@@ -2059,12 +2059,14 @@ async function loadFinance() {
     const trainersList = [];
     trainersSnap.forEach(d => trainersList.push({ id: d.id, ...d.data() }));
 
-    // Показываем только тренеров (не админа)
-    const toShow = trainersList.filter(t => t.role !== 'admin');
+    // Показываем всех (включая тех у кого роль admin — они тоже могут вести уроки)
+    const toShow = trainersList;
 
-    // Карта id→тренер и имя→id (фолбэк для старых записей без trainerId)
+    // Карта: trainerId → id  И  имя (нормализованное) → id
+    // Нормализация убирает лишние пробелы и регистр
+    const norm = s => (s||'').toLowerCase().replace(/\s+/g,' ').trim();
     const nameToId = {};
-    trainersList.forEach(t => { if (t.name) nameToId[t.name.trim()] = t.id; });
+    trainersList.forEach(t => { if (t.name) nameToId[norm(t.name)] = t.id; });
 
     // 2. Загружаем ВСЕ занятия (без фильтра дат — фильтруем в JS)
     const [lessonsSnap, groupSnap] = await Promise.all([
@@ -2079,8 +2081,8 @@ async function loadFinance() {
     lessonsSnap.forEach(d => {
       const data = d.data();
       const date = data.date || '';
-      if (date < fromVal || date > toVal) return; // фильтр даты
-      const tid = data.trainerId || nameToId[data.trainerName?.trim()];
+      if (date < fromVal || date > toVal) return;
+      const tid = data.trainerId || nameToId[norm(data.trainerName)];
       if (!tid) return;
       if (!counts[tid]) counts[tid] = emptyCount();
       data.format === 'online' ? counts[tid].indivOn++ : counts[tid].indivOff++;
@@ -2090,7 +2092,7 @@ async function loadFinance() {
       const data = d.data();
       const date = data.date || '';
       if (date < fromVal || date > toVal) return;
-      const tid = data.trainerId || nameToId[data.trainerName?.trim()];
+      const tid = data.trainerId || nameToId[norm(data.trainerName)];
       if (!tid) return;
       if (!counts[tid]) counts[tid] = emptyCount();
       data.format === 'online' ? counts[tid].groupOn++ : counts[tid].groupOff++;
@@ -2128,7 +2130,7 @@ async function loadFinance() {
       <div class="card" style="margin-bottom:14px">
         <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
           <span class="card-title">👤 ${t.name || t.email}</span>
-          ${isAdmin ? `<button class="btn-sm" onclick="askRatePassword('${t.id}','${safeName}',${r.indivOff},${r.indivOn},${r.groupOff},${r.groupOn})" style="font-size:.75rem;background:var(--accent);color:#fff;border:none;padding:5px 10px;border-radius:7px">✏️ Ставки</button>` : ''}
+          ${isAdmin ? `<button class="btn-sm rate-btn" data-tid="${t.id}" data-name="${safeName}" data-ioff="${r.indivOff}" data-ion="${r.indivOn}" data-goff="${r.groupOff}" data-gon="${r.groupOn}" style="font-size:.75rem;background:var(--accent);color:#fff;border:none;padding:5px 10px;border-radius:7px">✏️ Ставки</button>` : ''}
         </div>
         <div class="card-body">
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">
@@ -2221,6 +2223,13 @@ document.addEventListener('click', e => {
   if (editGrpBtn) {
     e.stopPropagation();
     openEditGroupModal(editGrpBtn.dataset.editGroupId);
+  }
+  // Кнопка ставок тренера
+  const rateBtn = e.target.closest('.rate-btn');
+  if (rateBtn) {
+    e.stopPropagation();
+    const d = rateBtn.dataset;
+    askRatePassword(d.tid, d.name, +d.ioff, +d.ion, +d.goff, +d.gon);
   }
 });
 </script>
