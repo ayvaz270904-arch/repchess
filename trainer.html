@@ -479,6 +479,13 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <input type="hidden" id="rec-format" value="offline">
     </div>
     <input type="hidden" id="rec-type" value="individual">
+    <div class="form-row" id="rec-trainer-row" style="display:none">
+      <div class="form-label">Тренер</div>
+      <select class="form-sel" id="rec-trainer-sel" onchange="checkRecTrainerAssignment()">
+        <option value="">— выберите тренера —</option>
+      </select>
+      <div id="rec-trainer-warn" style="color:var(--orange);font-size:.78rem;margin-top:6px;display:none">⚠️ Ученик не закреплён за этим тренером</div>
+    </div>
     <div class="form-row">
       <div class="form-label">Заметки <span style="color:var(--text2);text-transform:none;font-size:.72rem">(необязательно)</span></div>
       <textarea class="form-ta" id="rec-notes" placeholder="Темы, прогресс, замечания..."></textarea>
@@ -508,6 +515,12 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         <button class="toggle-btn" onclick="toggle('grp-format',this,'online')">💻 Онлайн</button>
       </div>
       <input type="hidden" id="grp-format" value="offline">
+    </div>
+    <div class="form-row" id="grp-trainer-row" style="display:none">
+      <div class="form-label">Тренер</div>
+      <select class="form-sel" id="grp-trainer-sel">
+        <option value="">— выберите тренера —</option>
+      </select>
     </div>
     <div class="form-row">
       <div class="form-label">Ученики</div>
@@ -711,6 +724,7 @@ function _closeModal(id) {
 let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 let students = [];          // from CRM CSV
+let _trainersCache = [];    // all trainers from Firestore
 let grpSelectedStudents = []; // for group lesson modal
 let editingGroupId = null;
 let _editGroupCache = {};
@@ -795,6 +809,7 @@ async function showApp() {
   document.getElementById('home-date').textContent = new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
 
   await loadStudents();
+  await loadTrainers();
   loadHomePage();
   showPage('home');
 }
@@ -855,6 +870,34 @@ async function loadStudents() {
     console.warn('Could not load students from CRM:', e);
     students = [];
   }
+}
+
+// ══════════════════════════════════════════════
+//  LOAD TRAINERS
+// ══════════════════════════════════════════════
+async function loadTrainers() {
+  try {
+    const snap = await db.collection('trainers').get();
+    _trainersCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch(e) {
+    console.warn('Could not load trainers:', e);
+    _trainersCache = [];
+  }
+}
+
+function populateTrainerSelect(selId) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— выберите тренера —</option>';
+  for (const t of _trainersCache) {
+    if (t.role === 'admin') continue; // admin не ведёт занятия
+    const opt = document.createElement('option');
+    opt.value = t.id;
+    opt.textContent = t.name || t.email;
+    sel.appendChild(opt);
+  }
+  if (current) sel.value = current;
 }
 
 // ══════════════════════════════════════════════
@@ -1040,6 +1083,8 @@ async function selectStudent(email, prefix) {
     // Load balance async
     const bal = await getStudentBalance(email);
     document.getElementById('rec-chosen-balance').innerHTML = balanceBadge(bal.remaining, bal.purchased);
+    // Проверяем назначение ученика к тренеру (для администратора)
+    checkRecTrainerAssignment();
 
   } else if (prefix === 'grp') {
     if (grpSelectedStudents.find(x => x.email === email)) return;
@@ -1065,7 +1110,32 @@ function removeGrpStudent(email) {
 function clearStudent(prefix) {
   document.getElementById(`${prefix}-student-inp`).value = '';
   document.getElementById(`${prefix}-student-inp`).dataset.email = '';
-  document.getElementById(`${prefix}-student-chosen`).style.display='none';
+  if (document.getElementById(`${prefix}-student-chosen`)) {
+    document.getElementById(`${prefix}-student-chosen`).style.display='none';
+  }
+  if (prefix === 'rec') {
+    const warnEl = document.getElementById('rec-trainer-warn');
+    if (warnEl) warnEl.style.display = 'none';
+  }
+}
+
+// Проверяет, закреплён ли выбранный ученик за выбранным тренером
+function checkRecTrainerAssignment() {
+  const isAdmin = currentTrainer?.role === 'admin';
+  if (!isAdmin) return;
+  const trainerId = document.getElementById('rec-trainer-sel')?.value;
+  const email = document.getElementById('rec-student-inp')?.dataset.email;
+  const warnEl = document.getElementById('rec-trainer-warn');
+  if (!warnEl) return;
+  if (!trainerId || !email) { warnEl.style.display = 'none'; return; }
+  const trainer = _trainersCache.find(t => t.id === trainerId);
+  const assigned = trainer?.assignedStudents || [];
+  // Предупреждаем только если у тренера есть назначенные ученики, но этого нет в списке
+  if (assigned.length > 0 && !assigned.includes(email)) {
+    warnEl.style.display = '';
+  } else {
+    warnEl.style.display = 'none';
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -1081,14 +1151,25 @@ async function submitLesson() {
   if (!email) { toast('Выбери ученика', 'err'); return; }
   if (!date)  { toast('Укажи дату', 'err'); return; }
 
+  // Для администратора — используем выбранного тренера
+  const isAdmin = currentTrainer.role === 'admin';
+  let trainerId   = currentUser.uid;
+  let trainerName = currentTrainer.name;
+  if (isAdmin) {
+    const selId = document.getElementById('rec-trainer-sel').value;
+    if (!selId) { toast('Выбери тренера', 'err'); return; }
+    const selTrainer = _trainersCache.find(t => t.id === selId);
+    trainerId   = selId;
+    trainerName = selTrainer?.name || selId;
+  }
+
   const s = students.find(x => x.email === email);
   const btn = document.getElementById('rec-submit');
   btn.disabled = true; btn.textContent = 'Сохранение...';
 
   try {
     await db.collection('lessons').add({
-      trainerId:   currentUser.uid,
-      trainerName: currentTrainer.name,
+      trainerId, trainerName,
       studentEmail: email,
       studentName:  s?.name || '',
       studentId:    s?.id || '',
@@ -1120,6 +1201,14 @@ function openIndivModal() {
   document.getElementById('rec-format').value = 'offline';
   document.getElementById('rec-submit').textContent = 'Записать занятие';
   document.getElementById('rec-submit').disabled = false;
+  // Выбор тренера — только для администратора
+  const isAdmin = currentTrainer.role === 'admin';
+  const trainerRow = document.getElementById('rec-trainer-row');
+  trainerRow.style.display = isAdmin ? '' : 'none';
+  if (isAdmin) {
+    populateTrainerSelect('rec-trainer-sel');
+    document.getElementById('rec-trainer-warn').style.display = 'none';
+  }
   _openModal('indiv-modal');
 }
 function closeIndivModal() {
@@ -1137,6 +1226,11 @@ function openGroupModal() {
   document.getElementById('group-modal-title').textContent = 'Новое групповое занятие';
   const delBtn = document.getElementById('grp-delete-btn');
   if (delBtn) delBtn.style.display = 'none';
+  // Выбор тренера — только для администратора
+  const isAdmin = currentTrainer.role === 'admin';
+  const trainerRow = document.getElementById('grp-trainer-row');
+  trainerRow.style.display = isAdmin ? '' : 'none';
+  if (isAdmin) populateTrainerSelect('grp-trainer-sel');
   _openModal('group-modal');
 }
 
@@ -1240,6 +1334,18 @@ async function submitGroupLesson() {
   if (!venue) { toast('Укажи место', 'err'); return; }
   if (!grpSelectedStudents.length) { toast('Добавь хотя бы одного ученика', 'err'); return; }
 
+  // Для администратора — используем выбранного тренера (только при создании)
+  const isAdmin = currentTrainer.role === 'admin';
+  let trainerId   = currentUser.uid;
+  let trainerName = currentTrainer.name;
+  if (isAdmin && !editingGroupId) {
+    const selId = document.getElementById('grp-trainer-sel').value;
+    if (!selId) { toast('Выбери тренера', 'err'); return; }
+    const selTrainer = _trainersCache.find(t => t.id === selId);
+    trainerId   = selId;
+    trainerName = selTrainer?.name || selId;
+  }
+
   const btn = document.getElementById('grp-submit');
   btn.disabled=true; btn.textContent='Сохранение...';
 
@@ -1272,8 +1378,7 @@ async function submitGroupLesson() {
     // ── РЕЖИМ СОЗДАНИЯ ──
     const grpRef = db.collection('groupLessons').doc();
     batch.set(grpRef, {
-      trainerId:   currentUser.uid,
-      trainerName: currentTrainer.name,
+      trainerId, trainerName,
       _date: date, venue, format, notes,
       studentEmails: grpSelectedStudents.map(s=>s.email),
       studentNames:  grpSelectedStudents.map(s=>s.name),
@@ -1286,8 +1391,7 @@ async function submitGroupLesson() {
     for (const s of grpSelectedStudents) {
       const lesRef = db.collection('lessons').doc();
       batch.set(lesRef, {
-        trainerId:   currentUser.uid,
-        trainerName: currentTrainer.name,
+        trainerId, trainerName,
         studentEmail: s.email,
         studentName:  s.name,
         studentId:    s.id,
@@ -2059,8 +2163,11 @@ async function loadFinance() {
     const trainersList = [];
     trainersSnap.forEach(d => trainersList.push({ id: d.id, ...d.data() }));
 
-    // Показываем всех (включая тех у кого роль admin — они тоже могут вести уроки)
-    const toShow = trainersList;
+    // Администратор видит всех тренеров (кроме самого себя-Admin),
+    // тренер — только свою карточку
+    const toShow = isAdmin
+      ? trainersList.filter(t => t.role !== 'admin')
+      : trainersList.filter(t => t.id === currentUser.uid);
 
     // Карта: trainerId → id  И  имя (нормализованное) → id
     // Нормализация убирает лишние пробелы и регистр
@@ -2080,8 +2187,8 @@ async function loadFinance() {
 
     lessonsSnap.forEach(d => {
       const data = d.data();
-      const date = data.date || '';
-      if (date < fromVal || date > toVal) return;
+      const date = data._date || data.date || '';
+      if (!date || date < fromVal || date > toVal) return;
       const tid = data.trainerId || nameToId[norm(data.trainerName)];
       if (!tid) return;
       if (!counts[tid]) counts[tid] = emptyCount();
@@ -2090,8 +2197,8 @@ async function loadFinance() {
 
     groupSnap.forEach(d => {
       const data = d.data();
-      const date = data.date || '';
-      if (date < fromVal || date > toVal) return;
+      const date = data._date || data.date || '';
+      if (!date || date < fromVal || date > toVal) return;
       const tid = data.trainerId || nameToId[norm(data.trainerName)];
       if (!tid) return;
       if (!counts[tid]) counts[tid] = emptyCount();
@@ -2123,7 +2230,7 @@ async function loadFinance() {
         <div style="background:var(--surface2);border-radius:10px;padding:8px 10px;text-align:center">
           <div style="font-size:1.2rem;font-weight:800">${count}</div>
           <div style="font-size:.68rem;color:var(--text2);line-height:1.3">${label}</div>
-          ${isAdmin ? `<div style="font-size:.68rem;color:var(--accent);margin-top:2px">${rate > 0 ? rate+'₽' : '—'}</div>` : ''}
+          <div style="font-size:.68rem;color:var(--accent);margin-top:2px">${rate > 0 ? rate+'₽' : '—'}</div>
         </div>`;
 
       html += `
@@ -2139,11 +2246,10 @@ async function loadFinance() {
             ${cell(c.groupOff, 'Груп.<br>офлайн', r.groupOff)}
             ${cell(c.groupOn,  'Груп.<br>онлайн',  r.groupOn)}
           </div>
-          ${isAdmin ? `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
             <span style="font-weight:700">К выплате</span>
             <span style="font-size:1.1rem;font-weight:800;color:${payout > 0 ? 'var(--green)' : 'var(--text2)'}">${payout > 0 ? payout.toLocaleString('ru') + ' ₽' : hasRates ? '0 ₽' : 'ставки не заданы'}</span>
-          </div>` : ''}
+          </div>
         </div>
       </div>`;
     }
