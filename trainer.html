@@ -1949,9 +1949,6 @@ function calNext(){_calMonth++;if(_calMonth>11){_calMonth=0;_calYear++;}renderCa
 let _finYear  = new Date().getFullYear();
 let _finMonth = new Date().getMonth(); // 0-based
 
-const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь',
-                     'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
-
 function finPrevMonth() {
   _finMonth--; if (_finMonth < 0) { _finMonth = 11; _finYear--; }
   loadFinance();
