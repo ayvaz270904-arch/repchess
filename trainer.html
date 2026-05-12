@@ -660,6 +660,14 @@ const FIREBASE_CONFIG = {
 // CRM Google Sheet (для загрузки студентов и баланса)
 const CRM_CSV = 'https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk/export?format=csv&gid=0';
 
+// ── Локальная дата без UTC-сдвига ──
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
 // ══════════════════════════════════════════════
 //  INIT FIREBASE
 // ══════════════════════════════════════════════
@@ -774,7 +782,7 @@ async function showApp() {
   document.getElementById('admin-nav').style.display = isAdmin ? 'flex' : 'none';
 
   // Set today's date as default
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateStr(new Date());
   document.getElementById('rec-date').value = today;
   document.getElementById('grp-date').value = today;
 
@@ -1104,7 +1112,7 @@ async function submitLesson() {
 function openIndivModal() {
   clearStudent('rec');
   document.getElementById('rec-notes').value = '';
-  document.getElementById('rec-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rec-date').value = localDateStr(new Date());
   // сброс формата
   document.querySelectorAll('#indiv-modal .toggle-btn').forEach(b=>b.classList.remove('on'));
   const offlineBtn = document.querySelector('#indiv-modal .toggle-btn');
@@ -1122,7 +1130,7 @@ function openGroupModal() {
   editingGroupId = null;
   grpSelectedStudents = [];
   renderGrpTags();
-  document.getElementById('grp-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('grp-date').value = localDateStr(new Date());
   document.getElementById('grp-venue').value = '';
   document.getElementById('grp-notes').value = '';
   document.getElementById('grp-submit').textContent = 'Создать занятие';
@@ -1963,7 +1971,7 @@ function renderCalendar() {
   }
   const firstDow    = (new Date(year, month, 1).getDay() + 6) % 7;
   const daysInMonth = new Date(year, month+1, 0).getDate();
-  const today = new Date().toISOString().slice(0,10);
+  const today = localDateStr(new Date());
   let html = DAY_NAMES.map(d=>`<div style="text-align:center;font-size:.62rem;color:var(--text2);padding:3px 0;font-weight:700">${d}</div>`).join('');
   for (let i=0;i<firstDow;i++) html+='<div></div>';
   for (let day=1;day<=daysInMonth;day++){
@@ -2028,8 +2036,8 @@ function finInitDates() {
 function finSetThisMonth() {
   const now = new Date();
   const y = now.getFullYear(), m = now.getMonth();
-  const from = new Date(y, m, 1).toISOString().slice(0,10);
-  const to   = new Date(y, m+1, 0).toISOString().slice(0,10);
+  const from = localDateStr(new Date(y, m, 1));
+  const to   = localDateStr(new Date(y, m+1, 0));
   document.getElementById('fin-from').value = from;
   document.getElementById('fin-to').value   = to;
   loadFinance();
@@ -2059,15 +2067,24 @@ async function loadFinance() {
     // counts: trainerId -> { indivOff, indivOn, groupOff, groupOn }
     const counts = {};
     const emptyCount = () => ({ indivOff:0, indivOn:0, groupOff:0, groupOn:0 });
+
+    // Карта имя тренера → id (фолбэк для старых занятий без trainerId)
+    const nameToId = {};
+    trainersList.forEach(t => { if (t.name) nameToId[t.name] = t.id; });
+
     lessonsSnap.forEach(d => {
-      const { trainerId: tid, format } = d.data(); if (!tid) return;
+      const data = d.data();
+      const tid = data.trainerId || nameToId[data.trainerName];
+      if (!tid) return;
       if (!counts[tid]) counts[tid] = emptyCount();
-      format === 'online' ? counts[tid].indivOn++ : counts[tid].indivOff++;
+      data.format === 'online' ? counts[tid].indivOn++ : counts[tid].indivOff++;
     });
     groupSnap.forEach(d => {
-      const { trainerId: tid, format } = d.data(); if (!tid) return;
+      const data = d.data();
+      const tid = data.trainerId || nameToId[data.trainerName];
+      if (!tid) return;
       if (!counts[tid]) counts[tid] = emptyCount();
-      format === 'online' ? counts[tid].groupOn++ : counts[tid].groupOff++;
+      data.format === 'online' ? counts[tid].groupOn++ : counts[tid].groupOff++;
     });
 
     let totalPayout = 0;
