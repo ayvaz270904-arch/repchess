@@ -296,7 +296,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
         </div>
         <div class="card-body" style="overflow-x:auto">
           <table class="tbl" id="adm-trainer-tbl">
-            <thead><tr><th>Тренер</th><th>Занятий</th><th>Учеников</th><th>Офлайн</th><th>Онлайн</th></tr></thead>
+            <thead><tr><th>Тренер</th><th>Офл.Инд.</th><th>Офл.Гр.</th><th>Онл.Инд.</th><th>Онл.Гр.</th><th>Всего</th></tr></thead>
             <tbody id="adm-trainer-body"></tbody>
           </table>
         </div>
@@ -320,6 +320,12 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
             <tbody id="adm-lessons-body"></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Assign students to trainers -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><span class="card-title">👤 Назначение учеников тренерам</span></div>
+        <div class="card-body" id="adm-assignment-body"><div class="empty">Загрузка...</div></div>
       </div>
 
       <!-- Manage trainers -->
@@ -632,7 +638,7 @@ async function loadStudents() {
     for (const row of rows) {
       const email = (row['Email']||'').toLowerCase().trim();
       if (!email || email === 'test@mail.ru') continue;
-      if (!map[email]) map[email] = { name: row['Name']||'', email, phone: row['Phone']||'', purchased: 0, firstDate: null };
+      if (!map[email]) map[email] = { name: row['Name']||'', email, phone: row['Phone']||'', purchased: 0, firstDate: null, nextExpiry: null };
       const m = map[email];
       if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
 
@@ -641,8 +647,20 @@ async function loadStudents() {
         const price = parseFloat((row['price']||'').replace(/[\s ]/g,'').replace(',','.')) || 0;
         const date  = row['sent'] ? new Date(row['sent'].replace(' ','T')) : null;
         if (price > 0) {
-          m.purchased += getLessonsFromPayment(price, date);
-          if (!m.firstDate || (date && date < m.firstDate)) m.firstDate = date;
+          const cnt = getLessonsFromPayment(price, date);
+          // Срок действия: 1 зан = 1 мес, 4 зан = 3 мес, 10 зан = 6 мес
+          const expiryMonths = cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1;
+          let expiryDate = null;
+          if (date) { expiryDate = new Date(date); expiryDate.setMonth(expiryDate.getMonth() + expiryMonths); }
+          const isExpired = expiryDate && expiryDate < new Date();
+          if (!isExpired) {
+            m.purchased += cnt;
+            if (!m.firstDate || (date && date < m.firstDate)) m.firstDate = date;
+          }
+          // Ближайшая дата истечения (для предупреждений)
+          if (expiryDate && !isExpired) {
+            if (!m.nextExpiry || expiryDate < m.nextExpiry) m.nextExpiry = expiryDate;
+          }
         }
       }
     }
@@ -802,7 +820,12 @@ function lessonItemHTML(l) {
 function searchStudents(q, prefix) {
   const resultsEl = document.getElementById(`${prefix}-student-results`);
   if (!q || q.length < 2) { resultsEl.style.display='none'; return; }
-  const matches = students.filter(s =>
+  // Если тренер (не админ) и у него есть назначенные ученики — показываем только их
+  let pool = students;
+  if (currentTrainer.role !== 'admin' && currentTrainer.assignedStudents?.length) {
+    pool = students.filter(s => currentTrainer.assignedStudents.includes(s.email));
+  }
+  const matches = pool.filter(s =>
     s.name.toLowerCase().includes(q.toLowerCase()) ||
     s.email.includes(q.toLowerCase())
   ).slice(0,8);
@@ -1314,22 +1337,31 @@ async function loadAdminData() {
   if (from) lessons = lessons.filter(l=>l._date>=from);
   if (to)   lessons = lessons.filter(l=>l._date<=to);
 
-  // Trainer stats
+  // Trainer stats — детальная разбивка
   const trainerMap = {};
   for (const l of lessons) {
-    if (!trainerMap[l.trainerId]) trainerMap[l.trainerId] = {name:l.trainerName,cnt:0,students:new Set(),offline:0,online:0};
+    if (!trainerMap[l.trainerId]) trainerMap[l.trainerId] = {
+      name: l.trainerName, offIndiv:0, offGroup:0, onIndiv:0, onGroup:0
+    };
     const t = trainerMap[l.trainerId];
-    t.cnt++; t.students.add(l.studentEmail);
-    if (l.format==='offline') t.offline++; else t.online++;
+    const isGroup = l.type === 'group';
+    const isOnline = l.format === 'online';
+    if (!isOnline && !isGroup) t.offIndiv++;
+    else if (!isOnline && isGroup) t.offGroup++;
+    else if (isOnline && !isGroup) t.onIndiv++;
+    else t.onGroup++;
   }
-  document.getElementById('adm-trainer-body').innerHTML = Object.values(trainerMap).map(t=>`
-    <tr>
+  document.getElementById('adm-trainer-body').innerHTML = Object.values(trainerMap).map(t => {
+    const total = t.offIndiv + t.offGroup + t.onIndiv + t.onGroup;
+    return `<tr>
       <td><b>${esc(t.name||'—')}</b></td>
-      <td>${t.cnt}</td>
-      <td>${t.students.size}</td>
-      <td>${t.offline}</td>
-      <td>${t.online}</td>
-    </tr>`).join('') || '<tr><td colspan="5" class="empty">Нет данных</td></tr>';
+      <td>${t.offIndiv}</td>
+      <td>${t.offGroup}</td>
+      <td>${t.onIndiv}</td>
+      <td>${t.onGroup}</td>
+      <td><b>${total}</b></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" class="empty">Нет данных</td></tr>';
 
   // Recent lessons
   const recent = lessons.slice(0,50);
@@ -1354,6 +1386,9 @@ async function loadAdminData() {
       <td><span class="badge ${t.role==='admin'?'badge-empty':'badge-active'}" style="${t.role==='admin'?'background:rgba(239,68,68,.12);color:var(--red)':'background:rgba(74,158,255,.12);color:var(--accent2)'}">${t.role==='admin'?'Админ':'Тренер'}</span></td>
       <td></td>
     </tr>`;}).join('');
+
+  // Назначение учеников
+  await loadTrainerAssignments(trainersSnap);
 
   // Students with empty balance
   await loadBalanceAlerts();
@@ -1393,6 +1428,84 @@ async function loadBalanceAlerts() {
           <span class="balance-badge balance-empty">${remaining <= 0 ? '0' : remaining} зан.</span>
         </div>`).join('')
     : '<div class="empty" style="padding:16px">Всё в порядке — у всех учеников есть занятия</div>';
+}
+
+// ══════════════════════════════════════════════
+//  TRAINER-STUDENT ASSIGNMENT
+// ══════════════════════════════════════════════
+async function loadTrainerAssignments(trainersSnap) {
+  const el = document.getElementById('adm-assignment-body');
+  if (!el) return;
+  const nonAdmin = trainersSnap.docs
+    .filter(d => d.data().role !== 'admin')
+    .map(d => ({ id: d.id, ...d.data() }));
+
+  if (!nonAdmin.length) { el.innerHTML = '<div class="empty">Нет тренеров</div>'; return; }
+
+  el.innerHTML = nonAdmin.map(t => {
+    const assigned = t.assignedStudents || [];
+    const tags = assigned.map(email => {
+      const s = students.find(x => x.email === email);
+      const name = s ? s.name : email;
+      return `<div class="group-student-tag">${esc(name)}
+        <button onclick="removeStudentAssignment('${esc(t.id)}','${esc(email)}')">✕</button>
+      </div>`;
+    }).join('');
+    return `<div style="padding:14px 0;border-bottom:1px solid var(--border)">
+      <div style="font-weight:700;margin-bottom:8px">${esc(t.name)}</div>
+      <div id="assign-tags-${t.id}" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
+        ${tags || '<span style="color:var(--text2);font-size:.8rem">Ученики не назначены — видит всех</span>'}
+      </div>
+      <div class="student-search-wrap" style="max-width:320px">
+        <input class="form-inp" id="assign-inp-${t.id}" placeholder="Добавить ученика..."
+          style="font-size:.82rem;padding:8px 12px;margin-bottom:0"
+          oninput="searchStudentsForAssign(this.value,'${esc(t.id)}')" autocomplete="off">
+        <div class="student-results" id="assign-results-${t.id}" style="display:none"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function searchStudentsForAssign(q, trainerId) {
+  const resultsEl = document.getElementById(`assign-results-${trainerId}`);
+  if (!q || q.length < 2) { resultsEl.style.display='none'; return; }
+  const matches = students.filter(s =>
+    s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase())
+  ).slice(0,6);
+  if (!matches.length) { resultsEl.style.display='none'; return; }
+  resultsEl.innerHTML = matches.map(s => `
+    <div class="student-result-item" onclick="assignStudent('${esc(trainerId)}','${esc(s.email)}')">
+      <div>
+        <div class="student-name">${esc(s.name)}</div>
+        <div class="student-meta">${s.id} · ${esc(s.email)}</div>
+      </div>
+      <span class="balance-badge ${s.purchased>0?'balance-ok':'balance-low'}">${s.purchased} зан.</span>
+    </div>`).join('');
+  resultsEl.style.display = '';
+}
+
+async function assignStudent(trainerId, email) {
+  document.getElementById(`assign-results-${trainerId}`).style.display = 'none';
+  document.getElementById(`assign-inp-${trainerId}`).value = '';
+  try {
+    await db.collection('trainers').doc(trainerId).update({
+      assignedStudents: firebase.firestore.FieldValue.arrayUnion(email)
+    });
+    toast('Ученик назначен ✓', 'ok');
+    const snap = await db.collection('trainers').get();
+    loadTrainerAssignments(snap);
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
+}
+
+async function removeStudentAssignment(trainerId, email) {
+  try {
+    await db.collection('trainers').doc(trainerId).update({
+      assignedStudents: firebase.firestore.FieldValue.arrayRemove(email)
+    });
+    toast('Ученик убран из списка', 'ok');
+    const snap = await db.collection('trainers').get();
+    loadTrainerAssignments(snap);
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
 }
 
 // ══════════════════════════════════════════════

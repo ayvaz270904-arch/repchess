@@ -451,9 +451,22 @@ async function loadUsedLessons() {
 function getBalance(email) {
   const s = students[email];
   if (!s) return null;
-  const purchased = s.payments.reduce((t,p)=>t+(p.prod?.lessons||1),0);
+  const now = new Date();
+  let purchased = 0;
+  let nextExpiry = null;
+  for (const p of s.payments) {
+    const cnt = p.prod?.lessons || 1;
+    const expiryMonths = cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1;
+    let expiry = null;
+    if (p.date) { expiry = new Date(p.date); expiry.setMonth(expiry.getMonth() + expiryMonths); }
+    const isExpired = expiry && expiry < now;
+    if (!isExpired) {
+      purchased += cnt;
+      if (expiry && (!nextExpiry || expiry < nextExpiry)) nextExpiry = expiry;
+    }
+  }
   const used = usedLessonsMap[email.toLowerCase()]||0;
-  return { purchased, used, remaining: purchased - used };
+  return { purchased, used, remaining: purchased - used, nextExpiry };
 }
 
 function balanceBadge(email) {
