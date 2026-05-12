@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Rep Chess Education — Журнал тренера</title>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#252836;--border:#2d3142;
+  --accent:#AC3D36;--accent2:#4a9eff;--text:#e8e8e8;--text2:#9ca3b0;
+  --green:#22c55e;--red:#ef4444;--orange:#f97316;--purple:#a855f7;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;font-size:15px;}
+
+/* ── AUTH ── */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px 32px;width:100%;max-width:380px;}
+.auth-logo{text-align:center;font-size:2.5rem;margin-bottom:8px;}
+.auth-title{text-align:center;font-size:1.3rem;font-weight:800;color:var(--accent);margin-bottom:4px;}
+.auth-sub{text-align:center;font-size:.82rem;color:var(--text2);margin-bottom:28px;}
+.field-label{font-size:.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.field-inp{width:100%;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:.95rem;margin-bottom:14px;}
+.field-inp:focus{outline:none;border-color:var(--accent);}
+.field-inp::placeholder{color:var(--text2);}
+.auth-err{color:var(--red);font-size:.82rem;text-align:center;margin-bottom:10px;min-height:18px;}
+.btn-full{width:100%;padding:13px;border-radius:10px;border:none;cursor:pointer;font-size:.95rem;font-weight:700;transition:all .15s;}
+.btn-gold{background:var(--accent);color:#fff;}
+.btn-gold:hover{background:#8f312b;}
+.btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.btn-ghost:hover{background:var(--border);}
+
+/* ── APP SHELL ── */
+#app{display:none;min-height:100vh;padding-bottom:80px;}
+.topbar{background:var(--surface);border-bottom:2px solid var(--accent);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.topbar-left{display:flex;align-items:center;gap:10px;}
+.topbar h1{font-size:1rem;font-weight:800;color:var(--accent);}
+.trainer-badge{font-size:.75rem;background:rgba(245,200,66,.12);color:var(--accent);border:1px solid rgba(245,200,66,.3);padding:3px 10px;border-radius:20px;font-weight:600;}
+.admin-badge{background:rgba(239,68,68,.12);color:var(--red);border-color:rgba(239,68,68,.3);}
+.btn-sm{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:.78rem;cursor:pointer;}
+.btn-sm:hover{color:var(--text);background:var(--surface2);}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 6px;cursor:pointer;transition:all .15s;border:none;background:none;color:var(--text2);}
+.nav-item.on{color:var(--accent);}
+.nav-icon{font-size:1.3rem;margin-bottom:3px;}
+.nav-label{font-size:.65rem;font-weight:600;}
+
+/* ── CONTAINER ── */
+.container{max-width:700px;margin:0 auto;padding:20px 16px;}
+.page{display:none;}
+.page.on{display:block;}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px;}
+.card-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.card-title{font-weight:700;font-size:.92rem;}
+.card-body{padding:16px 18px;}
+
+/* ── FORM ── */
+.form-row{margin-bottom:14px;}
+.form-label{font-size:.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.form-inp,.form-sel,.form-ta{width:100%;padding:11px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:.92rem;}
+.form-inp:focus,.form-sel:focus,.form-ta:focus{outline:none;border-color:var(--accent);}
+.form-inp::placeholder{color:var(--text2);}
+.form-sel option{background:var(--surface2);}
+.form-ta{resize:vertical;min-height:80px;}
+
+/* ── TOGGLE BUTTONS ── */
+.toggle-group{display:flex;gap:8px;flex-wrap:wrap;}
+.toggle-btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:.85rem;cursor:pointer;transition:all .15s;font-weight:500;}
+.toggle-btn.on{background:rgba(245,200,66,.12);border-color:var(--accent);color:var(--accent);font-weight:700;}
+
+/* ── STUDENT SEARCH ── */
+.student-search-wrap{position:relative;}
+.student-results{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.student-result-item{padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(45,49,66,.5);display:flex;align-items:center;justify-content:space-between;}
+.student-result-item:last-child{border-bottom:none;}
+.student-result-item:hover{background:var(--surface2);}
+.student-name{font-weight:600;font-size:.88rem;}
+.student-meta{font-size:.75rem;color:var(--text2);}
+.balance-badge{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:10px;}
+.balance-ok{background:rgba(34,197,94,.15);color:var(--green);}
+.balance-low{background:rgba(249,115,22,.15);color:var(--orange);}
+.balance-empty{background:rgba(239,68,68,.15);color:var(--red);}
+
+/* ── LESSON ITEM ── */
+.lesson-item{padding:12px 0;border-bottom:1px solid rgba(45,49,66,.4);}
+.lesson-item:last-child{border-bottom:none;}
+.lesson-row1{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.lesson-student{font-weight:700;font-size:.9rem;}
+.lesson-date{font-size:.78rem;color:var(--text2);}
+.lesson-row2{display:flex;align-items:center;gap:8px;}
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.72rem;font-weight:700;}
+.tag-offline{background:rgba(74,158,255,.12);color:var(--accent2);}
+.tag-online{background:rgba(34,197,94,.12);color:var(--green);}
+.tag-group{background:rgba(168,85,247,.12);color:var(--purple);}
+.tag-indiv{background:rgba(249,115,22,.12);color:var(--orange);}
+
+/* ── STAT CARDS ── */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;position:relative;overflow:hidden;}
+.stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0;}
+.sc-green::after{background:var(--green);} .sc-blue::after{background:var(--accent2);} .sc-purple::after{background:var(--purple);}
+.sc-orange::after{background:var(--orange);} .sc-purple::after{background:var(--purple);}
+.sc-red::after{background:var(--red);}
+.stat-label{font-size:.7rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.stat-val{font-size:1.6rem;font-weight:800;line-height:1;}
+.sc-green .stat-val{color:var(--green);} .sc-blue .stat-val{color:var(--accent2);} .sc-purple .stat-val{color:var(--purple);}
+.sc-orange .stat-val{color:var(--orange);} .sc-purple .stat-val{color:var(--purple);}
+.sc-red .stat-val{color:var(--red);}
+.stat-sub{font-size:.72rem;color:var(--text2);margin-top:4px;}
+
+/* ── GROUP LESSON ── */
+.group-student-tag{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:.82rem;margin:4px;}
+.group-student-tag button{background:none;border:none;color:var(--text2);cursor:pointer;font-size:.9rem;padding:0;line-height:1;}
+.group-student-tag button:hover{color:var(--red);}
+
+/* ── ALERT ── */
+.alert{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;}
+.alert-icon{font-size:1.1rem;flex-shrink:0;}
+.alert-text{font-size:.82rem;line-height:1.5;}
+.alert-text b{color:var(--text);}
+
+/* ── DATE FILTER ── */
+.date-filter{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+.date-filter input{padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.82rem;}
+.date-filter input:focus{outline:none;border-color:var(--accent);}
+.date-filter input::-webkit-calendar-picker-indicator{filter:invert(.6);}
+.dim{color:var(--text2);}
+
+/* ── ADMIN TABLE ── */
+.tbl{width:100%;border-collapse:collapse;font-size:.82rem;}
+.tbl th{text-align:left;padding:8px 12px;color:var(--text2);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);}
+.tbl td{padding:9px 12px;border-bottom:1px solid rgba(45,49,66,.4);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:var(--surface2);}
+
+/* ── EMPTY ── */
+.empty{text-align:center;padding:32px 20px;color:var(--text2);font-size:.88rem;}
+
+/* ── TOAST ── */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 20px;font-size:.88rem;font-weight:600;white-space:nowrap;z-index:1000;opacity:0;transition:all .3s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.toast.ok{border-color:rgba(34,197,94,.4);color:var(--green);}
+.toast.err{border-color:rgba(239,68,68,.4);color:var(--red);}
+
+/* ── LOADING ── */
+#page-loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:16px;}
+#page-loading .ico{font-size:3rem;animation:pulse 1.3s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* ── MODAL ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:flex-end;justify-content:center;padding:0;}
+.modal{background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:85vh;overflow-y:auto;padding:24px 20px;}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px;}
+.modal-title{font-size:1rem;font-weight:700;margin-bottom:16px;}
+
+@media(min-width:600px){.overlay{align-items:center;}.modal{border-radius:20px;max-height:80vh;}}
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="page-loading"><div class="ico">♟</div><div style="color:var(--text2);font-size:.9rem">Загрузка...</div></div>
+
+<!-- LOGIN -->
+<div id="login-page" style="display:none">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">♟</div>
+      <div class="auth-title">Rep Chess Education</div>
+      <div class="auth-sub">Журнал тренера</div>
+      <div class="field-label">Email</div>
+      <input class="field-inp" id="login-email" type="email" placeholder="ваш@email.com" autocomplete="email">
+      <div class="field-label">Пароль</div>
+      <input class="field-inp" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')doLogin()">
+      <div class="auth-err" id="login-err"></div>
+      <button class="btn-full btn-gold" onclick="doLogin()">Войти</button>
+    </div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <span style="font-size:1.3rem">♟</span>
+      <h1>Rep Chess Education</h1>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="trainer-badge" id="user-badge"></span>
+      <button class="btn-sm" onclick="doLogout()">Выйти</button>
+    </div>
+  </div>
+
+  <!-- BOTTOM NAV -->
+  <div class="bottom-nav" id="bottom-nav">
+    <button class="nav-item on" onclick="showPage('home')" data-page="home">
+      <div class="nav-icon">🏠</div><div class="nav-label">Главная</div>
+    </button>
+    <button class="nav-item" onclick="showPage('record')" data-page="record">
+      <div class="nav-icon">✏️</div><div class="nav-label">Индив.</div>
+    </button>
+    <button class="nav-item" onclick="showPage('group')" data-page="group">
+      <div class="nav-icon">👥</div><div class="nav-label">Группы</div>
+    </button>
+    <button class="nav-item" onclick="showPage('history')" data-page="history">
+      <div class="nav-icon">📋</div><div class="nav-label">История</div>
+    </button>
+    <button class="nav-item" onclick="showPage('admin')" data-page="admin" id="admin-nav" style="display:none">
+      <div class="nav-icon">⚙️</div><div class="nav-label">Админ</div>
+    </button>
+  </div>
+
+  <div class="container">
+
+    <!-- HOME -->
+    <div class="page on" id="page-home">
+      <div style="margin-bottom:20px">
+        <div style="font-size:.8rem;color:var(--text2)" id="home-date"></div>
+        <div style="font-size:1.3rem;font-weight:800;margin-top:4px" id="home-greeting"></div>
+      </div>
+      <div class="stat-grid" id="home-stats"></div>
+      <div class="card">
+        <div class="card-head"><span class="card-title">Последние занятия</span></div>
+        <div class="card-body" id="home-recent"></div>
+      </div>
+    </div>
+
+    <!-- RECORD LESSON -->
+    <div class="page" id="page-record">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-weight:700;font-size:1rem">Индивидуальные занятия</div>
+        <button class="btn-sm btn-gold" style="color:#fff;background:var(--accent);border:none;font-weight:700" onclick="openIndivModal()">+ Новое</button>
+      </div>
+      <div id="rec-recent-list"><div class="empty">Занятия ещё не записаны</div></div>
+    </div>
+
+    <!-- GROUP LESSONS -->
+    <div class="page" id="page-group">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-weight:700;font-size:1rem">Групповые занятия</div>
+        <button class="btn-sm btn-gold" style="color:#fff;background:var(--accent);border:none;font-weight:700" onclick="openGroupModal()">+ Новое</button>
+      </div>
+      <div id="group-list"></div>
+    </div>
+
+    <!-- HISTORY -->
+    <div class="page" id="page-history">
+      <div style="font-weight:700;font-size:1rem;margin-bottom:12px">📋 Журнал занятий</div>
+      <div class="date-filter" style="margin-bottom:12px">
+        <input type="date" id="hist-from" onchange="loadHistory()">
+        <span class="dim" style="font-size:.8rem">—</span>
+        <input type="date" id="hist-to" onchange="loadHistory()">
+        <button class="btn-sm" onclick="resetHistoryFilter()">Всё время</button>
+      </div>
+      <!-- Детальная статистика -->
+      <div id="hist-stats" class="stat-grid" style="margin-bottom:14px"></div>
+      <!-- Переключатель инд/группа -->
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="toggle-btn on" id="hist-tab-all" onclick="histTab('all',this)" style="flex:1;padding:8px">Все</button>
+        <button class="toggle-btn" id="hist-tab-indiv" onclick="histTab('indiv',this)" style="flex:1;padding:8px">Индив.</button>
+        <button class="toggle-btn" id="hist-tab-group" onclick="histTab('group',this)" style="flex:1;padding:8px">Группы</button>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title" id="hist-title">Все занятия</span>
+          <span class="dim" id="hist-count" style="font-size:.78rem"></span>
+        </div>
+        <div class="card-body" id="hist-list"></div>
+      </div>
+    </div>
+
+    <!-- ADMIN -->
+    <div class="page" id="page-admin">
+      <div style="font-weight:700;font-size:1.1rem;margin-bottom:16px">⚙️ Панель администратора</div>
+
+      <!-- Alerts: students with empty balance -->
+      <div id="admin-alerts"></div>
+
+      <!-- Trainer stats -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <span class="card-title">Активность тренеров</span>
+          <div style="display:flex;gap:6px">
+            <input type="date" id="adm-from" style="padding:5px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.75rem;" onchange="loadAdminData()">
+            <input type="date" id="adm-to" style="padding:5px 8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.75rem;" onchange="loadAdminData()">
+          </div>
+        </div>
+        <div class="card-body" style="overflow-x:auto">
+          <table class="tbl" id="adm-trainer-tbl">
+            <thead><tr><th>Тренер</th><th>Занятий</th><th>Учеников</th><th>Офлайн</th><th>Онлайн</th></tr></thead>
+            <tbody id="adm-trainer-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Students needing payment -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><span class="card-title">🔴 Нужна оплата</span></div>
+        <div class="card-body" id="adm-balance-list"></div>
+      </div>
+
+      <!-- All recent lessons -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <span class="card-title">Все занятия</span>
+          <span class="dim" id="adm-lessons-count" style="font-size:.78rem"></span>
+        </div>
+        <div class="card-body" style="overflow-x:auto">
+          <table class="tbl">
+            <thead><tr><th>Дата</th><th>Ученик</th><th>Тренер</th><th>Формат</th><th>Тип</th></tr></thead>
+            <tbody id="adm-lessons-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Manage trainers -->
+      <div class="card">
+        <div class="card-head">
+          <span class="card-title">Тренеры</span>
+          <button class="btn-sm btn-gold" style="color:#fff;background:var(--accent);border:none;font-weight:700" onclick="openAddTrainerModal()">+ Добавить</button>
+        </div>
+        <div class="card-body" style="overflow-x:auto">
+          <table class="tbl">
+            <thead><tr><th>Имя</th><th>Email</th><th>Роль</th><th></th></tr></thead>
+            <tbody id="adm-trainers-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+</div><!-- /app -->
+
+<!-- GROUP LESSON MODAL -->
+<!-- INDIVIDUAL LESSON MODAL -->
+<div class="overlay" id="indiv-modal" style="display:none" onclick="if(event.target===this)closeIndivModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Индивидуальное занятие</div>
+    <div class="form-row">
+      <div class="form-label">Ученик</div>
+      <div class="student-search-wrap">
+        <input class="form-inp" id="rec-student-inp" type="text" placeholder="Поиск по имени..."
+          oninput="searchStudents(this.value,'rec')" autocomplete="off">
+        <div class="student-results" id="rec-student-results" style="display:none"></div>
+      </div>
+      <div id="rec-student-chosen" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(172,61,54,.08);border:1px solid rgba(172,61,54,.25);border-radius:10px;">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-weight:700" id="rec-chosen-name"></div>
+            <div style="font-size:.75rem;color:var(--text2)" id="rec-chosen-id"></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="rec-chosen-balance"></span>
+            <button onclick="clearStudent('rec')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:1rem">✕</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Дата</div>
+      <input class="form-inp" id="rec-date" type="date">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Формат</div>
+      <div class="toggle-group">
+        <button class="toggle-btn on" onclick="toggle('rec-format',this,'offline')">📍 Офлайн</button>
+        <button class="toggle-btn" onclick="toggle('rec-format',this,'online')">💻 Онлайн</button>
+      </div>
+      <input type="hidden" id="rec-format" value="offline">
+    </div>
+    <input type="hidden" id="rec-type" value="individual">
+    <div class="form-row">
+      <div class="form-label">Заметки <span style="color:var(--text2);text-transform:none;font-size:.72rem">(необязательно)</span></div>
+      <textarea class="form-ta" id="rec-notes" placeholder="Темы, прогресс, замечания..."></textarea>
+    </div>
+    <button class="btn-full btn-gold" onclick="submitLesson()" id="rec-submit">Записать занятие</button>
+    <div style="height:8px"></div>
+    <button class="btn-full btn-ghost" onclick="closeIndivModal()">Отмена</button>
+  </div>
+</div>
+
+<div class="overlay" id="group-modal" style="display:none" onclick="if(event.target===this)closeGroupModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="group-modal-title">Новое групповое занятие</div>
+    <div class="form-row">
+      <div class="form-label">Дата</div>
+      <input class="form-inp" id="grp-date" type="date">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Место проведения</div>
+      <input class="form-inp" id="grp-venue" type="text" placeholder="Адрес или название клуба">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Формат</div>
+      <div class="toggle-group">
+        <button class="toggle-btn on" onclick="toggle('grp-format',this,'offline')">📍 Офлайн</button>
+        <button class="toggle-btn" onclick="toggle('grp-format',this,'online')">💻 Онлайн</button>
+      </div>
+      <input type="hidden" id="grp-format" value="offline">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Ученики</div>
+      <div class="student-search-wrap">
+        <input class="form-inp" id="grp-student-inp" type="text" placeholder="Добавить ученика..."
+          oninput="searchStudents(this.value,'grp')" autocomplete="off">
+        <div class="student-results" id="grp-student-results" style="display:none"></div>
+      </div>
+      <div id="grp-students-tags" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Заметки</div>
+      <textarea class="form-ta" id="grp-notes" placeholder="Тема занятия, замечания..."></textarea>
+    </div>
+    <button class="btn-full btn-gold" onclick="submitGroupLesson()" id="grp-submit">Создать занятие</button>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="closeGroupModal()">Отмена</button>
+  </div>
+</div>
+
+<!-- ADD TRAINER MODAL -->
+<div class="overlay" id="add-trainer-modal" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Добавить тренера</div>
+    <div class="form-row">
+      <div class="form-label">Имя тренера</div>
+      <input class="form-inp" id="new-trainer-name" type="text" placeholder="Фамилия Имя Отчество">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Email</div>
+      <input class="form-inp" id="new-trainer-email" type="email" placeholder="trainer@email.com">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Временный пароль</div>
+      <input class="form-inp" id="new-trainer-pass" type="text" placeholder="Минимум 6 символов">
+    </div>
+    <div class="auth-err" id="add-trainer-err"></div>
+    <button class="btn-full btn-gold" onclick="addTrainer()">Создать аккаунт</button>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="document.getElementById('add-trainer-modal').style.display='none'">Отмена</button>
+  </div>
+</div>
+
+<!-- EDIT LESSON MODAL -->
+<div class="overlay" id="edit-lesson-modal" style="display:none" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="edit-lesson-title">Редактировать занятие</div>
+    <input type="hidden" id="edit-lesson-id">
+    <div class="form-row">
+      <div class="form-label">Ученик</div>
+      <div id="edit-lesson-student" style="font-weight:700;padding:8px 0;color:var(--text)"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Дата</div>
+      <input class="form-inp" id="edit-lesson-date" type="date">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Формат</div>
+      <div class="toggle-group">
+        <button class="toggle-btn on" id="edit-fmt-offline" onclick="editToggleFmt('offline',this)">📍 Офлайн</button>
+        <button class="toggle-btn" id="edit-fmt-online" onclick="editToggleFmt('online',this)">💻 Онлайн</button>
+      </div>
+      <input type="hidden" id="edit-lesson-format" value="offline">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Заметки</div>
+      <textarea class="form-ta" id="edit-lesson-notes" placeholder="Темы, прогресс, замечания..."></textarea>
+    </div>
+    <button class="btn-full btn-gold" onclick="saveEditLesson()" id="edit-save-btn">Сохранить</button>
+    <div style="height:8px"></div>
+    <button class="btn-full" id="edit-delete-btn" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:13px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%" onclick="confirmDeleteLesson()">🗑 Удалить занятие</button>
+    <div style="height:8px"></div>
+    <button class="btn-full btn-ghost" onclick="closeEditModal()">Отмена</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  FIREBASE CONFIG — заполни после создания проекта
+// ══════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyAumAqazzVQ7GgyNKCo7cCkz2XoObjYUTQ",
+  authDomain:        "repchess-trainer.firebaseapp.com",
+  projectId:         "repchess-trainer",
+  storageBucket:     "repchess-trainer.firebasestorage.app",
+  messagingSenderId: "694548342592",
+  appId:             "1:694548342592:web:5c245c1c24c27e0109bca5"
+};
+
+// CRM Google Sheet (для загрузки студентов и баланса)
+const CRM_CSV = 'https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk/export?format=csv&gid=0';
+
+// ══════════════════════════════════════════════
+//  INIT FIREBASE
+// ══════════════════════════════════════════════
+try {
+  firebase.initializeApp(FIREBASE_CONFIG);
+} catch(e) {
+  console.error('Firebase init error:', e);
+}
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// Fallback: если Firebase не ответил за 8 сек — показываем логин
+setTimeout(() => {
+  const loading = document.getElementById('page-loading');
+  if (loading && loading.style.display !== 'none') {
+    loading.style.display = 'none';
+    document.getElementById('login-page').style.display = 'block';
+  }
+}, 8000);
+
+// ══════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════
+let currentUser = null;
+let currentTrainer = null;  // Firestore trainer doc
+let students = [];          // from CRM CSV
+let grpSelectedStudents = []; // for group lesson modal
+let editingGroupId = null;
+let _editGroupCache = {};
+
+// ══════════════════════════════════════════════
+//  PRICE HISTORY (same as CRM)
+// ══════════════════════════════════════════════
+const PRICE_CHANGE = new Date('2026-03-18');
+const PRICES_OLD = {1500:{l:1},5500:{l:4},12000:{l:10},1000:{l:1},3600:{l:4},8000:{l:10},2500:{l:1},9000:{l:4},21000:{l:10},1700:{l:1},6400:{l:4},15000:{l:10}};
+const PRICES_NEW = {1800:{l:1},6500:{l:4},15500:{l:10},1200:{l:1},4400:{l:4},10000:{l:10},2800:{l:1},23500:{l:10},2000:{l:1},7200:{l:4},17000:{l:10},6000:{l:1}};
+
+function getLessonsFromPayment(price, date) {
+  const catalog = (date && date >= PRICE_CHANGE) ? PRICES_NEW : PRICES_OLD;
+  return (catalog[Math.round(price)] || {l:1}).l;
+}
+
+// ══════════════════════════════════════════════
+//  AUTH
+// ══════════════════════════════════════════════
+auth.onAuthStateChanged(async user => {
+  if (user) {
+    currentUser = user;
+    try {
+      const doc = await db.collection('trainers').doc(user.uid).get();
+      if (!doc.exists) { auth.signOut(); return; }
+      currentTrainer = { uid: user.uid, ...doc.data() };
+      document.getElementById('page-loading').style.display = 'none';
+      showApp();
+    } catch(e) {
+      document.getElementById('page-loading').style.display = 'none';
+      document.getElementById('login-page').style.display = 'block';
+    }
+  } else {
+    currentUser = null;
+    currentTrainer = null;
+    document.getElementById('page-loading').style.display = 'none';
+    document.getElementById('login-page').style.display = 'block';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-err');
+  errEl.textContent = '';
+  if (!email || !pass) { errEl.textContent = 'Введите email и пароль'; return; }
+  try {
+    await auth.signInWithEmailAndPassword(email, pass);
+  } catch(e) {
+    errEl.textContent = e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found'
+      ? 'Неверный email или пароль' : 'Ошибка: ' + e.message;
+  }
+}
+
+function doLogout() { auth.signOut(); }
+
+// ══════════════════════════════════════════════
+//  APP INIT
+// ══════════════════════════════════════════════
+async function showApp() {
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  const isAdmin = currentTrainer.role === 'admin';
+  document.getElementById('user-badge').textContent = currentTrainer.name.split(' ')[0];
+  document.getElementById('user-badge').className = 'trainer-badge' + (isAdmin ? ' admin-badge' : '');
+  // Явно задаём видимость — не оставляем на CSS
+  document.getElementById('admin-nav').style.display = isAdmin ? 'flex' : 'none';
+
+  // Set today's date as default
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('rec-date').value = today;
+  document.getElementById('grp-date').value = today;
+
+  // Home greeting
+  const hr = new Date().getHours();
+  const gr = hr >= 6 && hr < 12 ? 'Доброе утро' : hr >= 12 && hr < 18 ? 'Добрый день' : hr >= 18 ? 'Добрый вечер' : 'Доброй ночи';
+  const nameParts = currentTrainer.name.trim().split(/\s+/);
+  const firstName = nameParts.length >= 2 ? nameParts[1] : nameParts[0];
+  document.getElementById('home-greeting').textContent = gr + ', ' + firstName + '!';
+  document.getElementById('home-date').textContent = new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
+
+  await loadStudents();
+  loadHomePage();
+  showPage('home');
+}
+
+// ══════════════════════════════════════════════
+//  LOAD STUDENTS FROM CRM
+// ══════════════════════════════════════════════
+async function loadStudents() {
+  try {
+    const res = await fetch(CRM_CSV + '&t=' + Date.now());
+    const txt = await res.text();
+    const rows = parseCSV(txt);
+
+    // Group by email, compute purchased lessons
+    const map = {};
+    for (const row of rows) {
+      const email = (row['Email']||'').toLowerCase().trim();
+      if (!email || email === 'test@mail.ru') continue;
+      if (!map[email]) map[email] = { name: row['Name']||'', email, phone: row['Phone']||'', purchased: 0, firstDate: null };
+      const m = map[email];
+      if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
+
+      // Check if paid
+      if (row['Payment status']==='Paid' || row['Статус оплаты']==='Оплачено' || (row['paymentid']&&/tinkoff|sber/.test(row['paymentid']))) {
+        const price = parseFloat((row['price']||'').replace(/[\s ]/g,'').replace(',','.')) || 0;
+        const date  = row['sent'] ? new Date(row['sent'].replace(' ','T')) : null;
+        if (price > 0) {
+          m.purchased += getLessonsFromPayment(price, date);
+          if (!m.firstDate || (date && date < m.firstDate)) m.firstDate = date;
+        }
+      }
+    }
+
+    // Assign IDs (RC-XXXX) sorted by first payment date
+    const sorted = Object.values(map).filter(s => s.purchased > 0)
+      .sort((a,b) => (a.firstDate||0) - (b.firstDate||0));
+    sorted.forEach((s, i) => { s.id = `RC-${String(i+1).padStart(4,'0')}`; });
+
+    // Also include students without payments (free sign-ups)
+    const freeStudents = Object.values(map).filter(s => !s.purchased);
+    freeStudents.forEach((s, i) => { s.id = `RC-F${String(i+1).padStart(3,'0')}`; s.purchased = 0; });
+
+    students = [...sorted, ...freeStudents];
+
+  } catch(e) {
+    console.warn('Could not load students from CRM:', e);
+    students = [];
+  }
+}
+
+// ══════════════════════════════════════════════
+//  STUDENT BALANCE
+// ══════════════════════════════════════════════
+async function getUsedLessons(email) {
+  const snap = await db.collection('lessons')
+    .where('studentEmail','==',email).get();
+  return snap.size;
+}
+
+async function getStudentBalance(email) {
+  const s = students.find(x => x.email === email);
+  if (!s) return { purchased: 0, used: 0, remaining: 0 };
+  const used = await getUsedLessons(email);
+  return { purchased: s.purchased, used, remaining: s.purchased - used };
+}
+
+function balanceBadge(remaining, purchased) {
+  if (!purchased) return `<span class="balance-badge balance-low">Нет пакета</span>`;
+  if (remaining <= 0) return `<span class="balance-badge balance-empty">0 занятий</span>`;
+  if (remaining <= 2) return `<span class="balance-badge balance-low">${remaining} зан.</span>`;
+  return `<span class="balance-badge balance-ok">${remaining} зан.</span>`;
+}
+
+// ══════════════════════════════════════════════
+//  HOME PAGE
+// ══════════════════════════════════════════════
+async function loadHomePage() {
+  const isAdmin = currentTrainer.role === 'admin';
+  const uid = currentUser.uid;
+
+  // Загружаем индивидуальные занятия
+  let indivSnap;
+  try {
+    indivSnap = isAdmin
+      ? await db.collection('lessons').limit(200).get()
+      : await db.collection('lessons').where('trainerId','==',uid).get();
+  } catch(e) { indivSnap = {docs:[]}; }
+  let indivAll = indivSnap.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(l => !_deletedLessonIds.has(l.id));
+  indivAll.forEach(l => { _editLessonCache[l.id] = l; });
+
+  // Загружаем групповые занятия
+  let grpSnap;
+  try {
+    grpSnap = isAdmin
+      ? await db.collection('groupLessons').limit(100).get()
+      : await db.collection('groupLessons').where('trainerId','==',uid).get();
+  } catch(e) { grpSnap = {docs:[]}; }
+  let grpAll = grpSnap.docs.map(d=>({id:d.id,...d.data(),_isGroup:true}))
+    .filter(g => !_deletedGroupIds.has(g.id));
+
+  // Статистика (только инд. занятия — группы уже создают записи в lessons)
+  const now = new Date();
+  const weekAgo  = new Date(now - 7*86400000);
+  const monthAgo = new Date(now - 30*86400000);
+  const allLessons = indivAll;
+  const weekCnt  = allLessons.filter(l=>l._date && l._date >= weekAgo.toISOString().slice(0,10)).length;
+  const monthCnt = allLessons.filter(l=>l._date && l._date >= monthAgo.toISOString().slice(0,10)).length;
+  const uniqueW  = new Set(allLessons.filter(l=>l._date >= weekAgo.toISOString().slice(0,10)).map(l=>l.studentEmail)).size;
+
+  document.getElementById('home-stats').innerHTML = `
+    <div class="stat-card sc-blue">
+      <div class="stat-label">За неделю</div>
+      <div class="stat-val">${weekCnt}</div>
+      <div class="stat-sub">${uniqueW} учеников</div>
+    </div>
+    <div class="stat-card sc-green">
+      <div class="stat-label">За месяц</div>
+      <div class="stat-val">${monthCnt}</div>
+      <div class="stat-sub">занятий</div>
+    </div>`;
+
+  // Лента последних: группы одной карточкой + индив. без group-дубликатов
+  const indivOnly = indivAll.filter(l => l.type !== 'group');
+  indivOnly.sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1);
+  grpAll.sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1);
+
+  // Объединяем и сортируем по дате
+  const feed = [
+    ...indivOnly.map(l => ({...l, _feedDate: l._date||''})),
+    ...grpAll.map(g => ({...g, _feedDate: g._date||''}))
+  ].sort((a,b) => b._feedDate > a._feedDate ? 1 : -1).slice(0, 12);
+
+  document.getElementById('home-recent').innerHTML = feed.length
+    ? feed.map(item => item._isGroup ? groupFeedItemHTML(item) : lessonItemHTML(item)).join('')
+    : '<div class="empty">Занятия ещё не записаны</div>';
+
+  // Список под формой индив. занятий — показываем ВСЕ уроки (включая из групп)
+  const recAll = indivAll.slice().sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1).slice(0, 20);
+  document.getElementById('rec-recent-list').innerHTML = recAll.length
+    ? recAll.map(l => lessonItemHTML(l)).join('')
+    : '<div class="empty">Занятия ещё не записаны</div>';
+}
+
+function groupFeedItemHTML(g) {
+  const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+  const names = (g.studentNames||[]).slice(0,3).join(', ') + (g.count>3 ? ` и ещё ${g.count-3}` : '');
+  return `<div class="lesson-item">
+    <div class="lesson-row1">
+      <span class="lesson-student">👥 ${esc(g.venue||'Групповое')}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="lesson-date">${d}</span>
+        <button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
+      </div>
+    </div>
+    <div class="lesson-row2">
+      <span class="tag tag-group">${g.count} чел.</span>
+      <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
+      ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
+      <span class="dim" style="font-size:.73rem">${esc(names)}</span>
+    </div>
+  </div>`;
+}
+
+function lessonItemHTML(l) {
+  const d = l._date ? new Date(l._date + 'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+  return `<div class="lesson-item">
+    <div class="lesson-row1">
+      <span class="lesson-student">${esc(l.studentName||'—')}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="lesson-date">${d}</span>
+        <button data-edit-id="${l.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.85rem;padding:2px 4px;line-height:1;min-width:28px;min-height:28px" title="Редактировать">✏️</button>
+      </div>
+    </div>
+    <div class="lesson-row2">
+      <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
+      ${l.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
+      ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,40))}${l.notes.length>40?'…':''}</span>`:''}
+    </div>
+  </div>`;
+}
+
+// ══════════════════════════════════════════════
+//  STUDENT SEARCH
+// ══════════════════════════════════════════════
+function searchStudents(q, prefix) {
+  const resultsEl = document.getElementById(`${prefix}-student-results`);
+  if (!q || q.length < 2) { resultsEl.style.display='none'; return; }
+  const matches = students.filter(s =>
+    s.name.toLowerCase().includes(q.toLowerCase()) ||
+    s.email.includes(q.toLowerCase())
+  ).slice(0,8);
+
+  if (!matches.length) { resultsEl.style.display='none'; return; }
+
+  resultsEl.innerHTML = matches.map(s => `
+    <div class="student-result-item" onclick="selectStudent('${esc(s.email)}','${prefix}')">
+      <div>
+        <div class="student-name">${esc(s.name)}</div>
+        <div class="student-meta">${s.id} · ${esc(s.email)}</div>
+      </div>
+      <div class="balance-badge ${s.purchased>0?'balance-ok':'balance-low'}">${s.purchased} куп.</div>
+    </div>`).join('');
+  resultsEl.style.display = '';
+}
+
+async function selectStudent(email, prefix) {
+  const s = students.find(x => x.email === email);
+  if (!s) return;
+  document.getElementById(`${prefix}-student-results`).style.display='none';
+
+  if (prefix === 'rec') {
+    document.getElementById('rec-student-inp').value = s.name;
+    document.getElementById('rec-student-inp').dataset.email = email;
+    document.getElementById('rec-chosen-name').textContent = s.name;
+    document.getElementById('rec-chosen-id').textContent = s.id + ' · ' + email;
+    document.getElementById('rec-student-chosen').style.display = '';
+
+    // Load balance async
+    const bal = await getStudentBalance(email);
+    document.getElementById('rec-chosen-balance').innerHTML = balanceBadge(bal.remaining, bal.purchased);
+
+  } else if (prefix === 'grp') {
+    if (grpSelectedStudents.find(x => x.email === email)) return;
+    grpSelectedStudents.push(s);
+    renderGrpTags();
+    document.getElementById('grp-student-inp').value = '';
+  }
+}
+
+function renderGrpTags() {
+  document.getElementById('grp-students-tags').innerHTML = grpSelectedStudents.map(s =>
+    `<div class="group-student-tag">
+      ${esc(s.name)}
+      <button onclick="removeGrpStudent('${esc(s.email)}')">✕</button>
+    </div>`).join('');
+}
+
+function removeGrpStudent(email) {
+  grpSelectedStudents = grpSelectedStudents.filter(s => s.email !== email);
+  renderGrpTags();
+}
+
+function clearStudent(prefix) {
+  document.getElementById(`${prefix}-student-inp`).value = '';
+  document.getElementById(`${prefix}-student-inp`).dataset.email = '';
+  document.getElementById(`${prefix}-student-chosen`).style.display='none';
+}
+
+// ══════════════════════════════════════════════
+//  RECORD INDIVIDUAL LESSON
+// ══════════════════════════════════════════════
+async function submitLesson() {
+  const email = document.getElementById('rec-student-inp').dataset.email;
+  const date  = document.getElementById('rec-date').value;
+  const format= document.getElementById('rec-format').value;
+  const type  = document.getElementById('rec-type').value;
+  const notes = document.getElementById('rec-notes').value.trim();
+
+  if (!email) { toast('Выбери ученика', 'err'); return; }
+  if (!date)  { toast('Укажи дату', 'err'); return; }
+
+  const s = students.find(x => x.email === email);
+  const btn = document.getElementById('rec-submit');
+  btn.disabled = true; btn.textContent = 'Сохранение...';
+
+  try {
+    await db.collection('lessons').add({
+      trainerId:   currentUser.uid,
+      trainerName: currentTrainer.name,
+      studentEmail: email,
+      studentName:  s?.name || '',
+      studentId:    s?.id || '',
+      _date:   date,
+      format, type, notes,
+      groupLessonId: null,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+    toast('Занятие записано ✓', 'ok');
+    closeIndivModal();
+    loadHomePage();
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = 'Записать занятие';
+}
+
+// ══════════════════════════════════════════════
+//  GROUP LESSONS
+// ══════════════════════════════════════════════
+function openIndivModal() {
+  clearStudent('rec');
+  document.getElementById('rec-notes').value = '';
+  document.getElementById('rec-date').value = new Date().toISOString().slice(0,10);
+  // сброс формата
+  document.querySelectorAll('#indiv-modal .toggle-btn').forEach(b=>b.classList.remove('on'));
+  const offlineBtn = document.querySelector('#indiv-modal .toggle-btn');
+  if (offlineBtn) offlineBtn.classList.add('on');
+  document.getElementById('rec-format').value = 'offline';
+  document.getElementById('rec-submit').textContent = 'Записать занятие';
+  document.getElementById('rec-submit').disabled = false;
+  document.getElementById('indiv-modal').style.display = 'flex';
+}
+function closeIndivModal() {
+  document.getElementById('indiv-modal').style.display = 'none';
+}
+
+function openGroupModal() {
+  editingGroupId = null;
+  grpSelectedStudents = [];
+  renderGrpTags();
+  document.getElementById('grp-date').value = new Date().toISOString().slice(0,10);
+  document.getElementById('grp-venue').value = '';
+  document.getElementById('grp-notes').value = '';
+  document.getElementById('grp-submit').textContent = 'Создать занятие';
+  document.getElementById('group-modal-title').textContent = 'Новое групповое занятие';
+  const delBtn = document.getElementById('grp-delete-btn');
+  if (delBtn) delBtn.style.display = 'none';
+  document.getElementById('group-modal').style.display = 'flex';
+}
+
+async function openEditGroupModal(groupId) {
+  let g = _editGroupCache[groupId];
+  if (!g) {
+    try {
+      const doc = await db.collection('groupLessons').doc(groupId).get();
+      if (!doc.exists) { toast('Групповое занятие не найдено', 'err'); return; }
+      g = {id: doc.id, ...doc.data()};
+      _editGroupCache[groupId] = g;
+    } catch(e) { toast('Ошибка: ' + e.message, 'err'); return; }
+  }
+  editingGroupId = groupId;
+  // Заполняем студентов из существующей группы
+  grpSelectedStudents = (g.studentEmails||[]).map((email, i) => ({
+    email, name: (g.studentNames||[])[i]||email, id: (g.studentIds||[])[i]||''
+  }));
+  renderGrpTags();
+  document.getElementById('grp-date').value = g._date || '';
+  document.getElementById('grp-venue').value = g.venue || '';
+  document.getElementById('grp-notes').value = g.notes || '';
+  // Формат
+  const fmt = g.format || 'offline';
+  document.getElementById('grp-format').value = fmt;
+  document.querySelectorAll('#group-modal .toggle-btn').forEach(b => b.classList.remove('on'));
+  const fmtBtn = document.querySelector(`#group-modal .toggle-btn[onclick*="${fmt}"]`);
+  if (fmtBtn) fmtBtn.classList.add('on');
+  document.getElementById('grp-submit').textContent = 'Сохранить изменения';
+  document.getElementById('group-modal-title').textContent = 'Редактировать занятие';
+  // Показываем кнопку удаления
+  let delBtn = document.getElementById('grp-delete-btn');
+  if (!delBtn) {
+    delBtn = document.createElement('button');
+    delBtn.id = 'grp-delete-btn';
+    delBtn.className = 'btn-full';
+    delBtn.style.cssText = 'background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:13px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%;margin-top:8px';
+    delBtn.textContent = '🗑 Удалить занятие';
+    delBtn.addEventListener('click', confirmDeleteGroup);
+    document.getElementById('grp-submit').parentNode.insertBefore(delBtn, document.getElementById('grp-submit').nextSibling.nextSibling);
+  }
+  delBtn.style.display = '';
+  delBtn.dataset.confirm = '';
+  document.getElementById('group-modal').style.display = 'flex';
+}
+
+async function confirmDeleteGroup() {
+  const btn = document.getElementById('grp-delete-btn');
+  if (btn.dataset.confirm !== '1') {
+    btn.dataset.confirm = '1';
+    btn.textContent = '⚠️ Нажми ещё раз для подтверждения';
+    setTimeout(() => { btn.dataset.confirm = ''; btn.textContent = '🗑 Удалить занятие'; }, 3000);
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Удаление...';
+  const deletingId = editingGroupId;
+  try {
+    const batch = db.batch();
+    batch.delete(db.collection('groupLessons').doc(deletingId));
+    // Удаляем связанные индивидуальные записи
+    const snap = await db.collection('lessons').where('groupLessonId','==',deletingId).get();
+    snap.docs.forEach(d => {
+      batch.delete(d.ref);
+      delete _editLessonCache[d.id];
+    });
+    await batch.commit();
+    _deletedGroupIds.add(deletingId);
+    delete _editGroupCache[deletingId];
+
+    // Сразу убираем из DOM
+    document.querySelectorAll(`[data-edit-group-id="${deletingId}"]`).forEach(el => {
+      el.closest('.lesson-item, .card')?.remove();
+    });
+
+    closeGroupModal();
+    toast('Групповое занятие удалено', 'ok');
+
+    // Фоновая перезагрузка
+    loadGroupLessons();
+    loadHomePage();
+    if (document.getElementById('page-history').classList.contains('on')) loadHistory();
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+    btn.disabled = false;
+    btn.dataset.confirm = '';
+    btn.textContent = '🗑 Удалить занятие';
+  }
+}
+
+function closeGroupModal() {
+  document.getElementById('group-modal').style.display = 'none';
+}
+
+async function submitGroupLesson() {
+  const date   = document.getElementById('grp-date').value;
+  const venue  = document.getElementById('grp-venue').value.trim();
+  const format = document.getElementById('grp-format').value;
+  const notes  = document.getElementById('grp-notes').value.trim();
+
+  if (!date)  { toast('Укажи дату', 'err'); return; }
+  if (!venue) { toast('Укажи место', 'err'); return; }
+  if (!grpSelectedStudents.length) { toast('Добавь хотя бы одного ученика', 'err'); return; }
+
+  const btn = document.getElementById('grp-submit');
+  btn.disabled=true; btn.textContent='Сохранение...';
+
+  try {
+    const batch = db.batch();
+
+    if (editingGroupId) {
+      // ── РЕЖИМ РЕДАКТИРОВАНИЯ ──
+      batch.update(db.collection('groupLessons').doc(editingGroupId), {
+        _date: date, venue, format, notes,
+        studentEmails: grpSelectedStudents.map(s=>s.email),
+        studentNames:  grpSelectedStudents.map(s=>s.name),
+        studentIds:    grpSelectedStudents.map(s=>s.id),
+        count: grpSelectedStudents.length,
+      });
+      // Обновляем связанные индивидуальные записи
+      const indSnap = await db.collection('lessons').where('groupLessonId','==',editingGroupId).get();
+      indSnap.docs.forEach(d => batch.update(d.ref, { _date: date, format, notes }));
+      await batch.commit();
+      delete _editGroupCache[editingGroupId];
+      closeGroupModal();
+      toast('Занятие обновлено ✓', 'ok');
+      loadGroupLessons();
+      loadHomePage();
+      if (document.getElementById('page-history').classList.contains('on')) loadHistory();
+      btn.disabled=false; btn.textContent='Сохранить изменения';
+      return;
+    }
+
+    // ── РЕЖИМ СОЗДАНИЯ ──
+    const grpRef = db.collection('groupLessons').doc();
+    batch.set(grpRef, {
+      trainerId:   currentUser.uid,
+      trainerName: currentTrainer.name,
+      _date: date, venue, format, notes,
+      studentEmails: grpSelectedStudents.map(s=>s.email),
+      studentNames:  grpSelectedStudents.map(s=>s.name),
+      studentIds:    grpSelectedStudents.map(s=>s.id),
+      count: grpSelectedStudents.length,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Create individual lesson records for each student
+    for (const s of grpSelectedStudents) {
+      const lesRef = db.collection('lessons').doc();
+      batch.set(lesRef, {
+        trainerId:   currentUser.uid,
+        trainerName: currentTrainer.name,
+        studentEmail: s.email,
+        studentName:  s.name,
+        studentId:    s.id,
+        _date: date, format, type: 'group', notes,
+        groupLessonId: grpRef.id,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+    closeGroupModal();
+    toast(`Групповое занятие записано (${grpSelectedStudents.length} учеников) ✓`, 'ok');
+    loadGroupLessons();
+    loadHomePage();
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+  }
+  btn.disabled=false; btn.textContent='Создать занятие';
+}
+
+async function loadGroupLessons() {
+  let snap;
+  try {
+    snap = currentTrainer.role === 'admin'
+      ? await db.collection('groupLessons').orderBy('createdAt','desc').limit(50).get()
+      : await db.collection('groupLessons').where('trainerId','==',currentUser.uid).get();
+  } catch(e) {
+    snap = currentTrainer.role === 'admin'
+      ? await db.collection('groupLessons').limit(50).get()
+      : await db.collection('groupLessons').where('trainerId','==',currentUser.uid).get();
+  }
+  const docs = snap.docs.slice().sort((a,b)=>{
+    const ad=a.data()._date||'', bd=b.data()._date||'';
+    return bd>ad?1:-1;
+  });
+  // Кешируем для редактирования
+  docs.forEach(d => { _editGroupCache[d.id] = {id: d.id, ...d.data()}; });
+  const list = document.getElementById('group-list');
+  if (!docs.length) { list.innerHTML='<div class="empty">Групповых занятий пока нет</div>'; return; }
+  list.innerHTML = docs.map(d => {
+    const g = d.data();
+    const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}) : '';
+    return `<div class="card" style="cursor:default">
+      <div class="card-head">
+        <div>
+          <div style="font-weight:700">${esc(g.venue)}</div>
+          <div style="font-size:.75rem;color:var(--text2)">${dt} · ${g.count} учеников · <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${g.format==='online'?'Онлайн':'Офлайн'}</span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName||'')}</span>`:''}
+          <button data-edit-group-id="${d.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px">✏️</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:10px 18px">
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${(g.studentNames||[]).map(n=>`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:.78rem">${esc(n)}</span>`).join('')}
+        </div>
+        ${g.notes?`<div style="font-size:.78rem;color:var(--text2);margin-top:8px">${esc(g.notes)}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════════════
+let _histTab = 'all';  // 'all' | 'indiv' | 'group'
+let _histLessonsCache = [];
+let _histGroupsCache  = [];
+
+function histTab(tab, btn) {
+  _histTab = tab;
+  document.querySelectorAll('[id^="hist-tab-"]').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderHistoryList();
+}
+
+async function loadHistory() {
+  const from = document.getElementById('hist-from').value;
+  const to   = document.getElementById('hist-to').value;
+  const isAdmin = currentTrainer.role === 'admin';
+
+  // Инд. занятия
+  const snap = isAdmin
+    ? await db.collection('lessons').get()
+    : await db.collection('lessons').where('trainerId','==',currentUser.uid).get();
+  let lessons = snap.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(l => !_deletedLessonIds.has(l.id));
+  lessons.forEach(l => { _editLessonCache[l.id] = l; });
+  lessons.sort((a,b)=>(b._date||'')>(a._date||'')?1:-1);
+  if (from) lessons = lessons.filter(l=>l._date>=from);
+  if (to)   lessons = lessons.filter(l=>l._date<=to);
+
+  // Групповые
+  const gsnap = isAdmin
+    ? await db.collection('groupLessons').get()
+    : await db.collection('groupLessons').where('trainerId','==',currentUser.uid).get();
+  let groups = gsnap.docs.map(d=>({id:d.id,...d.data(),_isGroup:true}))
+    .filter(g => !_deletedGroupIds.has(g.id));
+  groups.forEach(g => { _editGroupCache[g.id] = g; });
+  groups.sort((a,b)=>(b._date||'')>(a._date||'')?1:-1);
+  if (from) groups = groups.filter(g=>g._date>=from);
+  if (to)   groups = groups.filter(g=>g._date<=to);
+
+  _histLessonsCache = lessons;
+  _histGroupsCache  = groups;
+
+  // Статистика
+  const indivOnly = lessons.filter(l=>l.type!=='group');
+  const offline = lessons.filter(l=>l.format==='offline').length;
+  const online  = lessons.filter(l=>l.format==='online').length;
+  const unique  = new Set(lessons.map(l=>l.studentEmail)).size;
+  const totalStudentsInGroups = groups.reduce((t,g)=>t+(g.count||0),0);
+
+  document.getElementById('hist-stats').innerHTML = `
+    <div class="stat-card sc-blue">
+      <div class="stat-label">Инд. занятий</div>
+      <div class="stat-val">${indivOnly.length}</div>
+      <div class="stat-sub">${offline} офл · ${online} онл</div>
+    </div>
+    <div class="stat-card sc-green">
+      <div class="stat-label">Групп. занятий</div>
+      <div class="stat-val">${groups.length}</div>
+      <div class="stat-sub">${totalStudentsInGroups} посещений</div>
+    </div>
+    <div class="stat-card sc-purple">
+      <div class="stat-label">Учеников</div>
+      <div class="stat-val">${unique}</div>
+      <div class="stat-sub">уникальных</div>
+    </div>`;
+
+  renderHistoryList();
+}
+
+function renderHistoryList() {
+  const lessons = _histLessonsCache;
+  const groups  = _histGroupsCache;
+  let html = '';
+  let count = 0;
+
+  if (_histTab === 'all' || _histTab === 'indiv') {
+    // Показываем ВСЕ записи из lessons (включая созданные из групп)
+    if (lessons.length) {
+      if (_histTab === 'all') html += `<div style="font-size:.75rem;font-weight:700;color:var(--text2);padding:10px 0 6px;text-transform:uppercase;letter-spacing:.04em">Все записи учеников (${lessons.length})</div>`;
+      html += lessons.map(l => histLessonItemHTML(l)).join('');
+      count += lessons.length;
+    } else if (_histTab === 'indiv') {
+      html += '<div class="empty">Нет занятий</div>';
+    }
+  }
+
+  if (_histTab === 'all' || _histTab === 'group') {
+    if (groups.length) {
+      if (_histTab === 'all') html += `<div style="font-size:.75rem;font-weight:700;color:var(--text2);padding:14px 0 6px;text-transform:uppercase;letter-spacing:.04em">Групповые (${groups.length})</div>`;
+      html += groups.map(g => histGroupItemHTML(g)).join('');
+      count += groups.length;
+    } else if (_histTab === 'group') {
+      html += '<div class="empty">Нет групповых занятий</div>';
+    }
+  }
+
+  const titles = {all:'Все занятия', indiv:'Индивидуальные', group:'Групповые'};
+  document.getElementById('hist-title').textContent = titles[_histTab];
+  document.getElementById('hist-count').textContent = count + ' записей';
+  document.getElementById('hist-list').innerHTML = html || '<div class="empty">Нет занятий за этот период</div>';
+}
+
+function histLessonItemHTML(l) {
+  const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
+  return `<div class="lesson-item">
+    <div class="lesson-row1">
+      <span class="lesson-student">${esc(l.studentName||'—')}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="lesson-date">${d}</span>
+        <button data-edit-id="${esc(l.id)}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
+      </div>
+    </div>
+    <div class="lesson-row2">
+      <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
+      ${l.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
+      ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,60))}${l.notes.length>60?'…':''}</span>`:''}
+    </div>
+  </div>`;
+}
+
+function histGroupItemHTML(g) {
+  const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
+  return `<div class="lesson-item">
+    <div class="lesson-row1">
+      <span class="lesson-student">👥 ${esc(g.venue||'Группа')}</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="lesson-date">${d}</span>
+        <button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
+      </div>
+    </div>
+    <div class="lesson-row2">
+      <span class="tag tag-group">${g.count} чел.</span>
+      <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
+      ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+      ${(g.studentNames||[]).map(n=>`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:.73rem">${esc(n)}</span>`).join('')}
+    </div>
+    ${g.notes?`<div style="font-size:.75rem;color:var(--text2);margin-top:6px;font-style:italic">💬 ${esc(g.notes)}</div>`:''}
+  </div>`;
+}
+
+function resetHistoryFilter() {
+  document.getElementById('hist-from').value = '';
+  document.getElementById('hist-to').value = '';
+  loadHistory();
+}
+
+// ══════════════════════════════════════════════
+//  ADMIN PANEL
+// ══════════════════════════════════════════════
+async function loadAdminData() {
+  if (currentTrainer.role !== 'admin') return;
+  const from = document.getElementById('adm-from').value;
+  const to   = document.getElementById('adm-to').value;
+
+  // Load all lessons
+  let snap;
+  try { snap = await db.collection('lessons').orderBy('_date','desc').limit(500).get(); }
+  catch(e) { snap = await db.collection('lessons').limit(500).get(); }
+  let lessons = snap.docs.map(d=>({id:d.id,...d.data()}));
+  lessons.forEach(l => { _editLessonCache[l.id] = l; });
+  lessons.sort((a,b)=>(b._date||'')>(a._date||'')?1:-1);
+  if (from) lessons = lessons.filter(l=>l._date>=from);
+  if (to)   lessons = lessons.filter(l=>l._date<=to);
+
+  // Trainer stats
+  const trainerMap = {};
+  for (const l of lessons) {
+    if (!trainerMap[l.trainerId]) trainerMap[l.trainerId] = {name:l.trainerName,cnt:0,students:new Set(),offline:0,online:0};
+    const t = trainerMap[l.trainerId];
+    t.cnt++; t.students.add(l.studentEmail);
+    if (l.format==='offline') t.offline++; else t.online++;
+  }
+  document.getElementById('adm-trainer-body').innerHTML = Object.values(trainerMap).map(t=>`
+    <tr>
+      <td><b>${esc(t.name||'—')}</b></td>
+      <td>${t.cnt}</td>
+      <td>${t.students.size}</td>
+      <td>${t.offline}</td>
+      <td>${t.online}</td>
+    </tr>`).join('') || '<tr><td colspan="5" class="empty">Нет данных</td></tr>';
+
+  // Recent lessons
+  const recent = lessons.slice(0,50);
+  document.getElementById('adm-lessons-count').textContent = lessons.length + ' занятий';
+  document.getElementById('adm-lessons-body').innerHTML = recent.map(l=>{
+    const dt = l._date?new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}):'—';
+    return`<tr>
+      <td>${dt}</td>
+      <td><b>${esc(l.studentName||'—')}</b><div style="font-size:.7rem;color:var(--text2)">${l.studentId||''}</div></td>
+      <td class="dim">${esc(l.trainerName||'—')}</td>
+      <td><span class="tag ${l.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${l.format==='online'?'Онлайн':'Офлайн'}</span></td>
+      <td><span class="tag ${l.type==='group'?'tag-group':'tag-indiv'}" style="padding:1px 6px">${l.type==='group'?'Группа':'Индив.'}</span></td>
+    </tr>`;}).join('') || '<tr><td colspan="5" class="empty">Нет занятий</td></tr>';
+
+  // Trainer list
+  const trainersSnap = await db.collection('trainers').get();
+  document.getElementById('adm-trainers-body').innerHTML = trainersSnap.docs.map(d=>{
+    const t = d.data();
+    return`<tr>
+      <td><b>${esc(t.name||'')}</b></td>
+      <td class="dim" style="font-size:.78rem">${esc(t.email||'')}</td>
+      <td><span class="badge ${t.role==='admin'?'badge-empty':'badge-active'}" style="${t.role==='admin'?'background:rgba(239,68,68,.12);color:var(--red)':'background:rgba(74,158,255,.12);color:var(--accent2)'}">${t.role==='admin'?'Админ':'Тренер'}</span></td>
+      <td></td>
+    </tr>`;}).join('');
+
+  // Students with empty balance
+  await loadBalanceAlerts();
+}
+
+async function loadBalanceAlerts() {
+  // Get used lessons per student
+  const snap = await db.collection('lessons').get();
+  const usedMap = {};
+  snap.docs.forEach(d => {
+    const email = d.data().studentEmail;
+    usedMap[email] = (usedMap[email]||0) + 1;
+  });
+
+  const alerts = [];
+  const listItems = [];
+  for (const s of students) {
+    if (!s.purchased) continue;
+    const used = usedMap[s.email] || 0;
+    const remaining = s.purchased - used;
+    if (remaining <= 0) {
+      alerts.push(`<div class="alert"><div class="alert-icon">🔴</div><div class="alert-text"><b>${esc(s.name)}</b> — закончились занятия (куплено: ${s.purchased}, использовано: ${used})</div></div>`);
+      listItems.push({s, remaining, used});
+    } else if (remaining <= 2) {
+      alerts.push(`<div class="alert" style="background:rgba(249,115,22,.08);border-color:rgba(249,115,22,.25)"><div class="alert-icon">🟡</div><div class="alert-text"><b>${esc(s.name)}</b> — осталось <b>${remaining} занятия</b>. Написать?</div></div>`);
+    }
+  }
+
+  document.getElementById('admin-alerts').innerHTML = alerts.slice(0,5).join('');
+  document.getElementById('adm-balance-list').innerHTML = listItems.length
+    ? listItems.map(({s,remaining,used})=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4)">
+          <div>
+            <div style="font-weight:700">${esc(s.name)}</div>
+            <div style="font-size:.75rem;color:var(--text2)">${s.id} · ${esc(s.email)}</div>
+          </div>
+          <span class="balance-badge balance-empty">${remaining <= 0 ? '0' : remaining} зан.</span>
+        </div>`).join('')
+    : '<div class="empty" style="padding:16px">Всё в порядке — у всех учеников есть занятия</div>';
+}
+
+// ══════════════════════════════════════════════
+//  EDIT / DELETE LESSON
+// ══════════════════════════════════════════════
+let _editLessonCache = {};  // id → lesson data cache
+const _deletedLessonIds = new Set();   // удалённые individual
+const _deletedGroupIds  = new Set();   // удалённые group
+
+async function openEditModal(lessonId) {
+  try {
+    let lesson = _editLessonCache[lessonId];
+    if (!lesson) {
+      // Try fetching from Firestore, but don't fail if rules block it
+      try {
+        const doc = await db.collection('lessons').doc(lessonId).get();
+        if (doc.exists) {
+          lesson = { id: doc.id, ...doc.data() };
+          _editLessonCache[lessonId] = lesson;
+        }
+      } catch(fetchErr) {
+        console.warn('Could not fetch lesson, checking cache only:', fetchErr.message);
+      }
+    }
+    if (!lesson) { toast('Занятие не найдено в кеше. Перезагрузи страницу.', 'err'); return; }
+
+    document.getElementById('edit-lesson-id').value = lessonId;
+    document.getElementById('edit-lesson-student').textContent = lesson.studentName || lesson.studentEmail || '—';
+    document.getElementById('edit-lesson-date').value = lesson._date || '';
+    document.getElementById('edit-lesson-notes').value = lesson.notes || '';
+
+    const fmt = lesson.format || 'offline';
+    document.getElementById('edit-lesson-format').value = fmt;
+    document.getElementById('edit-fmt-offline').classList.toggle('on', fmt === 'offline');
+    document.getElementById('edit-fmt-online').classList.toggle('on', fmt === 'online');
+
+    // Сбрасываем кнопки
+    const delBtn = document.getElementById('edit-delete-btn');
+    if (delBtn) { delBtn.dataset.confirm = ''; delBtn.disabled = false; delBtn.textContent = '🗑 Удалить занятие'; }
+    const saveBtn = document.getElementById('edit-save-btn');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Сохранить'; }
+
+    document.getElementById('edit-lesson-modal').style.display = 'flex';
+  } catch(e) {
+    toast('Ошибка открытия: ' + e.message, 'err');
+    console.error('openEditModal error:', e);
+  }
+}
+
+function closeEditModal() {
+  document.getElementById('edit-lesson-modal').style.display = 'none';
+}
+
+function editToggleFmt(val, btn) {
+  document.getElementById('edit-lesson-format').value = val;
+  btn.closest('.toggle-group').querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+async function saveEditLesson() {
+  const id     = document.getElementById('edit-lesson-id').value;
+  const date   = document.getElementById('edit-lesson-date').value;
+  const format = document.getElementById('edit-lesson-format').value;
+  const notes  = document.getElementById('edit-lesson-notes').value.trim();
+  if (!date) { toast('Укажи дату', 'err'); return; }
+
+  const btn = document.getElementById('edit-save-btn');
+  btn.disabled = true; btn.textContent = 'Сохранение...';
+  try {
+    await db.collection('lessons').doc(id).update({ _date: date, format, notes });
+    delete _editLessonCache[id];
+    toast('Изменения сохранены ✓', 'ok');
+    closeEditModal();
+    loadHomePage();
+    if (document.getElementById('page-history').style.display !== 'none') loadHistory();
+    if (currentTrainer.role === 'admin') loadAdminData();
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = 'Сохранить';
+}
+
+async function confirmDeleteLesson() {
+  const id = document.getElementById('edit-lesson-id').value;
+  const btn = document.getElementById('edit-delete-btn');
+
+  if (btn.dataset.confirm !== '1') {
+    btn.dataset.confirm = '1';
+    btn.textContent = '⚠️ Нажми ещё раз для подтверждения';
+    setTimeout(() => { btn.dataset.confirm = ''; btn.textContent = '🗑 Удалить занятие'; }, 3000);
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Удаление...';
+  try {
+    await db.collection('lessons').doc(id).delete();
+    _deletedLessonIds.add(id);
+    delete _editLessonCache[id];
+
+    // Сразу убираем из DOM — не ждём перезагрузки
+    document.querySelectorAll(`[data-edit-id="${id}"]`).forEach(el => {
+      el.closest('.lesson-item')?.remove();
+    });
+
+    closeEditModal();
+    toast('Занятие удалено', 'ok');
+
+    // Фоновая перезагрузка
+    loadHomePage();
+    if (document.getElementById('page-history').classList.contains('on')) loadHistory();
+    if (currentTrainer.role === 'admin') loadAdminData();
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+    btn.disabled = false;
+    btn.dataset.confirm = '';
+    btn.textContent = '🗑 Удалить занятие';
+  }
+}
+
+// ══════════════════════════════════════════════
+//  ADD TRAINER
+// ══════════════════════════════════════════════
+function openAddTrainerModal() {
+  document.getElementById('add-trainer-modal').style.display = 'flex';
+  document.getElementById('add-trainer-err').textContent = '';
+}
+
+async function addTrainer() {
+  const name  = document.getElementById('new-trainer-name').value.trim();
+  const email = document.getElementById('new-trainer-email').value.trim();
+  const pass  = document.getElementById('new-trainer-pass').value;
+  const errEl = document.getElementById('add-trainer-err');
+  errEl.textContent = '';
+
+  if (!name||!email||!pass) { errEl.textContent='Заполни все поля'; return; }
+  if (pass.length < 6) { errEl.textContent='Пароль минимум 6 символов'; return; }
+
+  // Use unique secondary app name to avoid conflicts on repeated calls
+  const secName = 'secondary_' + Date.now();
+  const secondaryApp = firebase.initializeApp(FIREBASE_CONFIG, secName);
+  try {
+    const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, pass);
+    await db.collection('trainers').doc(cred.user.uid).set({
+      name, email, role: 'trainer',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      active: true,
+    });
+    await secondaryApp.auth().signOut();
+    await secondaryApp.delete();
+    toast('Тренер создан: ' + name, 'ok');
+    document.getElementById('new-trainer-name').value = '';
+    document.getElementById('new-trainer-email').value = '';
+    document.getElementById('new-trainer-pass').value = '';
+    document.getElementById('add-trainer-modal').style.display = 'none';
+    loadAdminData();
+  } catch(e) {
+    errEl.textContent = e.code==='auth/email-already-in-use'?'Email уже используется':'Ошибка: '+e.message;
+    try { await secondaryApp.delete(); } catch(_) {}
+  }
+}
+
+// ══════════════════════════════════════════════
+//  NAVIGATION
+// ══════════════════════════════════════════════
+function showPage(name) {
+  if (name === 'admin' && currentTrainer?.role !== 'admin') return;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('on'));
+  document.getElementById(`page-${name}`).classList.add('on');
+  document.querySelector(`[data-page="${name}"]`)?.classList.add('on');
+  // Lazy load
+  if (name==='record')  loadHomePage();
+  if (name==='history') loadHistory();
+  if (name==='group')   loadGroupLessons();
+  if (name==='admin')   loadAdminData();
+}
+
+// ══════════════════════════════════════════════
+//  TOGGLE BUTTONS
+// ══════════════════════════════════════════════
+function toggle(fieldId, btn, val) {
+  btn.closest('.toggle-group').querySelectorAll('.toggle-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById(fieldId).value = val;
+}
+
+// ══════════════════════════════════════════════
+//  CSV PARSER (minimal)
+// ══════════════════════════════════════════════
+function parseCSV(txt){
+  const lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  if(!lines.length)return[];
+  const headers=splitLine(lines[0]);
+  const out=[];
+  for(let i=1;i<lines.length;i++){
+    const l=lines[i].trim();if(!l)continue;
+    const vals=splitLine(l),row={};
+    headers.forEach((h,j)=>row[h.trim()]=(vals[j]||'').trim());
+    out.push(row);
+  }
+  return out;
+}
+function splitLine(line){
+  const res=[];let cur='',q=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}
+    else if(c===','&&!q){res.push(cur);cur='';}
+    else cur+=c;
+  }
+  res.push(cur);return res;
+}
+
+// ══════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+let _toastTimer=null;
+function toast(msg, type='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.className=`toast ${type} show`;
+  if(_toastTimer)clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+// Делегированный обработчик кликов — надёжнее inline onclick на мобильных
+document.addEventListener('click', e => {
+  // Закрыть поиск студентов
+  if (!e.target.closest('.student-search-wrap')) {
+    document.querySelectorAll('.student-results').forEach(el=>el.style.display='none');
+  }
+  // Кнопка редактирования индивидуального занятия
+  const editBtn = e.target.closest('[data-edit-id]');
+  if (editBtn) {
+    e.stopPropagation();
+    openEditModal(editBtn.dataset.editId);
+  }
+  // Кнопка редактирования группового занятия
+  const editGrpBtn = e.target.closest('[data-edit-group-id]');
+  if (editGrpBtn) {
+    e.stopPropagation();
+    openEditGroupModal(editGrpBtn.dataset.editGroupId);
+  }
+});
+</script>
+</body>
+</html>

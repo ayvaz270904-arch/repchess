@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rep Chess Education CRM</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg:#0f1117; --surface:#1a1d27; --surface2:#252836; --border:#2d3142;
+  --accent:#C94A42; --accent2:#4a9eff; --text:#e8e8e8; --text2:#9ca3b0;
+  --green:#22c55e; --red:#ef4444; --orange:#f97316; --purple:#a855f7;
+}
+body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; font-size:14px; }
+
+/* HEADER */
+.header { background:var(--surface); border-bottom:2px solid var(--accent); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; gap:12px; flex-wrap:wrap; }
+.header h1 { font-size:1.2rem; font-weight:800; color:var(--accent); white-space:nowrap; }
+.header-right { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.status-pill { font-size:.75rem; color:var(--text2); background:var(--surface2); border:1px solid var(--border); padding:4px 10px; border-radius:20px; white-space:nowrap; }
+.status-pill.ok  { color:var(--green); border-color:rgba(34,197,94,.3); background:rgba(34,197,94,.08); }
+.status-pill.err { color:var(--red);   border-color:rgba(239,68,68,.3);  background:rgba(239,68,68,.08); }
+.status-pill.spin { animation:pulse 1.2s infinite; }
+.btn { padding:7px 14px; border-radius:8px; border:none; cursor:pointer; font-size:.82rem; font-weight:600; transition:all .15s; white-space:nowrap; }
+.btn-gold  { background:var(--accent); color:#fff; }
+.btn-gold:hover  { background:#e0b430; }
+.btn-ghost { background:var(--surface2); color:var(--text); border:1px solid var(--border); }
+.btn-ghost:hover { background:var(--border); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+/* DATE FILTER BAR */
+.filter-bar {
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:10px 24px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  position:sticky;
+  top:53px;
+  z-index:99;
+}
+.filter-label { font-size:.75rem; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
+.date-inp {
+  padding:6px 10px;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  color:var(--text);
+  font-size:.82rem;
+  cursor:pointer;
+}
+.date-inp:focus { outline:none; border-color:var(--accent); }
+.date-inp::-webkit-calendar-picker-indicator { filter:invert(.6); cursor:pointer; }
+.presets { display:flex; gap:6px; flex-wrap:wrap; }
+.preset {
+  padding:4px 10px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:none;
+  color:var(--text2);
+  font-size:.75rem;
+  cursor:pointer;
+  transition:all .15s;
+  white-space:nowrap;
+}
+.preset:hover { border-color:var(--accent); color:var(--accent); }
+.preset.on { background:rgba(201,74,66,.12); border-color:var(--accent); color:var(--accent); font-weight:700; }
+.filter-active-badge {
+  font-size:.72rem;
+  background:rgba(245,200,66,.15);
+  color:var(--accent);
+  border:1px solid rgba(245,200,66,.3);
+  padding:3px 8px;
+  border-radius:20px;
+  display:none;
+}
+.btn-clear { padding:4px 10px; border-radius:6px; border:1px solid var(--border); background:none; color:var(--text2); font-size:.75rem; cursor:pointer; }
+.btn-clear:hover { color:var(--red); border-color:var(--red); }
+
+.container { max-width:1480px; margin:0 auto; padding:20px 24px; }
+
+/* KPI */
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:14px; margin-bottom:20px; }
+.kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; position:relative; overflow:hidden; }
+.kpi-card::after { content:''; position:absolute; top:0;left:0;right:0;height:3px; border-radius:12px 12px 0 0; }
+.kpi-gold::after{background:var(--accent);}  .kpi-blue::after{background:var(--accent2);}
+.kpi-green::after{background:var(--green);}  .kpi-orange::after{background:var(--orange);}
+.kpi-purple::after{background:var(--purple);}
+.kpi-label { font-size:.7rem; color:var(--text2); text-transform:uppercase; letter-spacing:.06em; margin-bottom:7px; }
+.kpi-val   { font-size:1.75rem; font-weight:800; line-height:1; }
+.kpi-gold  .kpi-val{color:var(--accent);}    .kpi-blue  .kpi-val{color:var(--accent2);}
+.kpi-green .kpi-val{color:var(--green);}     .kpi-orange .kpi-val{color:var(--orange);}
+.kpi-purple .kpi-val{color:var(--purple);}
+.kpi-sub { font-size:.72rem; color:var(--text2); margin-top:5px; line-height:1.4; }
+
+/* SECTIONS */
+.section { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; margin-bottom:18px; }
+.section-head { padding:12px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.section-title { font-size:.88rem; font-weight:700; }
+.section-body  { padding:16px 20px; }
+.chart-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-bottom:18px; }
+.chart-box { position:relative; height:230px; }
+
+/* TABLE */
+.tbl-wrap { overflow-x:auto; }
+.tbl { width:100%; border-collapse:collapse; font-size:.82rem; }
+.tbl th { text-align:left; padding:9px 12px; color:var(--text2); font-weight:700; font-size:.7rem; text-transform:uppercase; letter-spacing:.05em; border-bottom:1px solid var(--border); white-space:nowrap; cursor:pointer; user-select:none; }
+.tbl th:hover{color:var(--text);}
+.tbl td { padding:8px 12px; border-bottom:1px solid rgba(45,49,66,.4); vertical-align:middle; white-space:nowrap; }
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:var(--surface2);}
+
+/* BADGES */
+.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.7rem;font-weight:700;}
+.badge-active{background:rgba(34,197,94,.15);color:var(--green);}
+.badge-inactive{background:rgba(156,163,176,.12);color:var(--text2);}
+.badge-free{background:rgba(249,115,22,.12);color:var(--orange);}
+
+/* SEARCH */
+.search-row{display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap;}
+.search-inp{flex:1;min-width:200px;padding:8px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.88rem;}
+.search-inp::placeholder{color:var(--text2);}
+.search-inp:focus{outline:none;border-color:var(--accent);}
+.tabs{display:flex;gap:4px;}
+.tab{padding:5px 12px;border-radius:7px;cursor:pointer;font-size:.78rem;font-weight:600;color:var(--text2);border:1px solid transparent;background:none;transition:all .15s;white-space:nowrap;}
+.tab.on{background:var(--surface2);color:var(--text);border-color:var(--border);}
+
+/* SCROLL */
+.scroll{max-height:360px;overflow-y:auto;}
+.scroll::-webkit-scrollbar{width:5px;}
+.scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px;}
+
+.tg-link{color:var(--accent2);text-decoration:none;}
+.tg-link:hover{text-decoration:underline;}
+.dim{color:var(--text2);}
+.empty{text-align:center;padding:28px;color:var(--text2);}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;width:100%;max-width:640px;max-height:85vh;overflow-y:auto;}
+.modal-head{padding:18px 24px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;}
+.modal-body{padding:18px 24px;}
+.modal-close{background:none;border:none;color:var(--text2);font-size:1.4rem;cursor:pointer;padding:2px 8px;border-radius:6px;}
+.modal-close:hover{background:var(--surface2);}
+
+#loading-state{text-align:center;padding:80px 20px;color:var(--text2);}
+#loading-state .ico{font-size:3rem;margin-bottom:16px;animation:pulse 1.3s infinite;}
+#error-state{display:none;text-align:center;padding:60px 20px;}
+.err-card{background:var(--surface);border:1px solid rgba(239,68,68,.3);border-radius:16px;padding:32px;max-width:480px;margin:0 auto;}
+.err-card h3{color:var(--red);margin-bottom:12px;}
+.err-card p{color:var(--text2);font-size:.88rem;line-height:1.7;}
+
+@media(max-width:768px){.chart-grid{grid-template-columns:1fr;}.container{padding:14px;}}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <h1>♟ Rep Chess Education CRM</h1>
+  <div class="header-right">
+    <span id="status-pill" class="status-pill spin">Загрузка...</span>
+    <span id="next-refresh" class="status-pill" style="display:none"></span>
+    <button class="btn btn-gold" onclick="doRefresh()">🔄 Обновить</button>
+  </div>
+</div>
+
+<!-- DATE FILTER BAR -->
+<div class="filter-bar" id="filter-bar" style="display:none">
+  <span class="filter-label">Период:</span>
+  <input class="date-inp" type="date" id="date-from" onchange="applyFilter()">
+  <span class="dim" style="font-size:.8rem">—</span>
+  <input class="date-inp" type="date" id="date-to" onchange="applyFilter()">
+  <div class="presets">
+    <button class="preset on" onclick="setPreset('all',this)">Всё время</button>
+    <button class="preset" onclick="setPreset('month',this)">Месяц</button>
+    <button class="preset" onclick="setPreset('quarter',this)">Квартал</button>
+    <button class="preset" onclick="setPreset('half',this)">Полгода</button>
+    <button class="preset" onclick="setPreset('year',this)">Год</button>
+  </div>
+  <span class="filter-active-badge" id="filter-badge"></span>
+  <button class="btn-clear" id="btn-clear" onclick="setPreset('all',document.querySelector('.preset'))" style="display:none">✕ Сбросить</button>
+</div>
+
+<!-- LOADING -->
+<div id="loading-state">
+  <div class="ico">♟</div>
+  <p>Загружаем данные...</p>
+</div>
+
+<!-- ERROR -->
+<div id="error-state">
+  <div class="err-card">
+    <h3>⚠ Не удалось загрузить данные</h3>
+    <p id="err-msg">Проверь подключение к интернету и попробуй снова.</p>
+    <br><button class="btn btn-gold" onclick="doRefresh()">Попробовать снова</button>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" style="display:none">
+  <div class="container">
+
+    <div class="kpi-grid" id="kpi-grid"></div>
+
+    <div class="chart-grid">
+      <div class="section">
+        <div class="section-head"><span class="section-title">📅 Выручка по дням недели</span></div>
+        <div class="section-body"><div class="chart-box"><canvas id="ch-weekday"></canvas></div></div>
+      </div>
+      <div class="section">
+        <div class="section-head"><span class="section-title">🕐 Выручка по часам суток</span></div>
+        <div class="section-body"><div class="chart-box"><canvas id="ch-hour"></canvas></div></div>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="section">
+        <div class="section-head">
+          <span class="section-title">📈 Выручка по месяцам</span>
+        </div>
+        <div class="section-body"><div class="chart-box"><canvas id="ch-trend"></canvas></div></div>
+      </div>
+      <div class="section">
+        <div class="section-head"><span class="section-title">📦 Разбивка по продуктам</span></div>
+        <div class="section-body"><div class="chart-box"><canvas id="ch-product"></canvas></div></div>
+      </div>
+    </div>
+
+    <!-- ACTIVE -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">🟢 Активные ученики <span style="color:var(--green)" id="active-cnt"></span></span>
+        <span class="dim" style="font-size:.77rem">оплата за последние 30 дней от сегодня</span>
+      </div>
+      <div class="section-body">
+        <div class="scroll"><div class="tbl-wrap">
+          <table class="tbl">
+            <thead><tr>
+              <th>Имя</th><th>Telegram</th><th>Телефон</th>
+              <th onclick="sortA('lastPay')">Последняя оплата</th>
+              <th>Продукт</th>
+              <th onclick="sortA('totalSpent')">Всего ₽</th>
+              <th onclick="sortA('payCount')">Оплат</th>
+            </tr></thead>
+            <tbody id="active-tbody"></tbody>
+          </table>
+        </div></div>
+      </div>
+    </div>
+
+    <!-- STUDENTS -->
+    <div class="section">
+      <div class="section-head">
+        <span class="section-title">👥 База учеников</span>
+        <span class="dim" id="students-cnt" style="font-size:.78rem"></span>
+      </div>
+      <div class="section-body">
+        <div class="search-row">
+          <input class="search-inp" id="search-inp" type="text"
+            placeholder="🔍  имя, email, телефон, telegram..." oninput="renderStudents()">
+          <div class="tabs">
+            <button class="tab on" onclick="setTab('all',this)">Все</button>
+            <button class="tab"    onclick="setTab('active',this)">Активные</button>
+            <button class="tab"    onclick="setTab('inactive',this)">Неактивные</button>
+            <button class="tab"    onclick="setTab('free',this)">Только пробное</button>
+          </div>
+        </div>
+        <div class="scroll"><div class="tbl-wrap">
+          <table class="tbl" id="students-tbl">
+            <thead><tr>
+              <th onclick="sortS('name')">Имя</th>
+              <th>Email</th><th>Telegram</th><th>Телефон</th>
+              <th onclick="sortS('firstPay')">Первая оплата</th>
+              <th onclick="sortS('lastPay')">Последняя оплата</th>
+              <th onclick="sortS('payCount')" id="th-pays">Оплат</th>
+              <th onclick="sortS('totalSpent')" id="th-sum">Сумма</th>
+              <th>Баланс</th>
+              <th>Статус</th>
+            </tr></thead>
+            <tbody id="students-tbody"></tbody>
+          </table>
+        </div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal" style="display:none" class="modal-overlay" onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div style="font-size:1.1rem;font-weight:700" id="m-name"></div>
+        <div style="font-size:.8rem;color:var(--text2);margin-top:3px" id="m-email"></div>
+      </div>
+      <button class="modal-close" onclick="document.getElementById('modal').style.display='none'">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk/export?format=csv&gid=0';
+const REFRESH_MS = 5 * 60 * 1000;
+
+// ══════════════════════════════════════════
+//  PRICE HISTORY
+//  До 18 марта 2026 — старые цены, с 18 — новые
+// ══════════════════════════════════════════
+const PRICE_CHANGE = new Date('2026-03-18');
+
+// price → {cat, lessons}  (разные ценники до и после)
+const PRICES_OLD = {
+  1500:  {cat:'Групп. офлайн',    lessons:1},
+  5500:  {cat:'Групп. офлайн',    lessons:4},
+  12000: {cat:'Групп. офлайн',    lessons:10},
+  1000:  {cat:'Групп. онлайн',    lessons:1},
+  3600:  {cat:'Групп. онлайн',    lessons:4},
+  8000:  {cat:'Групп. онлайн',    lessons:10},
+  2500:  {cat:'Индив. офлайн',    lessons:1},
+  9000:  {cat:'Индив. офлайн',    lessons:4},
+  21000: {cat:'Индив. офлайн',    lessons:10},
+  1700:  {cat:'Индив. онлайн',    lessons:1},
+  6400:  {cat:'Индив. онлайн',    lessons:4},
+  15000: {cat:'Индив. онлайн',    lessons:10},
+};
+const PRICES_NEW = {
+  1800:  {cat:'Групп. офлайн',    lessons:1},
+  6500:  {cat:'Групп. офлайн',    lessons:4},
+  15500: {cat:'Групп. офлайн',    lessons:10},
+  1200:  {cat:'Групп. онлайн',    lessons:1},
+  4400:  {cat:'Групп. онлайн',    lessons:4},
+  10000: {cat:'Групп. онлайн',    lessons:10},   // конфликт с Индив.офлайн×4 — решаем по названию
+  2800:  {cat:'Индив. офлайн',    lessons:1},
+  23500: {cat:'Индив. офлайн',    lessons:10},
+  2000:  {cat:'Индив. онлайн',    lessons:1},
+  7200:  {cat:'Индив. онлайн',    lessons:4},
+  17000: {cat:'Индив. онлайн',    lessons:10},
+  6000:  {cat:'Гроссмейстер',     lessons:1},
+};
+// 10000 после 18.03 — конфликт: Групп.онлайн×10 и Индив.офлайн×4
+// разруливаем по строке продукта
+
+function identifyProduct(productStr, price, date) {
+  const p = (productStr || '').toLowerCase();
+  const isNew = date && date >= PRICE_CHANGE;
+
+  // Попытка извлечь кол-во занятий из строки "Nx<price>"
+  let lessons = 1;
+  const qMatch = p.match(/(\d+)x\d/);
+  if (qMatch) lessons = parseInt(qMatch[1]);
+  else if (p.includes('10 зан') || p.match(/×10|x10|\b10\b.*абон/)) lessons = 10;
+  else if (p.includes('4 зан')  || p.match(/×4|x4|\b4\b.*абон/))    lessons = 4;
+
+  // Тип по ключевым словам
+  const isGM      = p.includes('гросс');
+  const isIndiv   = p.includes('индив');
+  const isOnline  = p.includes('онлайн');
+  const isOffline = p.includes('офлайн');
+  const isGroup   = p.includes('групп') || (!isIndiv && !isGM);
+
+  let cat = '';
+  if (isGM)                          cat = 'Гроссмейстер';
+  else if (isIndiv && isOffline)     cat = 'Индив. офлайн';
+  else if (isIndiv && isOnline)      cat = 'Индив. онлайн';
+  else if (isIndiv)                  cat = 'Индив. онлайн';
+  else if (isGroup && isOffline)     cat = 'Групп. офлайн';
+  else if (isGroup && isOnline)      cat = 'Групп. онлайн';
+  else if (isOffline)                cat = 'Групп. офлайн';
+  else if (isOnline)                 cat = 'Групп. онлайн';
+
+  // Если не определили по строке — используем прайс
+  if (!cat && price) {
+    const catalog = isNew ? PRICES_NEW : PRICES_OLD;
+    const entry = catalog[price];
+    if (entry) { cat = entry.cat; if (lessons === 1) lessons = entry.lessons; }
+  }
+
+  // Особый случай: цена 10000 после 18.03 — различаем по строке
+  if (price === 10000 && isNew) {
+    if (isIndiv && isOffline) { cat = 'Индив. офлайн'; lessons = 4; }
+    else                       { cat = 'Групп. онлайн'; lessons = 10; }
+  }
+
+  return {
+    cat:     cat || 'Другое',
+    lessons: lessons || 1,
+    label:   cat ? `${cat} ×${lessons}` : 'Другое',
+  };
+}
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let students={}, allPaidRows=[], filteredRows=[];
+let charts_={};
+let _tab='all', _sSort={key:'lastPay',dir:-1}, _aSort={key:'totalSpent',dir:-1};
+let _lastRefresh=0, _timer=null;
+let _dateFrom=null, _dateTo=null;
+let usedLessonsMap={};  // email → кол-во проведённых занятий
+
+// ══════════════════════════════════════════
+//  FIREBASE (читаем посещения из Firestore)
+// ══════════════════════════════════════════
+try {
+  firebase.initializeApp({
+    apiKey:            "AIzaSyAumAqazzVQ7GgyNKCo7cCkz2XoObjYUTQ",
+    authDomain:        "repchess-trainer.firebaseapp.com",
+    projectId:         "repchess-trainer",
+    storageBucket:     "repchess-trainer.firebasestorage.app",
+    messagingSenderId: "694548342592",
+    appId:             "1:694548342592:web:5c245c1c24c27e0109bca5"
+  });
+  firebase.auth().signInAnonymously().catch(()=>{});
+} catch(e) { console.warn('Firebase init:', e); }
+
+async function loadUsedLessons() {
+  try {
+    const db = firebase.firestore();
+    const snap = await db.collection('lessons').get();
+    usedLessonsMap = {};
+    snap.forEach(doc => {
+      const d = doc.data();
+      const email = (d.studentEmail||'').toLowerCase().trim();
+      if (!email) return;
+      usedLessonsMap[email] = (usedLessonsMap[email]||0) + 1;
+    });
+    // учитываем групповые занятия
+    const gsnap = await db.collection('groupLessons').get();
+    gsnap.forEach(doc => {
+      const d = doc.data();
+      (d.students||[]).forEach(st => {
+        const email = (st.email||'').toLowerCase().trim();
+        if (email) usedLessonsMap[email] = (usedLessonsMap[email]||0) + 1;
+      });
+    });
+  } catch(e) { console.warn('Firestore read:', e); }
+}
+
+function getBalance(email) {
+  const s = students[email];
+  if (!s) return null;
+  const purchased = s.payments.reduce((t,p)=>t+(p.prod?.lessons||1),0);
+  const used = usedLessonsMap[email.toLowerCase()]||0;
+  return { purchased, used, remaining: purchased - used };
+}
+
+function balanceBadge(email) {
+  const b = getBalance(email);
+  if (!b || !b.purchased) return '<span style="color:var(--text2);font-size:.8rem">—</span>';
+  const r = b.remaining;
+  const color = r <= 0 ? 'var(--red)' : r <= 2 ? 'var(--orange)' : 'var(--green)';
+  return `<span style="color:${color};font-weight:700">${r}</span>`;
+}
+
+// ══════════════════════════════════════════
+//  DATE FILTER
+// ══════════════════════════════════════════
+function setPreset(key, el) {
+  document.querySelectorAll('.preset').forEach(b=>b.classList.remove('on'));
+  el.classList.add('on');
+
+  const now = new Date();
+  let from=null, to=null;
+
+  if (key==='month') {
+    from = new Date(now.getFullYear(), now.getMonth(), 1);
+    to   = new Date(now.getFullYear(), now.getMonth()+1, 0);
+  } else if (key==='quarter') {
+    from = new Date(now - 90*86400000);
+    to   = now;
+  } else if (key==='half') {
+    from = new Date(now - 180*86400000);
+    to   = now;
+  } else if (key==='year') {
+    from = new Date(now.getFullYear(), 0, 1);
+    to   = now;
+  }
+
+  document.getElementById('date-from').value = from ? fmt(from) : '';
+  document.getElementById('date-to').value   = to   ? fmt(to)   : '';
+  _dateFrom = from; _dateTo = to;
+  updateFilterUI();
+  rerender();
+}
+
+function applyFilter() {
+  const f = document.getElementById('date-from').value;
+  const t = document.getElementById('date-to').value;
+  _dateFrom = f ? new Date(f) : null;
+  _dateTo   = t ? new Date(t + 'T23:59:59') : null;
+  document.querySelectorAll('.preset').forEach(b=>b.classList.remove('on'));
+  updateFilterUI();
+  rerender();
+}
+
+function updateFilterUI() {
+  const active = _dateFrom || _dateTo;
+  const badge  = document.getElementById('filter-badge');
+  const clear  = document.getElementById('btn-clear');
+  if (active) {
+    const f = _dateFrom ? fmtD(_dateFrom) : '...';
+    const t = _dateTo   ? fmtD(_dateTo)   : '...';
+    badge.textContent = `${f} — ${t}`;
+    badge.style.display='';
+    clear.style.display='';
+  } else {
+    badge.style.display='none';
+    clear.style.display='none';
+    // re-highlight "Всё время"
+    document.querySelector('.preset').classList.add('on');
+  }
+
+  // Update table headers when filter active
+  const label = active ? ' (в период)' : '';
+  document.getElementById('th-pays').textContent = 'Оплат' + label;
+  document.getElementById('th-sum').textContent  = 'Сумма' + label;
+}
+
+function inRange(date) {
+  if (!date) return false;
+  if (_dateFrom && date < _dateFrom) return false;
+  if (_dateTo   && date > _dateTo)   return false;
+  return true;
+}
+
+function computeFiltered() {
+  if (!_dateFrom && !_dateTo) {
+    filteredRows = allPaidRows;
+  } else {
+    filteredRows = allPaidRows.filter(r => inRange(parseDate(r['sent'])));
+  }
+}
+
+// ══════════════════════════════════════════
+//  FETCH
+// ══════════════════════════════════════════
+async function doRefresh() {
+  setPill('Загружаю...','spin');
+  try {
+    const res = await fetch(CSV_URL + '&t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const txt = await res.text();
+    if (!txt || txt.length < 50) throw new Error('Пустой ответ');
+    processCSV(txt);
+  } catch(e) {
+    hide('loading-state'); hide('dashboard');
+    show('error-state');
+    document.getElementById('err-msg').textContent = 'Ошибка: ' + e.message;
+    setPill('Ошибка','err');
+  }
+}
+
+function scheduleRefresh() {
+  if (_timer) clearInterval(_timer);
+  _timer = setInterval(doRefresh, REFRESH_MS);
+  setInterval(updateTimer, 15000);
+}
+function updateTimer() {
+  const el=document.getElementById('next-refresh');
+  if (!_lastRefresh) return;
+  const sec=Math.max(0,Math.round((REFRESH_MS-(Date.now()-_lastRefresh))/1000));
+  el.textContent=`🔁 через ${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`;
+  el.style.display='';
+}
+
+// ══════════════════════════════════════════
+//  CSV PARSE
+// ══════════════════════════════════════════
+function parseCSV(txt) {
+  const lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  if(!lines.length)return[];
+  const headers=splitLine(lines[0]);
+  const out=[];
+  for(let i=1;i<lines.length;i++){
+    const l=lines[i].trim();if(!l)continue;
+    const vals=splitLine(l),row={};
+    headers.forEach((h,j)=>row[h.trim()]=(vals[j]||'').trim());
+    out.push(row);
+  }
+  return out;
+}
+function splitLine(line){
+  const res=[];let cur='',q=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}
+    else if(c===','&&!q){res.push(cur);cur='';}
+    else cur+=c;
+  }
+  res.push(cur);return res;
+}
+function parsePrice(s){if(!s)return 0;return parseFloat(s.replace(/[\s ]/g,'').replace(',','.'))||0;}
+function parseDate(s){if(!s)return null;try{return new Date(s.replace(' ','T'));}catch{return null;}}
+function isPaid(r){return r['Payment status']==='Paid'||r['Статус оплаты']==='Оплачено'||(r['paymentid']&&/tinkoff|sber|pay/.test(r['paymentid']));}
+function getTg(r){
+  let s=(r['Ваш_ник_в_Telegram']||r['Input']||'').trim();
+  s=s.replace(/^@/,'').replace(/^https?:\/\/t\.me\//,'');
+  if(!s||s.startsWith('+')||/^\d{5,}/.test(s)||s.length<3)return'';
+  return s;
+}
+
+// ══════════════════════════════════════════
+//  PROCESS
+// ══════════════════════════════════════════
+function processCSV(txt) {
+  const rows=parseCSV(txt);
+  allPaidRows=[]; students={};
+
+  for(const row of rows){
+    const email=(row['Email']||'').toLowerCase().trim();
+    if(!email||email==='test@mail.ru')continue;
+    if(!students[email])students[email]={name:row['Name']||'',email,phone:row['Phone']||'',telegram:getTg(row),payments:[],freeCnt:0};
+    const s=students[email];
+    if((row['Name']||'').length>s.name.length)s.name=row['Name'];
+    if(!s.telegram)s.telegram=getTg(row);
+    if(!s.phone&&row['Phone'])s.phone=row['Phone'];
+
+    if(isPaid(row)){
+      const price=parsePrice(row['price']);
+      if(price>0){
+        const date=parseDate(row['sent']);
+        const prod=identifyProduct(row['products'],price,date);
+        allPaidRows.push({...row, _date:date, _price:price, _prod:prod});
+        s.payments.push({date,product:row['products']||'',price,prod});
+      }
+    }else{s.freeCnt++;}
+  }
+
+  for(const s of Object.values(students)){
+    s.payments.sort((a,b)=>(a.date||0)-(b.date||0));
+    s.totalSpent=s.payments.reduce((t,p)=>t+p.price,0);
+    s.payCount=s.payments.length;
+    s.firstPay=s.payments[0]?.date||null;
+    s.lastPay=s.payments[s.payments.length-1]?.date||null;
+    s.lastProduct=s.payments[s.payments.length-1]?.prod?.label||'';
+    s.active=isActiveDate(s.lastPay);
+    s.hasPaid=s.payCount>0;
+  }
+
+  _lastRefresh=Date.now();
+  const dt=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  setPill(`✓ ${dt} · ${rows.length} записей`,'ok');
+  hide('loading-state');hide('error-state');show('dashboard');
+  show('filter-bar');
+  computeFiltered();
+  renderAll();
+  // Подгружаем баланс занятий из Firebase асинхронно
+  loadUsedLessons().then(()=>renderAll());
+}
+
+function isActiveDate(d){return!!d&&(Date.now()-d.getTime())<=30*86400000;}
+
+function rerender(){computeFiltered();renderAll();}
+
+// ══════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════
+function renderAll(){renderKPIs();renderActive();renderStudents();renderCharts();}
+
+function renderKPIs(){
+  const allS=Object.values(students);
+  const act=allS.filter(s=>s.active);
+
+  // Period stats from filteredRows
+  const periodRev=filteredRows.reduce((t,r)=>t+r._price,0);
+  const periodBuyers=new Set(filteredRows.map(r=>(r['Email']||'').toLowerCase())).size;
+  const periodLessons=filteredRows.reduce((t,r)=>t+(r._prod?.lessons||1),0);
+
+  // Total (all time)
+  const totalRev=allPaidRows.reduce((t,r)=>t+r._price,0);
+  const paidStudents=allS.filter(s=>s.hasPaid);
+  const ltv=paidStudents.length?totalRev/paidStudents.length:0;
+
+  const hasPeriod=_dateFrom||_dateTo;
+  const periodLabel=hasPeriod?periodLabel_():null;
+
+  const kpis=[
+    {cls:'kpi-green',  lbl:'Активных учеников',       val:act.length,          sub:'оплата за последние 30 дней'},
+    {cls:'kpi-blue',   lbl:'Учеников в периоде',       val:periodBuyers,        sub:hasPeriod?`из ${paidStudents.length} всего`:`всего оплатили`},
+    {cls:'kpi-gold',   lbl:'Выручка в периоде',        val:fmtM(periodRev),     sub:hasPeriod?periodLabel:'все оплаты'},
+    {cls:'kpi-orange', lbl:'Занятий продано',          val:periodLessons,       sub:hasPeriod?periodLabel:'за всё время'},
+    {cls:'kpi-purple', lbl:'Общая выручка (всё время)',val:fmtM(totalRev),      sub:`LTV ≈ ${fmtM(ltv)}`},
+  ];
+  document.getElementById('kpi-grid').innerHTML=kpis.map(k=>`
+    <div class="kpi-card ${k.cls}">
+      <div class="kpi-label">${k.lbl}</div>
+      <div class="kpi-val">${k.val}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>`).join('');
+}
+
+function periodLabel_(){
+  const f=_dateFrom?fmtD(_dateFrom):'';
+  const t=_dateTo  ?fmtD(_dateTo):'';
+  if(f&&t)return`${f} — ${t}`;
+  if(f)return`с ${f}`;
+  if(t)return`по ${t}`;
+  return '';
+}
+
+function sortA(key){if(_aSort.key===key)_aSort.dir*=-1;else{_aSort.key=key;_aSort.dir=-1;}renderActive();}
+function renderActive(){
+  let list=Object.values(students).filter(s=>s.active);
+  list.sort((a,b)=>{
+    if(_aSort.key==='lastPay')return _aSort.dir*((b.lastPay||0)-(a.lastPay||0));
+    return _aSort.dir*(b[_aSort.key]-a[_aSort.key]);
+  });
+  document.getElementById('active-cnt').textContent=`(${list.length})`;
+  const tb=document.getElementById('active-tbody');
+  if(!list.length){tb.innerHTML=`<tr><td colspan="7" class="empty">Нет активных учеников</td></tr>`;return;}
+  tb.innerHTML=list.map(s=>`<tr onclick="openModal('${esc(s.email)}')" style="cursor:pointer">
+    <td><b>${esc(s.name)}</b></td>
+    <td>${s.telegram?`<a class="tg-link" href="https://t.me/${esc(s.telegram)}" target="_blank" onclick="event.stopPropagation()">@${esc(s.telegram)}</a>`:'<span class="dim">—</span>'}</td>
+    <td class="dim">${esc(s.phone)||'—'}</td>
+    <td>${fmtD(s.lastPay)}</td>
+    <td class="dim">${esc(s.lastProduct)}</td>
+    <td><b style="color:var(--accent)">${fmtM(s.totalSpent)}</b></td>
+    <td style="text-align:center">${s.payCount}</td>
+  </tr>`).join('');
+}
+
+function setTab(t,el){_tab=t;document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));el.classList.add('on');renderStudents();}
+function sortS(key){if(_sSort.key===key)_sSort.dir*=-1;else{_sSort.key=key;_sSort.dir=-1;}renderStudents();}
+
+function renderStudents(){
+  const q=(document.getElementById('search-inp')?.value||'').toLowerCase();
+  const hasPeriod=_dateFrom||_dateTo;
+
+  // Build per-student period stats
+  const periodMap={};
+  for(const r of filteredRows){
+    const email=(r['Email']||'').toLowerCase();
+    if(!periodMap[email])periodMap[email]={cnt:0,sum:0};
+    periodMap[email].cnt++;
+    periodMap[email].sum+=r._price;
+  }
+
+  let list=Object.values(students);
+  if(_tab==='active')  list=list.filter(s=>s.active);
+  else if(_tab==='inactive')list=list.filter(s=>s.hasPaid&&!s.active);
+  else if(_tab==='free')    list=list.filter(s=>!s.hasPaid);
+
+  // When period active, only show students with payments in period (unless free tab)
+  if(hasPeriod && _tab!=='free'){
+    list=list.filter(s=>periodMap[s.email]);
+  }
+
+  if(q)list=list.filter(s=>s.name.toLowerCase().includes(q)||s.email.includes(q)||s.phone.includes(q)||s.telegram.toLowerCase().includes(q));
+
+  list.sort((a,b)=>{
+    const k=_sSort.key;
+    if(k==='name')return a.name.localeCompare(b.name,'ru')*_sSort.dir;
+    // Period sort
+    if(hasPeriod&&k==='payCount'){ return((periodMap[b.email]?.cnt||0)-(periodMap[a.email]?.cnt||0))*_sSort.dir; }
+    if(hasPeriod&&k==='totalSpent'){ return((periodMap[b.email]?.sum||0)-(periodMap[a.email]?.sum||0))*_sSort.dir; }
+    const va=(k==='firstPay'?a.firstPay:k==='lastPay'?a.lastPay:null)||0;
+    const vb=(k==='firstPay'?b.firstPay:k==='lastPay'?b.lastPay:null)||0;
+    if(va||vb)return(vb-va)*_sSort.dir;
+    return(b[k]-a[k])*_sSort.dir;
+  });
+
+  document.getElementById('students-cnt').textContent=list.length+' учеников';
+  const tb=document.getElementById('students-tbody');
+  if(!list.length){tb.innerHTML=`<tr><td colspan="9" class="empty">Ничего не найдено</td></tr>`;return;}
+
+  tb.innerHTML=list.map(s=>{
+    const pm=periodMap[s.email];
+    const payCnt  = hasPeriod?(pm?.cnt||0):s.payCount;
+    const paySum  = hasPeriod?(pm?.sum||0):s.totalSpent;
+    return`<tr onclick="openModal('${esc(s.email)}')" style="cursor:pointer">
+      <td><b>${esc(s.name)}</b></td>
+      <td class="dim" style="font-size:.76rem">${esc(s.email)}</td>
+      <td>${s.telegram?`<a class="tg-link" href="https://t.me/${esc(s.telegram)}" target="_blank" onclick="event.stopPropagation()">@${esc(s.telegram)}</a>`:'<span class="dim">—</span>'}</td>
+      <td class="dim">${esc(s.phone)||'—'}</td>
+      <td class="dim">${fmtD(s.firstPay)}</td>
+      <td class="dim">${fmtD(s.lastPay)}</td>
+      <td style="text-align:center">${payCnt||'<span class="dim">0</span>'}</td>
+      <td>${paySum?`<b style="color:var(--accent)">${fmtM(paySum)}</b>`:'<span class="dim">—</span>'}</td>
+      <td style="text-align:center">${balanceBadge(s.email)}</td>
+      <td>${s.active?'<span class="badge badge-active">Активный</span>':s.hasPaid?'<span class="badge badge-inactive">Неактивный</span>':'<span class="badge badge-free">Пробное</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openModal(email){
+  const s=students[email];if(!s)return;
+  document.getElementById('m-name').textContent=s.name;
+  document.getElementById('m-email').textContent=s.email;
+  const pays=[...s.payments].reverse();
+  const total=s.totalSpent;
+  const lessons=s.payments.reduce((t,p)=>t+(p.prod?.lessons||1),0);
+  document.getElementById('modal-body').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+      <div><div class="kpi-label">Телефон</div><div style="margin-top:4px">${s.phone||'—'}</div></div>
+      <div><div class="kpi-label">Telegram</div><div style="margin-top:4px">${s.telegram?`<a class="tg-link" href="https://t.me/${esc(s.telegram)}" target="_blank">@${esc(s.telegram)}</a>`:'—'}</div></div>
+      <div><div class="kpi-label">Статус</div><div style="margin-top:4px">${s.active?'<span class="badge badge-active">Активный</span>':s.hasPaid?'<span class="badge badge-inactive">Неактивный</span>':'<span class="badge badge-free">Пробное</span>'}</div></div>
+      <div><div class="kpi-label">Всего оплачено</div><div style="margin-top:4px;font-size:1.1rem;font-weight:700;color:var(--accent)">${s.hasPaid?fmtM(total):'—'}</div></div>
+      <div><div class="kpi-label">Занятий куплено</div><div style="margin-top:4px;font-weight:700">${lessons}</div></div>
+      <div><div class="kpi-label">Покупок</div><div style="margin-top:4px;font-weight:700">${s.payCount}</div></div>
+      ${(()=>{const b=getBalance(s.email);if(!b||!b.purchased)return'';const c=b.remaining<=0?'var(--red)':b.remaining<=2?'var(--orange)':'var(--green)';return`<div><div class="kpi-label">Проведено занятий</div><div style="margin-top:4px;font-weight:700">${b.used}</div></div><div><div class="kpi-label">Остаток занятий</div><div style="margin-top:4px;font-size:1.2rem;font-weight:800;color:${c}">${b.remaining}</div></div>`;})()}
+    </div>
+    ${pays.length?`<div class="kpi-label" style="margin-bottom:10px">История оплат (${pays.length})</div>
+    <table class="tbl" style="font-size:.8rem">
+      <thead><tr><th>#</th><th>Дата</th><th>Продукт</th><th>Занятий</th><th>Сумма</th></tr></thead>
+      <tbody>${pays.map((p,i)=>`<tr>
+        <td class="dim">${pays.length-i}</td>
+        <td>${fmtD(p.date)}</td>
+        <td class="dim" style="max-width:200px;white-space:normal">${esc(p.prod?.cat||'—')}</td>
+        <td style="text-align:center">${p.prod?.lessons||1}</td>
+        <td><b>${fmtM(p.price)}</b></td>
+      </tr>`).join('')}</tbody>
+    </table>`:'<div class="empty">Нет оплаченных занятий</div>'}`;
+  document.getElementById('modal').style.display='flex';
+}
+
+// ══════════════════════════════════════════
+//  CHARTS — используют filteredRows
+// ══════════════════════════════════════════
+const WD=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const MN=['Янв','Фев','Мар','Апр','Май','Июн','Июл','Авг','Сен','Окт','Ноя','Дек'];
+const cO={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{
+  x:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#9ca3b0',font:{size:11}}},
+  y:{grid:{color:'rgba(255,255,255,.04)'},ticks:{color:'#9ca3b0',font:{size:11},callback:v=>fmtM(v)}}
+}};
+
+function renderCharts(){
+  const rows=filteredRows;
+  const wdR=new Array(7).fill(0),hrR=new Array(24).fill(0),mMap={},catMap={};
+  for(const r of rows){
+    const d=r._date;if(!d)continue;
+    const p=r._price;
+    wdR[(d.getDay()+6)%7]+=p;
+    hrR[d.getHours()]+=p;
+    const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    mMap[k]=(mMap[k]||0)+p;
+    const c=r._prod?.cat||'Другое';
+    catMap[c]=(catMap[c]||0)+p;
+  }
+
+  mkBar('ch-weekday',WD,wdR,'rgba(245,200,66,.75)','rgba(245,200,66,1)');
+  mkBar('ch-hour',Array.from({length:24},(_,i)=>`${i}:00`),hrR,'rgba(74,158,255,.7)','rgba(74,158,255,1)');
+
+  const mK=Object.keys(mMap).sort();
+  mkLine('ch-trend',mK.map(k=>{const[y,m]=k.split('-');return`${MN[+m-1]} ${y.slice(2)}`;}),mK.map(k=>mMap[k]));
+
+  const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+  const PIE=['#C94A42','#4a9eff','#22c55e','#f97316','#a855f7','#ef4444','#06b6d4','#ec4899'];
+  if(charts_['p'])charts_['p'].destroy();
+  if(cats.length){
+    charts_['p']=new Chart(document.getElementById('ch-product'),{
+      type:'doughnut',
+      data:{labels:cats.map(e=>e[0]),datasets:[{data:cats.map(e=>e[1]),backgroundColor:PIE,borderColor:'#1a1d27',borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{
+        legend:{position:'right',labels:{color:'#e8e8e8',font:{size:11},padding:10,boxWidth:14}},
+        tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fmtM(ctx.raw)}`}}
+      }}
+    });
+  }
+}
+
+function mkBar(id,labels,data,bg,border){
+  if(charts_[id])charts_[id].destroy();
+  charts_[id]=new Chart(document.getElementById(id),{
+    type:'bar',
+    data:{labels,datasets:[{data,backgroundColor:bg,borderColor:border,borderWidth:1,borderRadius:5}]},
+    options:cO
+  });
+}
+function mkLine(id,labels,data){
+  if(charts_[id])charts_[id].destroy();
+  charts_[id]=new Chart(document.getElementById(id),{
+    type:'line',
+    data:{labels,datasets:[{data,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.12)',fill:true,tension:.35,pointBackgroundColor:'#22c55e',pointRadius:5,pointHoverRadius:7}]},
+    options:cO
+  });
+}
+
+// ══════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════
+function fmtM(n){if(!n)return'0 ₽';if(n>=1e6)return(n/1e6).toFixed(1)+'М ₽';if(n>=1000)return Math.round(n/1000)+'К ₽';return n+' ₽';}
+function fmtD(d){if(!d)return'<span class="dim">—</span>';return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'});}
+function fmt(d){return d.toISOString().slice(0,10);}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function show(id){document.getElementById(id).style.display='';}
+function hide(id){document.getElementById(id).style.display='none';}
+function setPill(t,cls){const el=document.getElementById('status-pill');el.textContent=t;el.className='status-pill '+(cls||'');}
+
+// ══════════════════════════════════════════
+doRefresh();
+scheduleRefresh();
+</script>
+</body>
+</html>
