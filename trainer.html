@@ -4,6 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Rep Chess Education — Журнал тренера</title>
+<link rel="manifest" href="manifest-trainer.json">
+<meta name="theme-color" content="#AC3D36">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Журнал">
+<link rel="apple-touch-icon" href="icon.svg">
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -205,18 +211,27 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
     <button class="nav-item on" onclick="showPage('home')" data-page="home">
       <div class="nav-icon">🏠</div><div class="nav-label">Главная</div>
     </button>
-    <button class="nav-item" onclick="showPage('record')" data-page="record">
-      <div class="nav-icon">✏️</div><div class="nav-label">Индив.</div>
-    </button>
-    <button class="nav-item" onclick="showPage('group')" data-page="group">
-      <div class="nav-icon">👥</div><div class="nav-label">Группы</div>
-    </button>
     <button class="nav-item" onclick="showPage('history')" data-page="history">
       <div class="nav-icon">📋</div><div class="nav-label">История</div>
     </button>
     <button class="nav-item" onclick="showPage('admin')" data-page="admin" id="admin-nav" style="display:none">
       <div class="nav-icon">⚙️</div><div class="nav-label">Админ</div>
     </button>
+  </div>
+
+  <!-- FLOATING ACTION BUTTON -->
+  <div id="fab-wrap" style="position:fixed;bottom:90px;right:18px;z-index:150;display:flex;flex-direction:column;align-items:flex-end;gap:10px">
+    <div id="fab-options" style="display:none;flex-direction:column;align-items:flex-end;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="background:rgba(15,17,23,.9);color:var(--text);padding:5px 12px;border-radius:20px;font-size:.78rem;white-space:nowrap;border:1px solid var(--border)">Групповое</span>
+        <button onclick="openGroupModal();closeFab()" style="width:46px;height:46px;border-radius:50%;border:none;background:var(--purple);color:#fff;font-size:1.2rem;cursor:pointer;box-shadow:0 3px 12px rgba(168,85,247,.4)">👥</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="background:rgba(15,17,23,.9);color:var(--text);padding:5px 12px;border-radius:20px;font-size:.78rem;white-space:nowrap;border:1px solid var(--border)">Индивидуальное</span>
+        <button onclick="openIndivModal();closeFab()" style="width:46px;height:46px;border-radius:50%;border:none;background:var(--accent2);color:#fff;font-size:1.2rem;cursor:pointer;box-shadow:0 3px 12px rgba(74,158,255,.4)">✏️</button>
+      </div>
+    </div>
+    <button id="fab-main" onclick="toggleFab()" style="width:58px;height:58px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:2rem;font-weight:300;cursor:pointer;box-shadow:0 4px 18px rgba(172,61,54,.6);line-height:1;transition:transform .25s,background .15s">+</button>
   </div>
 
   <div class="container">
@@ -255,26 +270,47 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
     <!-- HISTORY -->
     <div class="page" id="page-history">
       <div style="font-weight:700;font-size:1rem;margin-bottom:12px">📋 Журнал занятий</div>
-      <div class="date-filter" style="margin-bottom:12px">
-        <input type="date" id="hist-from" onchange="loadHistory()">
-        <span class="dim" style="font-size:.8rem">—</span>
-        <input type="date" id="hist-to" onchange="loadHistory()">
-        <button class="btn-sm" onclick="resetHistoryFilter()">Всё время</button>
-      </div>
-      <!-- Детальная статистика -->
-      <div id="hist-stats" class="stat-grid" style="margin-bottom:14px"></div>
-      <!-- Переключатель инд/группа -->
+
+      <!-- Вид: список / календарь -->
       <div style="display:flex;gap:8px;margin-bottom:12px">
-        <button class="toggle-btn on" id="hist-tab-all" onclick="histTab('all',this)" style="flex:1;padding:8px">Все</button>
-        <button class="toggle-btn" id="hist-tab-indiv" onclick="histTab('indiv',this)" style="flex:1;padding:8px">Индив.</button>
-        <button class="toggle-btn" id="hist-tab-group" onclick="histTab('group',this)" style="flex:1;padding:8px">Группы</button>
+        <button class="toggle-btn on" id="hist-view-list" onclick="histView('list',this)" style="flex:1;padding:8px">📋 Список</button>
+        <button class="toggle-btn" id="hist-view-cal" onclick="histView('cal',this)" style="flex:1;padding:8px">📅 Календарь</button>
       </div>
-      <div class="card">
-        <div class="card-head">
-          <span class="card-title" id="hist-title">Все занятия</span>
-          <span class="dim" id="hist-count" style="font-size:.78rem"></span>
+
+      <!-- CALENDAR VIEW -->
+      <div id="hist-cal-wrap" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:0 4px">
+          <button class="btn-sm" onclick="calPrev()">◀</button>
+          <span id="cal-month-label" style="font-weight:800;font-size:1rem"></span>
+          <button class="btn-sm" onclick="calNext()">▶</button>
         </div>
-        <div class="card-body" id="hist-list"></div>
+        <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:12px"></div>
+        <div id="cal-day-detail"></div>
+      </div>
+
+      <!-- LIST VIEW -->
+      <div id="hist-list-section">
+        <div class="date-filter" style="margin-bottom:12px">
+          <input type="date" id="hist-from" onchange="loadHistory()">
+          <span class="dim" style="font-size:.8rem">—</span>
+          <input type="date" id="hist-to" onchange="loadHistory()">
+          <button class="btn-sm" onclick="resetHistoryFilter()">Всё время</button>
+        </div>
+        <!-- Статистика -->
+        <div id="hist-stats" class="stat-grid" style="margin-bottom:14px"></div>
+        <!-- Переключатель -->
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="toggle-btn on" id="hist-tab-all" onclick="histTab('all',this)" style="flex:1;padding:8px">Все</button>
+          <button class="toggle-btn" id="hist-tab-indiv" onclick="histTab('indiv',this)" style="flex:1;padding:8px">Индив.</button>
+          <button class="toggle-btn" id="hist-tab-group" onclick="histTab('group',this)" style="flex:1;padding:8px">Группы</button>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <span class="card-title" id="hist-title">Все занятия</span>
+            <span class="dim" id="hist-count" style="font-size:.78rem"></span>
+          </div>
+          <div class="card-body" id="hist-list"></div>
+        </div>
       </div>
     </div>
 
@@ -1730,6 +1766,97 @@ function toast(msg, type='ok'){
   el.textContent=msg; el.className=`toast ${type} show`;
   if(_toastTimer)clearTimeout(_toastTimer);
   _toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+// ══════════════════════════════════════════════
+//  FLOATING ACTION BUTTON
+// ══════════════════════════════════════════════
+let _fabOpen = false;
+function toggleFab() {
+  _fabOpen = !_fabOpen;
+  document.getElementById('fab-options').style.display = _fabOpen ? 'flex' : 'none';
+  const btn = document.getElementById('fab-main');
+  btn.textContent = _fabOpen ? '✕' : '+';
+  btn.style.transform = _fabOpen ? 'rotate(45deg)' : 'rotate(0deg)';
+}
+function closeFab() {
+  _fabOpen = false;
+  document.getElementById('fab-options').style.display = 'none';
+  const btn = document.getElementById('fab-main');
+  btn.textContent = '+'; btn.style.transform = 'rotate(0deg)';
+}
+
+// ══════════════════════════════════════════════
+//  CALENDAR VIEW
+// ══════════════════════════════════════════════
+let _calYear = new Date().getFullYear();
+let _calMonth = new Date().getMonth();
+const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const DAY_NAMES   = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+
+function histView(mode, btn) {
+  document.querySelectorAll('[id^="hist-view-"]').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById('hist-cal-wrap').style.display    = mode==='cal'  ? '' : 'none';
+  document.getElementById('hist-list-section').style.display = mode==='list' ? '' : 'none';
+  if (mode === 'cal') {
+    _calYear = new Date().getFullYear(); _calMonth = new Date().getMonth();
+    if (!_histLessonsCache.length) loadHistory().then(() => renderCalendar());
+    else renderCalendar();
+  }
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('cal-grid');
+  if (!grid) return;
+  const year = _calYear, month = _calMonth;
+  document.getElementById('cal-month-label').textContent = `${MONTH_NAMES[month]} ${year}`;
+  const dayMap = {};
+  for (const l of _histLessonsCache) {
+    if (!l._date) continue;
+    if (!dayMap[l._date]) dayMap[l._date] = {indiv:0,group:0};
+    l.type==='group' ? dayMap[l._date].group++ : dayMap[l._date].indiv++;
+  }
+  for (const g of _histGroupsCache) {
+    if (!g._date) continue;
+    if (!dayMap[g._date]) dayMap[g._date] = {indiv:0,group:0};
+    dayMap[g._date].group += g.count||1;
+  }
+  const firstDow    = (new Date(year, month, 1).getDay() + 6) % 7;
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const today = new Date().toISOString().slice(0,10);
+  let html = DAY_NAMES.map(d=>`<div style="text-align:center;font-size:.62rem;color:var(--text2);padding:3px 0;font-weight:700">${d}</div>`).join('');
+  for (let i=0;i<firstDow;i++) html+='<div></div>';
+  for (let day=1;day<=daysInMonth;day++){
+    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const d=dayMap[ds]; const total=d?d.indiv+d.group:0; const isToday=ds===today;
+    const bg=d?.indiv>0&&d?.group>0?'linear-gradient(135deg,rgba(74,158,255,.22),rgba(168,85,247,.22))':d?.group>0?'rgba(168,85,247,.2)':d?.indiv>0?'rgba(74,158,255,.2)':'';
+    html+=`<div onclick="${d?`showCalDay('${ds}')`:'void 0'}" style="aspect-ratio:1;min-height:36px;border-radius:8px;background:${bg};border:${isToday?'2px solid var(--accent)':'1px solid rgba(45,49,66,.5)'};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:${d?'pointer':'default'}">
+      <span style="font-size:.75rem;font-weight:${isToday?'800':'400'};color:${isToday?'var(--accent)':'var(--text)'}">${day}</span>
+      ${total>0?`<span style="font-size:.58rem;color:var(--text2);line-height:1">${total}</span>`:''}
+    </div>`;
+  }
+  grid.innerHTML=html;
+  document.getElementById('cal-day-detail').innerHTML='';
+}
+
+function showCalDay(ds) {
+  const lessons=_histLessonsCache.filter(l=>l._date===ds);
+  const groups=_histGroupsCache.filter(g=>g._date===ds);
+  const label=new Date(ds+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
+  let html=`<div style="font-weight:700;margin-bottom:10px">${label}</div>`;
+  if(!lessons.length&&!groups.length){html+='<div class="empty">Нет занятий</div>';}
+  else{html+='<div class="card"><div class="card-body">'+lessons.map(l=>histLessonItemHTML(l)).join('')+groups.map(g=>histGroupItemHTML(g)).join('')+'</div></div>';}
+  const el=document.getElementById('cal-day-detail');
+  el.innerHTML=html; el.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function calPrev(){_calMonth--;if(_calMonth<0){_calMonth=11;_calYear--;}renderCalendar();}
+function calNext(){_calMonth++;if(_calMonth>11){_calMonth=0;_calYear++;}renderCalendar();}
+
+// PWA — Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(e=>console.log('SW:',e)));
 }
 
 // Делегированный обработчик кликов — надёжнее inline onclick на мобильных

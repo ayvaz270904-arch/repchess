@@ -1,0 +1,13 @@
+{
+  "name": "Rep Chess — Журнал тренера",
+  "short_name": "Журнал",
+  "start_url": "./trainer.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#AC3D36",
+  "description": "Журнал занятий Rep Chess Education",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
