@@ -2123,7 +2123,7 @@ async function loadFinance() {
         <div style="background:var(--surface2);border-radius:10px;padding:8px 10px;text-align:center">
           <div style="font-size:1.2rem;font-weight:800">${count}</div>
           <div style="font-size:.68rem;color:var(--text2);line-height:1.3">${label}</div>
-          <div style="font-size:.68rem;color:var(--accent);margin-top:2px">${rate > 0 ? rate+'₽' : '—'}</div>
+          ${isAdmin ? `<div style="font-size:.68rem;color:var(--accent);margin-top:2px">${rate > 0 ? rate+'₽' : '—'}</div>` : ''}
         </div>`;
 
       html += `
@@ -2139,10 +2139,11 @@ async function loadFinance() {
             ${cell(c.groupOff, 'Груп.<br>офлайн', r.groupOff)}
             ${cell(c.groupOn,  'Груп.<br>онлайн',  r.groupOn)}
           </div>
+          ${isAdmin ? `
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
             <span style="font-weight:700">К выплате</span>
             <span style="font-size:1.1rem;font-weight:800;color:${payout > 0 ? 'var(--green)' : 'var(--text2)'}">${payout > 0 ? payout.toLocaleString('ru') + ' ₽' : hasRates ? '0 ₽' : 'ставки не заданы'}</span>
-          </div>
+          </div>` : ''}
         </div>
       </div>`;
     }
@@ -2168,17 +2169,14 @@ let _rateTrainerId = null;
 let _ratePending = {};
 
 function askRatePassword(id, name, indivOff, indivOn, groupOff, groupOn) {
-  // Финансы уже разблокированы паролем — открываем ставки сразу
   _rateTrainerId = id;
   document.getElementById('rate-err').textContent = '';
   document.getElementById('rate-trainer-name').textContent = name;
-  document.getElementById('rate-modal-title').textContent = '✏️ Ставки тренера';
   document.getElementById('rate-indiv-off').value = indivOff || '';
   document.getElementById('rate-indiv-on').value  = indivOn  || '';
   document.getElementById('rate-group-off').value = groupOff || '';
   document.getElementById('rate-group-on').value  = groupOn  || '';
   document.getElementById('rate-value-wrap').style.display = '';
-  document.getElementById('rate-password').style.display = 'none';
   document.getElementById('rate-confirm-btn').style.display = 'none';
   document.getElementById('rate-save-btn').style.display = '';
   _openModal('rate-modal');
