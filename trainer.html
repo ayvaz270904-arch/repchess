@@ -2051,44 +2051,55 @@ async function loadFinance() {
   const isAdmin = currentTrainer?.role === 'admin';
   const summaryCard = document.getElementById('fin-summary-card');
   const wrap = document.getElementById('fin-trainers-wrap');
-  wrap.innerHTML = '<div class="empty">Загрузка...</div>';
+  wrap.innerHTML = '<div class="empty" style="color:var(--text2)">Загрузка...</div>';
 
   try {
+    // 1. Загружаем тренеров
     const trainersSnap = await db.collection('trainers').get();
     const trainersList = [];
     trainersSnap.forEach(d => trainersList.push({ id: d.id, ...d.data() }));
-    const toShow = isAdmin ? trainersList : trainersList.filter(t => t.id === currentUser.uid);
 
-    const lessonsSnap = await db.collection('lessons')
-      .where('date', '>=', fromVal).where('date', '<=', toVal).get();
-    const groupSnap = await db.collection('groupLessons')
-      .where('date', '>=', fromVal).where('date', '<=', toVal).get();
+    // Показываем только тренеров (не админа)
+    const toShow = trainersList.filter(t => t.role !== 'admin');
 
-    // counts: trainerId -> { indivOff, indivOn, groupOff, groupOn }
-    const counts = {};
-    const emptyCount = () => ({ indivOff:0, indivOn:0, groupOff:0, groupOn:0 });
-
-    // Карта имя тренера → id (фолбэк для старых занятий без trainerId)
+    // Карта id→тренер и имя→id (фолбэк для старых записей без trainerId)
     const nameToId = {};
-    trainersList.forEach(t => { if (t.name) nameToId[t.name] = t.id; });
+    trainersList.forEach(t => { if (t.name) nameToId[t.name.trim()] = t.id; });
+
+    // 2. Загружаем ВСЕ занятия (без фильтра дат — фильтруем в JS)
+    const [lessonsSnap, groupSnap] = await Promise.all([
+      db.collection('lessons').get(),
+      db.collection('groupLessons').get()
+    ]);
+
+    // 3. Считаем по тренерам с фильтрацией по дате в JS
+    const emptyCount = () => ({ indivOff:0, indivOn:0, groupOff:0, groupOn:0 });
+    const counts = {};
 
     lessonsSnap.forEach(d => {
       const data = d.data();
-      const tid = data.trainerId || nameToId[data.trainerName];
+      const date = data.date || '';
+      if (date < fromVal || date > toVal) return; // фильтр даты
+      const tid = data.trainerId || nameToId[data.trainerName?.trim()];
       if (!tid) return;
       if (!counts[tid]) counts[tid] = emptyCount();
       data.format === 'online' ? counts[tid].indivOn++ : counts[tid].indivOff++;
     });
+
     groupSnap.forEach(d => {
       const data = d.data();
-      const tid = data.trainerId || nameToId[data.trainerName];
+      const date = data.date || '';
+      if (date < fromVal || date > toVal) return;
+      const tid = data.trainerId || nameToId[data.trainerName?.trim()];
       if (!tid) return;
       if (!counts[tid]) counts[tid] = emptyCount();
       data.format === 'online' ? counts[tid].groupOn++ : counts[tid].groupOff++;
     });
 
+    // 4. Рендерим карточки
     let totalPayout = 0;
     let html = '';
+
     for (const t of toShow) {
       const c = counts[t.id] || emptyCount();
       const r = {
@@ -2134,7 +2145,7 @@ async function loadFinance() {
       </div>`;
     }
 
-    wrap.innerHTML = html || '<div class="empty">Нет данных за период</div>';
+    wrap.innerHTML = html || '<div class="empty">Нет тренеров</div>';
 
     if (isAdmin) {
       summaryCard.style.display = '';
