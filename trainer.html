@@ -449,8 +449,8 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div class="form-row">
       <div class="form-label">Ученик</div>
       <div class="student-search-wrap">
-        <input class="form-inp" id="rec-student-inp" type="text" placeholder="Поиск по имени..."
-          oninput="searchStudents(this.value,'rec')" autocomplete="off">
+        <input class="form-inp" id="rec-student-inp" type="text" placeholder="Нажми для выбора ученика..."
+          oninput="searchStudents(this.value,'rec')" onfocus="showAllStudents('rec')" autocomplete="off">
         <div class="student-results" id="rec-student-results" style="display:none"></div>
       </div>
       <div id="rec-student-chosen" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(172,61,54,.08);border:1px solid rgba(172,61,54,.25);border-radius:10px;">
@@ -512,8 +512,8 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div class="form-row">
       <div class="form-label">Ученики</div>
       <div class="student-search-wrap">
-        <input class="form-inp" id="grp-student-inp" type="text" placeholder="Добавить ученика..."
-          oninput="searchStudents(this.value,'grp')" autocomplete="off">
+        <input class="form-inp" id="grp-student-inp" type="text" placeholder="Нажми для выбора ученика..."
+          oninput="searchStudents(this.value,'grp')" onfocus="showAllStudents('grp')" autocomplete="off">
         <div class="student-results" id="grp-student-results" style="display:none"></div>
       </div>
       <div id="grp-students-tags" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px"></div>
@@ -553,16 +553,28 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 </div>
 
 <!-- RATE EDIT MODAL -->
+<!-- FINANCE PASSWORD MODAL -->
+<div class="overlay" id="fin-pass-modal" style="display:none" onclick="if(event.target===this)_closeModal('fin-pass-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔒 Доступ к финансам</div>
+    <div style="color:var(--text2);font-size:.85rem;margin-bottom:14px">Введите пароль администратора для просмотра финансовой информации</div>
+    <div class="form-row">
+      <div class="form-label">Пароль</div>
+      <input class="form-inp" id="fin-pass-inp" type="password" placeholder="Введите пароль" onkeydown="if(event.key==='Enter')confirmFinancePassword()">
+    </div>
+    <div class="auth-err" id="fin-pass-err"></div>
+    <button class="btn-full btn-gold" onclick="confirmFinancePassword()">Войти</button>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('fin-pass-modal');showPage('home')">Отмена</button>
+  </div>
+</div>
+
 <div class="overlay" id="rate-modal" style="display:none" onclick="if(event.target===this)_closeModal('rate-modal')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
-    <div class="modal-title" id="rate-modal-title">🔒 Введите пароль</div>
+    <div class="modal-title" id="rate-modal-title">✏️ Ставки тренера</div>
     <div id="rate-trainer-name" style="font-weight:700;margin-bottom:14px;color:var(--accent)"></div>
-    <!-- Шаг 1: пароль -->
-    <div class="form-row">
-      <div class="form-label">🔒 Пароль</div>
-      <input class="form-inp" id="rate-password" type="password" placeholder="Введите пароль" onkeydown="if(event.key==='Enter')confirmRatePassword()">
-    </div>
     <!-- Шаг 2: ставки (скрыты до ввода пароля) -->
     <div id="rate-value-wrap" style="display:none">
       <div style="font-size:.78rem;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">💼 Индивидуальные</div>
@@ -974,16 +986,19 @@ function lessonItemHTML(l) {
 // ══════════════════════════════════════════════
 function searchStudents(q, prefix) {
   const resultsEl = document.getElementById(`${prefix}-student-results`);
-  if (!q || q.length < 2) { resultsEl.style.display='none'; return; }
-  // Если тренер (не админ) и у него есть назначенные ученики — показываем только их
+  const isAdmin = currentTrainer.role === 'admin';
+
+  // Пул учеников — для тренера только назначенные
   let pool = students;
-  if (currentTrainer.role !== 'admin' && currentTrainer.assignedStudents?.length) {
-    pool = students.filter(s => currentTrainer.assignedStudents.includes(s.email));
+  if (!isAdmin) {
+    const assigned = currentTrainer.assignedStudents || [];
+    pool = assigned.length ? students.filter(s => assigned.includes(s.email)) : [];
   }
-  const matches = pool.filter(s =>
-    s.name.toLowerCase().includes(q.toLowerCase()) ||
-    s.email.includes(q.toLowerCase())
-  ).slice(0,8);
+
+  // Фильтрация по запросу (пустой запрос = показать всех из пула)
+  const matches = q.length > 0
+    ? pool.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase())).slice(0, 10)
+    : pool.slice(0, 10);
 
   if (!matches.length) { resultsEl.style.display='none'; return; }
 
@@ -996,6 +1011,10 @@ function searchStudents(q, prefix) {
       <div class="balance-badge ${s.purchased>0?'balance-ok':'balance-low'}">${s.purchased} куп.</div>
     </div>`).join('');
   resultsEl.style.display = '';
+}
+
+function showAllStudents(prefix) {
+  searchStudents('', prefix);
 }
 
 async function selectStudent(email, prefix) {
@@ -1836,7 +1855,7 @@ function showPage(name) {
   if (name==='history') loadHistory();
   if (name==='group')   loadGroupLessons();
   if (name==='admin')   loadAdminData();
-  if (name==='finance') { finInitDates(); loadFinance(); }
+  if (name==='finance') { finCheckAccess(); }
 }
 
 // ══════════════════════════════════════════════
@@ -1977,6 +1996,32 @@ function calNext(){_calMonth++;if(_calMonth>11){_calMonth=0;_calYear++;}renderCa
 // ══════════════════════════════════════════════
 //  FINANCE
 // ══════════════════════════════════════════════
+let _financeUnlocked = false;
+
+function finCheckAccess() {
+  const isAdmin = currentTrainer?.role === 'admin';
+  if (!isAdmin || _financeUnlocked) {
+    // Тренер — показываем без пароля; админ уже разблокировал
+    finInitDates(); loadFinance(); return;
+  }
+  // Админ — запрашиваем пароль
+  document.getElementById('fin-pass-inp').value = '';
+  document.getElementById('fin-pass-err').textContent = '';
+  _openModal('fin-pass-modal');
+}
+
+function confirmFinancePassword() {
+  const pass = document.getElementById('fin-pass-inp').value;
+  if (pass !== '1289') {
+    document.getElementById('fin-pass-err').textContent = 'Неверный пароль';
+    return;
+  }
+  _financeUnlocked = true;
+  _closeModal('fin-pass-modal');
+  finInitDates();
+  loadFinance();
+}
+
 function finInitDates() {
   if (!document.getElementById('fin-from').value) finSetThisMonth();
 }
@@ -2093,32 +2138,20 @@ let _rateTrainerId = null;
 let _ratePending = {};
 
 function askRatePassword(id, name, indivOff, indivOn, groupOff, groupOn) {
-  _ratePending = { id, name, indivOff, indivOn, groupOff, groupOn };
-  document.getElementById('rate-password').value = '';
+  // Финансы уже разблокированы паролем — открываем ставки сразу
+  _rateTrainerId = id;
   document.getElementById('rate-err').textContent = '';
-  document.getElementById('rate-value-wrap').style.display = 'none';
   document.getElementById('rate-trainer-name').textContent = name;
-  document.getElementById('rate-modal-title').textContent = '🔒 Введите пароль';
-  document.getElementById('rate-save-btn').style.display = 'none';
-  document.getElementById('rate-confirm-btn').style.display = '';
-  _openModal('rate-modal');
-}
-
-function confirmRatePassword() {
-  const pass = document.getElementById('rate-password').value;
-  const errEl = document.getElementById('rate-err');
-  if (pass !== '1289') { errEl.textContent = 'Неверный пароль'; return; }
-  errEl.textContent = '';
-  _rateTrainerId = _ratePending.id;
   document.getElementById('rate-modal-title').textContent = '✏️ Ставки тренера';
-  document.getElementById('rate-indiv-off').value = _ratePending.indivOff || '';
-  document.getElementById('rate-indiv-on').value  = _ratePending.indivOn  || '';
-  document.getElementById('rate-group-off').value = _ratePending.groupOff || '';
-  document.getElementById('rate-group-on').value  = _ratePending.groupOn  || '';
+  document.getElementById('rate-indiv-off').value = indivOff || '';
+  document.getElementById('rate-indiv-on').value  = indivOn  || '';
+  document.getElementById('rate-group-off').value = groupOff || '';
+  document.getElementById('rate-group-on').value  = groupOn  || '';
   document.getElementById('rate-value-wrap').style.display = '';
-  document.getElementById('rate-password').value = '';
+  document.getElementById('rate-password').style.display = 'none';
   document.getElementById('rate-confirm-btn').style.display = 'none';
   document.getElementById('rate-save-btn').style.display = '';
+  _openModal('rate-modal');
 }
 
 async function saveRate() {
