@@ -563,10 +563,30 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <div class="form-label">🔒 Пароль</div>
       <input class="form-inp" id="rate-password" type="password" placeholder="Введите пароль" onkeydown="if(event.key==='Enter')confirmRatePassword()">
     </div>
-    <!-- Шаг 2: ставка (скрыта до ввода пароля) -->
-    <div id="rate-value-wrap" class="form-row" style="display:none">
-      <div class="form-label">Ставка за занятие (₽)</div>
-      <input class="form-inp" id="rate-value" type="number" min="0" step="50" placeholder="Например: 500">
+    <!-- Шаг 2: ставки (скрыты до ввода пароля) -->
+    <div id="rate-value-wrap" style="display:none">
+      <div style="font-size:.78rem;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">💼 Индивидуальные</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div>
+          <div class="form-label">📍 Офлайн (₽)</div>
+          <input class="form-inp" id="rate-indiv-off" type="number" min="0" step="50" placeholder="0">
+        </div>
+        <div>
+          <div class="form-label">💻 Онлайн (₽)</div>
+          <input class="form-inp" id="rate-indiv-on" type="number" min="0" step="50" placeholder="0">
+        </div>
+      </div>
+      <div style="font-size:.78rem;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">👥 Групповые</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div>
+          <div class="form-label">📍 Офлайн (₽)</div>
+          <input class="form-inp" id="rate-group-off" type="number" min="0" step="50" placeholder="0">
+        </div>
+        <div>
+          <div class="form-label">💻 Онлайн (₽)</div>
+          <input class="form-inp" id="rate-group-on" type="number" min="0" step="50" placeholder="0">
+        </div>
+      </div>
     </div>
     <div class="auth-err" id="rate-err"></div>
     <button class="btn-full btn-gold" id="rate-confirm-btn" onclick="confirmRatePassword()">Подтвердить</button>
@@ -1975,7 +1995,7 @@ async function loadFinance() {
   const toVal   = document.getElementById('fin-to').value;
   if (!fromVal || !toVal) return;
 
-  const isAdmin = currentTrainer?.isAdmin;
+  const isAdmin = currentTrainer?.role === 'admin';
   const summaryCard = document.getElementById('fin-summary-card');
   const wrap = document.getElementById('fin-trainers-wrap');
   wrap.innerHTML = '<div class="empty">Загрузка...</div>';
@@ -1991,52 +2011,62 @@ async function loadFinance() {
     const groupSnap = await db.collection('groupLessons')
       .where('date', '>=', fromVal).where('date', '<=', toVal).get();
 
+    // counts: trainerId -> { indivOff, indivOn, groupOff, groupOn }
     const counts = {};
+    const emptyCount = () => ({ indivOff:0, indivOn:0, groupOff:0, groupOn:0 });
     lessonsSnap.forEach(d => {
-      const tid = d.data().trainerId; if (!tid) return;
-      if (!counts[tid]) counts[tid] = { indiv: 0, group: 0 };
-      counts[tid].indiv++;
+      const { trainerId: tid, format } = d.data(); if (!tid) return;
+      if (!counts[tid]) counts[tid] = emptyCount();
+      format === 'online' ? counts[tid].indivOn++ : counts[tid].indivOff++;
     });
     groupSnap.forEach(d => {
-      const tid = d.data().trainerId; if (!tid) return;
-      if (!counts[tid]) counts[tid] = { indiv: 0, group: 0 };
-      counts[tid].group++;
+      const { trainerId: tid, format } = d.data(); if (!tid) return;
+      if (!counts[tid]) counts[tid] = emptyCount();
+      format === 'online' ? counts[tid].groupOn++ : counts[tid].groupOff++;
     });
 
     let totalPayout = 0;
     let html = '';
     for (const t of toShow) {
-      const c = counts[t.id] || { indiv: 0, group: 0 };
-      const total = c.indiv + c.group;
-      const rate  = t.rate || 0;
-      const payout = total * rate;
+      const c = counts[t.id] || emptyCount();
+      const r = {
+        indivOff: t.rateIndivOff || 0,
+        indivOn:  t.rateIndivOn  || 0,
+        groupOff: t.rateGroupOff || 0,
+        groupOn:  t.rateGroupOn  || 0,
+      };
+      const payout =
+        c.indivOff * r.indivOff +
+        c.indivOn  * r.indivOn  +
+        c.groupOff * r.groupOff +
+        c.groupOn  * r.groupOn;
       totalPayout += payout;
       const safeName = (t.name || t.email).replace(/'/g,"\\'");
+      const hasRates = Object.values(r).some(v => v > 0);
+
+      const cell = (count, label, rate) => `
+        <div style="background:var(--surface2);border-radius:10px;padding:8px 10px;text-align:center">
+          <div style="font-size:1.2rem;font-weight:800">${count}</div>
+          <div style="font-size:.68rem;color:var(--text2);line-height:1.3">${label}</div>
+          <div style="font-size:.68rem;color:var(--accent);margin-top:2px">${rate > 0 ? rate+'₽' : '—'}</div>
+        </div>`;
 
       html += `
       <div class="card" style="margin-bottom:14px">
         <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
           <span class="card-title">👤 ${t.name || t.email}</span>
-          ${isAdmin ? `<button class="btn-sm" onclick="askRatePassword('${t.id}','${safeName}',${rate})" style="font-size:.75rem">✏️ Ставка</button>` : ''}
+          ${isAdmin ? `<button class="btn-sm" onclick="askRatePassword('${t.id}','${safeName}',${r.indivOff},${r.indivOn},${r.groupOff},${r.groupOn})" style="font-size:.75rem;background:var(--accent);color:#fff;border:none;padding:5px 10px;border-radius:7px">✏️ Ставки</button>` : ''}
         </div>
         <div class="card-body">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-            <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;text-align:center">
-              <div style="font-size:1.3rem;font-weight:800">${c.indiv}</div>
-              <div style="font-size:.72rem;color:var(--text2)">Инд. занятий</div>
-            </div>
-            <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;text-align:center">
-              <div style="font-size:1.3rem;font-weight:800">${c.group}</div>
-              <div style="font-size:.72rem;color:var(--text2)">Груп. занятий</div>
-            </div>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
-            <span style="color:var(--text2);font-size:.85rem">Всего занятий</span>
-            <span style="font-weight:700">${total}</span>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">
+            ${cell(c.indivOff, 'Инд.<br>офлайн', r.indivOff)}
+            ${cell(c.indivOn,  'Инд.<br>онлайн',  r.indivOn)}
+            ${cell(c.groupOff, 'Груп.<br>офлайн', r.groupOff)}
+            ${cell(c.groupOn,  'Груп.<br>онлайн',  r.groupOn)}
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
             <span style="font-weight:700">К выплате</span>
-            <span style="font-size:1.1rem;font-weight:800;color:${payout > 0 ? 'var(--green)' : 'var(--text2)'}">${payout > 0 ? payout.toLocaleString('ru') + ' ₽' : rate > 0 ? '0 ₽' : 'ставка не задана'}</span>
+            <span style="font-size:1.1rem;font-weight:800;color:${payout > 0 ? 'var(--green)' : 'var(--text2)'}">${payout > 0 ? payout.toLocaleString('ru') + ' ₽' : hasRates ? '0 ₽' : 'ставки не заданы'}</span>
           </div>
         </div>
       </div>`;
@@ -2060,16 +2090,12 @@ async function loadFinance() {
 
 // ── RATE MODAL — пароль запрашивается ДО открытия ──
 let _rateTrainerId = null;
-let _ratePendingId = null, _ratePendingName = null, _ratePendingCurrent = null;
+let _ratePending = {};
 
-function askRatePassword(id, name, currentRate) {
-  // Показываем модалку пароля
-  _ratePendingId = id;
-  _ratePendingName = name;
-  _ratePendingCurrent = currentRate;
+function askRatePassword(id, name, indivOff, indivOn, groupOff, groupOn) {
+  _ratePending = { id, name, indivOff, indivOn, groupOff, groupOn };
   document.getElementById('rate-password').value = '';
   document.getElementById('rate-err').textContent = '';
-  // Скрываем поле ставки — оно откроется после проверки пароля
   document.getElementById('rate-value-wrap').style.display = 'none';
   document.getElementById('rate-trainer-name').textContent = name;
   document.getElementById('rate-modal-title').textContent = '🔒 Введите пароль';
@@ -2081,15 +2107,14 @@ function askRatePassword(id, name, currentRate) {
 function confirmRatePassword() {
   const pass = document.getElementById('rate-password').value;
   const errEl = document.getElementById('rate-err');
-  if (pass !== '1289') {
-    errEl.textContent = 'Неверный пароль';
-    return;
-  }
-  // Пароль верный — показываем поле ставки
+  if (pass !== '1289') { errEl.textContent = 'Неверный пароль'; return; }
   errEl.textContent = '';
-  _rateTrainerId = _ratePendingId;
-  document.getElementById('rate-modal-title').textContent = '✏️ Ставка тренера';
-  document.getElementById('rate-value').value = _ratePendingCurrent || '';
+  _rateTrainerId = _ratePending.id;
+  document.getElementById('rate-modal-title').textContent = '✏️ Ставки тренера';
+  document.getElementById('rate-indiv-off').value = _ratePending.indivOff || '';
+  document.getElementById('rate-indiv-on').value  = _ratePending.indivOn  || '';
+  document.getElementById('rate-group-off').value = _ratePending.groupOff || '';
+  document.getElementById('rate-group-on').value  = _ratePending.groupOn  || '';
   document.getElementById('rate-value-wrap').style.display = '';
   document.getElementById('rate-password').value = '';
   document.getElementById('rate-confirm-btn').style.display = 'none';
@@ -2097,18 +2122,16 @@ function confirmRatePassword() {
 }
 
 async function saveRate() {
-  const errEl  = document.getElementById('rate-err');
-  const rateVal = parseInt(document.getElementById('rate-value').value);
-
-  if (isNaN(rateVal) || rateVal < 0) {
-    errEl.textContent = 'Введите корректную ставку';
-    return;
-  }
+  const errEl = document.getElementById('rate-err');
+  const rateIndivOff = parseInt(document.getElementById('rate-indiv-off').value) || 0;
+  const rateIndivOn  = parseInt(document.getElementById('rate-indiv-on').value)  || 0;
+  const rateGroupOff = parseInt(document.getElementById('rate-group-off').value) || 0;
+  const rateGroupOn  = parseInt(document.getElementById('rate-group-on').value)  || 0;
 
   try {
-    await db.collection('trainers').doc(_rateTrainerId).update({ rate: rateVal });
+    await db.collection('trainers').doc(_rateTrainerId).update({ rateIndivOff, rateIndivOn, rateGroupOff, rateGroupOn });
     _closeModal('rate-modal');
-    toast('Ставка обновлена', 'ok');
+    toast('Ставки обновлены', 'ok');
     loadFinance();
   } catch(e) {
     errEl.textContent = 'Ошибка: ' + e.message;
