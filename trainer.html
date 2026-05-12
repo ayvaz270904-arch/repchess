@@ -75,6 +75,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .form-inp::placeholder{color:var(--text2);}
 .form-sel option{background:var(--surface2);}
 .form-ta{resize:vertical;min-height:80px;}
+input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 
 /* ── TOGGLE BUTTONS ── */
 .toggle-group{display:flex;gap:8px;flex-wrap:wrap;}
@@ -238,6 +239,9 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </button>
     <button class="nav-item" onclick="showPage('history')" data-page="history">
       <div class="nav-icon">📋</div><div class="nav-label">История</div>
+    </button>
+    <button class="nav-item" onclick="showPage('finance')" data-page="finance" id="finance-nav">
+      <div class="nav-icon">💰</div><div class="nav-label">Финансы</div>
     </button>
     <button class="nav-item" onclick="showPage('admin')" data-page="admin" id="admin-nav" style="display:none">
       <div class="nav-icon">⚙️</div><div class="nav-label">Админ</div>
@@ -404,6 +408,27 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       </div>
     </div>
 
+    <!-- FINANCE PAGE -->
+    <div class="page" id="page-finance">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div style="font-weight:800;font-size:1.1rem">💰 Финансы</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="btn-sm" onclick="finPrevMonth()">‹</button>
+          <span id="fin-month-label" style="font-size:.88rem;font-weight:700;min-width:100px;text-align:center"></span>
+          <button class="btn-sm" onclick="finNextMonth()">›</button>
+        </div>
+      </div>
+
+      <!-- Summary card (admin only) -->
+      <div class="card" id="fin-summary-card" style="display:none;margin-bottom:14px">
+        <div class="card-head"><span class="card-title">Итого за месяц</span></div>
+        <div class="card-body" id="fin-summary-body"></div>
+      </div>
+
+      <!-- Trainer rows -->
+      <div id="fin-trainers-wrap"></div>
+    </div>
+
   </div><!-- /container -->
 </div><!-- /app -->
 
@@ -515,7 +540,28 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div class="auth-err" id="add-trainer-err"></div>
     <button class="btn-full btn-gold" onclick="addTrainer()">Создать аккаунт</button>
     <div style="height:10px"></div>
-    <button class="btn-full btn-ghost" onclick="document.getElementById('add-trainer-modal').style.display='none'">Отмена</button>
+    <button class="btn-full btn-ghost" onclick="_closeModal('add-trainer-modal')">Отмена</button>
+  </div>
+</div>
+
+<!-- RATE EDIT MODAL -->
+<div class="overlay" id="rate-modal" style="display:none" onclick="if(event.target===this)_closeModal('rate-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ Ставка тренера</div>
+    <div id="rate-trainer-name" style="font-weight:700;margin-bottom:14px;color:var(--accent)"></div>
+    <div class="form-row">
+      <div class="form-label">Ставка за занятие (₽)</div>
+      <input class="form-inp" id="rate-value" type="number" min="0" step="50" placeholder="Например: 500">
+    </div>
+    <div class="form-row">
+      <div class="form-label">🔒 Пароль подтверждения</div>
+      <input class="form-inp" id="rate-password" type="password" placeholder="Введите пароль">
+    </div>
+    <div class="auth-err" id="rate-err"></div>
+    <button class="btn-full btn-gold" onclick="saveRate()">Сохранить ставку</button>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('rate-modal')">Отмена</button>
   </div>
 </div>
 
@@ -1759,6 +1805,7 @@ function showPage(name) {
   if (name==='history') loadHistory();
   if (name==='group')   loadGroupLessons();
   if (name==='admin')   loadAdminData();
+  if (name==='finance') loadFinance();
 }
 
 // ══════════════════════════════════════════════
@@ -1895,6 +1942,165 @@ function showCalDay(ds) {
 
 function calPrev(){_calMonth--;if(_calMonth<0){_calMonth=11;_calYear--;}renderCalendar();}
 function calNext(){_calMonth++;if(_calMonth>11){_calMonth=0;_calYear++;}renderCalendar();}
+
+// ══════════════════════════════════════════════
+//  FINANCE
+// ══════════════════════════════════════════════
+let _finYear  = new Date().getFullYear();
+let _finMonth = new Date().getMonth(); // 0-based
+
+const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                     'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+
+function finPrevMonth() {
+  _finMonth--; if (_finMonth < 0) { _finMonth = 11; _finYear--; }
+  loadFinance();
+}
+function finNextMonth() {
+  _finMonth++; if (_finMonth > 11) { _finMonth = 0; _finYear++; }
+  loadFinance();
+}
+
+async function loadFinance() {
+  document.getElementById('fin-month-label').textContent = MONTH_NAMES[_finMonth] + ' ' + _finYear;
+
+  const isAdmin = currentTrainer?.isAdmin;
+  const summaryCard = document.getElementById('fin-summary-card');
+  const wrap = document.getElementById('fin-trainers-wrap');
+  wrap.innerHTML = '<div class="empty">Загрузка...</div>';
+
+  try {
+    // Загружаем всех тренеров
+    const trainersSnap = await db.collection('trainers').get();
+    const trainersList = [];
+    trainersSnap.forEach(d => trainersList.push({ id: d.id, ...d.data() }));
+
+    // Если тренер (не админ) — показываем только себя
+    const toShow = isAdmin ? trainersList : trainersList.filter(t => t.id === currentUser.uid);
+
+    // Временные рамки месяца
+    const from = new Date(_finYear, _finMonth, 1);
+    const to   = new Date(_finYear, _finMonth + 1, 0, 23, 59, 59);
+
+    // Загружаем все занятия за месяц
+    const lessonsSnap = await db.collection('lessons')
+      .where('date', '>=', from.toISOString().slice(0,10))
+      .where('date', '<=', to.toISOString().slice(0,10))
+      .get();
+    const groupSnap = await db.collection('groupLessons')
+      .where('date', '>=', from.toISOString().slice(0,10))
+      .where('date', '<=', to.toISOString().slice(0,10))
+      .get();
+
+    // Считаем занятия по тренерам
+    const counts = {}; // trainerId -> { indiv, group }
+    lessonsSnap.forEach(d => {
+      const tid = d.data().trainerId;
+      if (!tid) return;
+      if (!counts[tid]) counts[tid] = { indiv: 0, group: 0 };
+      counts[tid].indiv++;
+    });
+    groupSnap.forEach(d => {
+      const tid = d.data().trainerId;
+      if (!tid) return;
+      if (!counts[tid]) counts[tid] = { indiv: 0, group: 0 };
+      counts[tid].group++;
+    });
+
+    // Рендерим карточки тренеров
+    let totalPayout = 0;
+    let html = '';
+    for (const t of toShow) {
+      const c = counts[t.id] || { indiv: 0, group: 0 };
+      const total = c.indiv + c.group;
+      const rate  = t.rate || 0;
+      const payout = total * rate;
+      totalPayout += payout;
+
+      html += `
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
+          <span class="card-title">👤 ${t.name || t.email}</span>
+          ${isAdmin ? `<button class="btn-sm" onclick="openRateModal('${t.id}','${(t.name||t.email).replace(/'/g,"\\'")}',${rate})" style="font-size:.75rem">✏️ Ставка</button>` : ''}
+        </div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+            <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;text-align:center">
+              <div style="font-size:1.3rem;font-weight:800">${c.indiv}</div>
+              <div style="font-size:.72rem;color:var(--text2)">Инд. занятий</div>
+            </div>
+            <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;text-align:center">
+              <div style="font-size:1.3rem;font-weight:800">${c.group}</div>
+              <div style="font-size:.72rem;color:var(--text2)">Груп. занятий</div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
+            <span style="color:var(--text2);font-size:.85rem">Ставка за занятие</span>
+            <span style="font-weight:700">${rate > 0 ? rate + ' ₽' : '<span style="color:var(--text2)">не задана</span>'}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
+            <span style="color:var(--text2);font-size:.85rem">Всего занятий</span>
+            <span style="font-weight:700">${total}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
+            <span style="font-weight:700">К выплате</span>
+            <span style="font-size:1.1rem;font-weight:800;color:${payout > 0 ? 'var(--green)' : 'var(--text2)'}">${payout > 0 ? payout.toLocaleString('ru') + ' ₽' : '—'}</span>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    wrap.innerHTML = html || '<div class="empty">Нет данных</div>';
+
+    // Итоговая карточка (только для админа)
+    if (isAdmin) {
+      summaryCard.style.display = '';
+      document.getElementById('fin-summary-body').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="color:var(--text2)">Итого к выплате тренерам</span>
+          <span style="font-size:1.2rem;font-weight:800;color:var(--green)">${totalPayout > 0 ? totalPayout.toLocaleString('ru') + ' ₽' : '—'}</span>
+        </div>`;
+    }
+
+  } catch(e) {
+    wrap.innerHTML = `<div class="empty" style="color:var(--red)">Ошибка: ${e.message}</div>`;
+  }
+}
+
+// ── RATE MODAL ──
+let _rateTrainerId = null;
+function openRateModal(id, name, currentRate) {
+  _rateTrainerId = id;
+  document.getElementById('rate-trainer-name').textContent = name;
+  document.getElementById('rate-value').value = currentRate || '';
+  document.getElementById('rate-password').value = '';
+  document.getElementById('rate-err').textContent = '';
+  _openModal('rate-modal');
+}
+
+async function saveRate() {
+  const pass   = document.getElementById('rate-password').value;
+  const errEl  = document.getElementById('rate-err');
+  const rateVal = parseInt(document.getElementById('rate-value').value);
+
+  if (pass !== '1289') {
+    errEl.textContent = 'Неверный пароль';
+    return;
+  }
+  if (isNaN(rateVal) || rateVal < 0) {
+    errEl.textContent = 'Введите корректную ставку';
+    return;
+  }
+
+  try {
+    await db.collection('trainers').doc(_rateTrainerId).update({ rate: rateVal });
+    _closeModal('rate-modal');
+    toast('Ставка обновлена', 'ok');
+    loadFinance();
+  } catch(e) {
+    errEl.textContent = 'Ошибка: ' + e.message;
+  }
+}
 
 // PWA — Service Worker
 if ('serviceWorker' in navigator) {
