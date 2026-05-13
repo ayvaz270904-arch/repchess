@@ -518,7 +518,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </div>
     <div class="form-row" id="grp-trainer-row" style="display:none">
       <div class="form-label">Тренер</div>
-      <select class="form-sel" id="grp-trainer-sel">
+      <select class="form-sel" id="grp-trainer-sel" onchange="refreshGrpStudentSearch()">
         <option value="">— выберите тренера —</option>
       </select>
     </div>
@@ -1039,33 +1039,71 @@ function searchStudents(q, prefix) {
   const resultsEl = document.getElementById(`${prefix}-student-results`);
   const isAdmin = currentTrainer.role === 'admin';
 
-  // Пул учеников — для тренера только назначенные
   let pool = students;
+
   if (!isAdmin) {
-    const assigned = currentTrainer.assignedStudents || [];
-    pool = assigned.length ? students.filter(s => assigned.includes(s.email)) : [];
+    // Тренер: видит только своих назначенных учеников
+    // Если назначений нет — видит всех, кроме закреплённых за другими тренерами
+    const myAssigned = currentTrainer.assignedStudents || [];
+    if (myAssigned.length > 0) {
+      pool = students.filter(s => myAssigned.includes(s.email));
+    } else {
+      const takenByOthers = new Set();
+      _trainersCache.forEach(t => {
+        if (t.id !== currentUser.uid) {
+          (t.assignedStudents || []).forEach(e => takenByOthers.add(e));
+        }
+      });
+      pool = students.filter(s => !takenByOthers.has(s.email));
+    }
   }
 
-  // Фильтрация по запросу (пустой запрос = показать всех из пула)
   const matches = q.length > 0
     ? pool.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase())).slice(0, 10)
     : pool.slice(0, 10);
 
   if (!matches.length) { resultsEl.style.display='none'; return; }
 
-  resultsEl.innerHTML = matches.map(s => `
-    <div class="student-result-item" onclick="selectStudent('${esc(s.email)}','${prefix}')">
+  // Для администратора: определяем выбранного тренера, чтобы пометить "чужих" учеников
+  let selectedTrainerId = null;
+  if (isAdmin) {
+    const selElId = prefix === 'rec' ? 'rec-trainer-sel' : 'grp-trainer-sel';
+    selectedTrainerId = document.getElementById(selElId)?.value || null;
+  }
+
+  resultsEl.innerHTML = matches.map(s => {
+    let blocked = false, blockLabel = '';
+    if (isAdmin && selectedTrainerId) {
+      const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(s.email));
+      if (assignedTo && assignedTo.id !== selectedTrainerId) {
+        blocked = true;
+        blockLabel = ` · 🔒 у ${esc((assignedTo.name||'').split(' ').slice(0,2).join(' '))}`;
+      }
+    }
+    return `
+    <div class="student-result-item"
+      onclick="${blocked ? 'void 0' : `selectStudent('${esc(s.email)}','${prefix}')`}"
+      style="${blocked ? 'opacity:.4;cursor:not-allowed' : ''}">
       <div>
         <div class="student-name">${esc(s.name)}</div>
-        <div class="student-meta">${s.id} · ${esc(s.email)}</div>
+        <div class="student-meta">${s.id} · ${esc(s.email)}${blockLabel}</div>
       </div>
-      <div class="balance-badge ${s.purchased>0?'balance-ok':'balance-low'}">${s.purchased} куп.</div>
-    </div>`).join('');
+      <div class="balance-badge ${blocked ? 'balance-low' : s.purchased>0?'balance-ok':'balance-low'}">${blocked ? 'занят' : s.purchased+' куп.'}</div>
+    </div>`;
+  }).join('');
   resultsEl.style.display = '';
 }
 
 function showAllStudents(prefix) {
   searchStudents('', prefix);
+}
+
+// Обновляет открытый дропдаун учеников при смене тренера в групповом модале
+function refreshGrpStudentSearch() {
+  const resultsEl = document.getElementById('grp-student-results');
+  if (resultsEl && resultsEl.style.display !== 'none') {
+    searchStudents(document.getElementById('grp-student-inp').value || '', 'grp');
+  }
 }
 
 async function selectStudent(email, prefix) {
@@ -1088,6 +1126,18 @@ async function selectStudent(email, prefix) {
 
   } else if (prefix === 'grp') {
     if (grpSelectedStudents.find(x => x.email === email)) return;
+    // Для администратора: проверяем конфликт назначений
+    if (currentTrainer.role === 'admin') {
+      const grpTrainerId = document.getElementById('grp-trainer-sel')?.value;
+      if (grpTrainerId) {
+        const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(email));
+        if (assignedTo && assignedTo.id !== grpTrainerId) {
+          const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
+          toast(`${s.name} закреплён за ${tName} — добавить нельзя`, 'err');
+          return;
+        }
+      }
+    }
     grpSelectedStudents.push(s);
     renderGrpTags();
     document.getElementById('grp-student-inp').value = '';
@@ -1119,7 +1169,7 @@ function clearStudent(prefix) {
   }
 }
 
-// Проверяет, закреплён ли выбранный ученик за выбранным тренером
+// Проверяет конфликт назначения: ученик закреплён за другим тренером?
 function checkRecTrainerAssignment() {
   const isAdmin = currentTrainer?.role === 'admin';
   if (!isAdmin) return;
@@ -1128,13 +1178,21 @@ function checkRecTrainerAssignment() {
   const warnEl = document.getElementById('rec-trainer-warn');
   if (!warnEl) return;
   if (!trainerId || !email) { warnEl.style.display = 'none'; return; }
-  const trainer = _trainersCache.find(t => t.id === trainerId);
-  const assigned = trainer?.assignedStudents || [];
-  // Предупреждаем только если у тренера есть назначенные ученики, но этого нет в списке
-  if (assigned.length > 0 && !assigned.includes(email)) {
+
+  // Кому реально назначен этот ученик?
+  const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(email));
+  if (assignedTo && assignedTo.id !== trainerId) {
+    const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
+    warnEl.textContent = `⚠️ Ученик закреплён за ${tName} — сохранение заблокировано`;
     warnEl.style.display = '';
   } else {
     warnEl.style.display = 'none';
+  }
+
+  // Обновляем выпадающий список, если он открыт (живая реакция при смене тренера)
+  const resultsEl = document.getElementById('rec-student-results');
+  if (resultsEl && resultsEl.style.display !== 'none') {
+    searchStudents(document.getElementById('rec-student-inp').value || '', 'rec');
   }
 }
 
@@ -1158,6 +1216,13 @@ async function submitLesson() {
   if (isAdmin) {
     const selId = document.getElementById('rec-trainer-sel').value;
     if (!selId) { toast('Выбери тренера', 'err'); return; }
+    // Жёсткая проверка конфликта назначений
+    const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(email));
+    if (assignedTo && assignedTo.id !== selId) {
+      const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
+      toast(`Ученик закреплён за ${tName} — сохранение невозможно`, 'err');
+      return;
+    }
     const selTrainer = _trainersCache.find(t => t.id === selId);
     trainerId   = selId;
     trainerName = selTrainer?.name || selId;
@@ -1341,6 +1406,15 @@ async function submitGroupLesson() {
   if (isAdmin && !editingGroupId) {
     const selId = document.getElementById('grp-trainer-sel').value;
     if (!selId) { toast('Выбери тренера', 'err'); return; }
+    // Жёсткая проверка конфликтов для каждого ученика в группе
+    for (const s of grpSelectedStudents) {
+      const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(s.email));
+      if (assignedTo && assignedTo.id !== selId) {
+        const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
+        toast(`${s.name} закреплён за ${tName} — сохранение невозможно`, 'err');
+        return;
+      }
+    }
     const selTrainer = _trainersCache.find(t => t.id === selId);
     trainerId   = selId;
     trainerName = selTrainer?.name || selId;
