@@ -1042,20 +1042,9 @@ function searchStudents(q, prefix) {
   let pool = students;
 
   if (!isAdmin) {
-    // Тренер: видит только своих назначенных учеников
-    // Если назначений нет — видит всех, кроме закреплённых за другими тренерами
+    // Тренер видит ТОЛЬКО учеников, назначенных ему администратором
     const myAssigned = currentTrainer.assignedStudents || [];
-    if (myAssigned.length > 0) {
-      pool = students.filter(s => myAssigned.includes(s.email));
-    } else {
-      const takenByOthers = new Set();
-      _trainersCache.forEach(t => {
-        if (t.id !== currentUser.uid) {
-          (t.assignedStudents || []).forEach(e => takenByOthers.add(e));
-        }
-      });
-      pool = students.filter(s => !takenByOthers.has(s.email));
-    }
+    pool = students.filter(s => myAssigned.includes(s.email));
   }
 
   const matches = q.length > 0
