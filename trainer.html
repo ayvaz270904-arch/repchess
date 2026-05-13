@@ -193,6 +193,27 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
   .modal{padding:18px 14px 28px;}
   #fab-main{width:50px;height:50px;font-size:1.4rem;}
 }
+
+/* ── LESSON STATUS ── */
+.tag-cancelled{background:rgba(239,68,68,.12);color:var(--red);}
+.tag-rescheduled{background:rgba(249,115,22,.12);color:var(--orange);}
+.lesson-item.is-cancelled{opacity:.5;}
+.lesson-item.is-cancelled .lesson-student{text-decoration:line-through;}
+
+/* ── NOTE CHIPS ── */
+.note-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
+.note-chip{padding:4px 10px;border-radius:16px;border:1px solid var(--border);background:none;color:var(--text2);font-size:.75rem;cursor:pointer;transition:all .15s;font-family:inherit;}
+.note-chip:hover,.note-chip:active{background:rgba(172,61,54,.12);border-color:var(--accent);color:var(--accent);}
+
+/* ── REMIND CARD ── */
+.remind-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4);}
+.remind-item:last-child{border-bottom:none;}
+.copy-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.72rem;padding:4px 8px;cursor:pointer;white-space:nowrap;}
+.copy-btn:hover{color:var(--accent);border-color:var(--accent);}
+
+/* ── FIN DRILL ── */
+.fin-cell-btn{cursor:pointer;transition:transform .1s;}
+.fin-cell-btn:hover{transform:scale(1.04);outline:1px solid var(--accent);border-radius:10px;}
 </style>
 </head>
 <body>
@@ -260,7 +281,11 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         <button class="fab-btn fab-btn-indiv" onclick="openIndivModal();closeFab()">✏️</button>
       </div>
     </div>
-    <button id="fab-main" onclick="toggleFab()">+</button>
+    <button id="fab-main" onclick="toggleFab()">
+      <svg width="22" height="22" viewBox="0 0 22 22" fill="none" style="pointer-events:none;display:block">
+        <path d="M11 2v18M2 11h18" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+    </button>
   </div>
 
   <div class="container">
@@ -272,6 +297,14 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         <div style="font-size:1.3rem;font-weight:800;margin-top:4px" id="home-greeting"></div>
       </div>
       <div class="stat-grid" id="home-stats"></div>
+      <!-- Напомнить о продлении -->
+      <div class="card" id="home-remind-card" style="display:none;border-color:rgba(249,115,22,.35);margin-bottom:14px">
+        <div class="card-head" style="border-color:rgba(249,115,22,.25)">
+          <span class="card-title">🔔 Написать сегодня</span>
+          <span style="font-size:.72rem;color:var(--orange)">заканчиваются занятия</span>
+        </div>
+        <div class="card-body" id="home-remind-body"></div>
+      </div>
       <div class="card">
         <div class="card-head"><span class="card-title">Последние занятия</span></div>
         <div class="card-body" id="home-recent"></div>
@@ -479,6 +512,15 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <input type="hidden" id="rec-format" value="offline">
     </div>
     <input type="hidden" id="rec-type" value="individual">
+    <div class="form-row">
+      <div class="form-label">Статус занятия</div>
+      <div class="toggle-group">
+        <button class="toggle-btn on" onclick="toggle('rec-status',this,'done')">✅ Проведено</button>
+        <button class="toggle-btn" onclick="toggle('rec-status',this,'cancelled')">❌ Отменено</button>
+        <button class="toggle-btn" onclick="toggle('rec-status',this,'rescheduled')">🔄 Перенесено</button>
+      </div>
+      <input type="hidden" id="rec-status" value="done">
+    </div>
     <div class="form-row" id="rec-trainer-row" style="display:none">
       <div class="form-label">Тренер</div>
       <select class="form-sel" id="rec-trainer-sel" onchange="checkRecTrainerAssignment()">
@@ -488,6 +530,16 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </div>
     <div class="form-row">
       <div class="form-label">Заметки <span style="color:var(--text2);text-transform:none;font-size:.72rem">(необязательно)</span></div>
+      <div class="note-chips">
+        <button type="button" class="note-chip" onclick="addNoteChip('rec-notes','Дебют')">♟ Дебют</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('rec-notes','Тактика')">⚔️ Тактика</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('rec-notes','Эндшпиль')">🏁 Эндшпиль</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('rec-notes','Миттельшпиль')">⚡ Миттельшпиль</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('rec-notes','Анализ партий')">🔍 Анализ</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('rec-notes','Разбор ошибок')">📋 Разбор</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('rec-notes','ДЗ выдано')">📝 ДЗ</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('rec-notes','Позиционная игра')">🗺 Позиция</button>
+      </div>
       <textarea class="form-ta" id="rec-notes" placeholder="Темы, прогресс, замечания..."></textarea>
     </div>
     <button class="btn-full btn-gold" onclick="submitLesson()" id="rec-submit">Записать занятие</button>
@@ -533,6 +585,15 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </div>
     <div class="form-row">
       <div class="form-label">Заметки</div>
+      <div class="note-chips">
+        <button type="button" class="note-chip" onclick="addNoteChip('grp-notes','Дебют')">♟ Дебют</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('grp-notes','Тактика')">⚔️ Тактика</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('grp-notes','Эндшпиль')">🏁 Эндшпиль</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('grp-notes','Миттельшпиль')">⚡ Миттельшпиль</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('grp-notes','Анализ партий')">🔍 Анализ</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('grp-notes','Разбор ошибок')">📋 Разбор</button>
+        <button type="button" class="note-chip" onclick="addNoteChip('grp-notes','ДЗ выдано')">📝 ДЗ</button>
+      </div>
       <textarea class="form-ta" id="grp-notes" placeholder="Тема занятия, замечания..."></textarea>
     </div>
     <button class="btn-full btn-gold" onclick="submitGroupLesson()" id="grp-submit">Создать занятие</button>
@@ -655,6 +716,28 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
   </div>
 </div>
 
+<!-- STUDENT INFO MODAL -->
+<div class="overlay" id="student-info-modal" style="display:none" onclick="if(event.target===this)_closeModal('student-info-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="si-name"></div>
+    <div id="si-body"></div>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('student-info-modal')">Закрыть</button>
+  </div>
+</div>
+
+<!-- FINANCE DRILL-DOWN MODAL -->
+<div class="overlay" id="fin-drill-modal" style="display:none" onclick="if(event.target===this)_closeModal('fin-drill-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="fin-drill-title"></div>
+    <div id="fin-drill-body"></div>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('fin-drill-modal')">Закрыть</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -679,6 +762,29 @@ function localDateStr(d) {
   const m = String(d.getMonth()+1).padStart(2,'0');
   const day = String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
+}
+
+// ══════════════════════════════════════════════
+//  UTILS
+// ══════════════════════════════════════════════
+
+// Универсальная обёртка: блокирует кнопку, показывает лоадер, ловит ошибки
+async function withLoading(btnId, loadingText, fn) {
+  const btn = document.getElementById(btnId);
+  const origText = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = loadingText || 'Сохранение...'; }
+  try { await fn(); }
+  catch(e) { toast('Ошибка: ' + e.message, 'err'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = origText; } }
+}
+
+// Добавляет чип-тему в заметки через запятую
+function addNoteChip(fieldId, text) {
+  const ta = document.getElementById(fieldId);
+  if (!ta) return;
+  const cur = ta.value.trim();
+  ta.value = cur ? cur + ', ' + text : text;
+  ta.focus();
 }
 
 // ══════════════════════════════════════════════
@@ -817,7 +923,19 @@ async function showApp() {
 // ══════════════════════════════════════════════
 //  LOAD STUDENTS FROM CRM
 // ══════════════════════════════════════════════
+const CRM_CACHE_KEY = 'repchess_crm_v2';
+const CRM_CACHE_TTL = 5 * 60 * 1000; // 5 минут
+
 async function loadStudents() {
+  // Проверяем sessionStorage кэш
+  try {
+    const raw = sessionStorage.getItem(CRM_CACHE_KEY);
+    if (raw) {
+      const { data, ts } = JSON.parse(raw);
+      if (Date.now() - ts < CRM_CACHE_TTL) { students = data; return; }
+    }
+  } catch(e) {}
+
   try {
     const res = await fetch(CRM_CSV + '&t=' + Date.now());
     const txt = await res.text();
@@ -865,6 +983,9 @@ async function loadStudents() {
     freeStudents.forEach((s, i) => { s.id = `RC-F${String(i+1).padStart(3,'0')}`; s.purchased = 0; });
 
     students = [...sorted, ...freeStudents];
+
+    // Сохраняем в sessionStorage
+    try { sessionStorage.setItem(CRM_CACHE_KEY, JSON.stringify({ data: students, ts: Date.now() })); } catch(e) {}
 
   } catch(e) {
     console.warn('Could not load students from CRM:', e);
@@ -951,14 +1072,21 @@ async function loadHomePage() {
   let grpAll = grpSnap.docs.map(d=>({id:d.id,...d.data(),_isGroup:true}))
     .filter(g => !_deletedGroupIds.has(g.id));
 
+  // Строим карту использованных занятий по ученикам (для напоминаний)
+  const usedMap = {};
+  indivAll.filter(l => l.status !== 'cancelled').forEach(l => {
+    if (l.studentEmail) usedMap[l.studentEmail] = (usedMap[l.studentEmail]||0) + 1;
+  });
+  loadHomeReminders(usedMap); // async, не блокирует рендер
+
   // Статистика (только инд. занятия — группы уже создают записи в lessons)
   const now = new Date();
   const weekAgo  = new Date(now - 7*86400000);
   const monthAgo = new Date(now - 30*86400000);
   const allLessons = indivAll;
-  const weekCnt  = allLessons.filter(l=>l._date && l._date >= weekAgo.toISOString().slice(0,10)).length;
-  const monthCnt = allLessons.filter(l=>l._date && l._date >= monthAgo.toISOString().slice(0,10)).length;
-  const uniqueW  = new Set(allLessons.filter(l=>l._date >= weekAgo.toISOString().slice(0,10)).map(l=>l.studentEmail)).size;
+  const weekCnt  = allLessons.filter(l=>l._date && l.status !== 'cancelled' && l._date >= weekAgo.toISOString().slice(0,10)).length;
+  const monthCnt = allLessons.filter(l=>l._date && l.status !== 'cancelled' && l._date >= monthAgo.toISOString().slice(0,10)).length;
+  const uniqueW  = new Set(allLessons.filter(l=>l._date && l.status !== 'cancelled' && l._date >= weekAgo.toISOString().slice(0,10)).map(l=>l.studentEmail)).size;
 
   document.getElementById('home-stats').innerHTML = `
     <div class="stat-card sc-blue">
@@ -1016,9 +1144,11 @@ function groupFeedItemHTML(g) {
 
 function lessonItemHTML(l) {
   const d = l._date ? new Date(l._date + 'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
-  return `<div class="lesson-item">
+  const isCancelled   = l.status === 'cancelled';
+  const isRescheduled = l.status === 'rescheduled';
+  return `<div class="lesson-item${isCancelled?' is-cancelled':''}">
     <div class="lesson-row1">
-      <span class="lesson-student">${esc(l.studentName||'—')}</span>
+      <span class="lesson-student" style="cursor:pointer" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
       <div style="display:flex;align-items:center;gap:6px">
         <span class="lesson-date">${d}</span>
         <button data-edit-id="${l.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.85rem;padding:2px 4px;line-height:1;min-width:28px;min-height:28px" title="Редактировать">✏️</button>
@@ -1026,6 +1156,8 @@ function lessonItemHTML(l) {
     </div>
     <div class="lesson-row2">
       <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
+      ${isCancelled?'<span class="tag tag-cancelled">Отменено</span>':''}
+      ${isRescheduled?'<span class="tag tag-rescheduled">Перенесено</span>':''}
       ${l.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
       ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,40))}${l.notes.length>40?'…':''}</span>`:''}
     </div>
@@ -1189,11 +1321,12 @@ function checkRecTrainerAssignment() {
 //  RECORD INDIVIDUAL LESSON
 // ══════════════════════════════════════════════
 async function submitLesson() {
-  const email = document.getElementById('rec-student-inp').dataset.email;
-  const date  = document.getElementById('rec-date').value;
-  const format= document.getElementById('rec-format').value;
-  const type  = document.getElementById('rec-type').value;
-  const notes = document.getElementById('rec-notes').value.trim();
+  const email  = document.getElementById('rec-student-inp').dataset.email;
+  const date   = document.getElementById('rec-date').value;
+  const format = document.getElementById('rec-format').value;
+  const type   = document.getElementById('rec-type').value;
+  const notes  = document.getElementById('rec-notes').value.trim();
+  const status = document.getElementById('rec-status').value || 'done';
 
   if (!email) { toast('Выбери ученика', 'err'); return; }
   if (!date)  { toast('Укажи дату', 'err'); return; }
@@ -1228,7 +1361,7 @@ async function submitLesson() {
       studentName:  s?.name || '',
       studentId:    s?.id || '',
       _date:   date,
-      format, type, notes,
+      format, type, notes, status,
       groupLessonId: null,
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
@@ -1253,6 +1386,13 @@ function openIndivModal() {
   const offlineBtn = document.querySelector('#indiv-modal .toggle-btn');
   if (offlineBtn) offlineBtn.classList.add('on');
   document.getElementById('rec-format').value = 'offline';
+  // сброс статуса
+  document.querySelectorAll('#indiv-modal .toggle-group').forEach(g => {
+    if (g.nextElementSibling && g.nextElementSibling.id === 'rec-status') {
+      g.querySelectorAll('.toggle-btn').forEach((b,i) => b.classList.toggle('on', i===0));
+    }
+  });
+  document.getElementById('rec-status').value = 'done';
   document.getElementById('rec-submit').textContent = 'Записать занятие';
   document.getElementById('rec-submit').disabled = false;
   // Выбор тренера — только для администратора
@@ -1624,9 +1764,11 @@ function renderHistoryList() {
 
 function histLessonItemHTML(l) {
   const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
-  return `<div class="lesson-item">
+  const isCancelled   = l.status === 'cancelled';
+  const isRescheduled = l.status === 'rescheduled';
+  return `<div class="lesson-item${isCancelled?' is-cancelled':''}">
     <div class="lesson-row1">
-      <span class="lesson-student">${esc(l.studentName||'—')}</span>
+      <span class="lesson-student" style="cursor:pointer" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
       <div style="display:flex;align-items:center;gap:6px">
         <span class="lesson-date">${d}</span>
         <button data-edit-id="${esc(l.id)}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
@@ -1634,6 +1776,8 @@ function histLessonItemHTML(l) {
     </div>
     <div class="lesson-row2">
       <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
+      ${isCancelled?'<span class="tag tag-cancelled">Отменено</span>':''}
+      ${isRescheduled?'<span class="tag tag-rescheduled">Перенесено</span>':''}
       ${l.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
       ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,60))}${l.notes.length>60?'…':''}</span>`:''}
     </div>
@@ -2112,15 +2256,12 @@ let _fabOpen = false;
 function toggleFab() {
   _fabOpen = !_fabOpen;
   document.getElementById('fab-options').style.display = _fabOpen ? 'flex' : 'none';
-  const btn = document.getElementById('fab-main');
-  btn.textContent = _fabOpen ? '✕' : '+';
-  btn.style.transform = _fabOpen ? 'rotate(45deg)' : 'rotate(0deg)';
+  document.getElementById('fab-main').style.transform = _fabOpen ? 'rotate(45deg)' : 'rotate(0deg)';
 }
 function closeFab() {
   _fabOpen = false;
   document.getElementById('fab-options').style.display = 'none';
-  const btn = document.getElementById('fab-main');
-  btn.textContent = '+'; btn.style.transform = 'rotate(0deg)';
+  document.getElementById('fab-main').style.transform = 'rotate(0deg)';
 }
 
 // ══════════════════════════════════════════════
@@ -2271,12 +2412,18 @@ async function loadFinance() {
     const emptyCount = () => ({ indivOff:0, indivOn:0, groupOff:0, groupOn:0 });
     const counts = {};
 
+    // Кешируем для drill-down
+    _finLessonsCache = []; _finGroupsCache = [];
+    const _finFrom = fromVal, _finTo = toVal;
+
     lessonsSnap.forEach(d => {
       const data = d.data();
       const date = data._date || data.date || '';
       if (!date || date < fromVal || date > toVal) return;
+      if (data.status === 'cancelled') return; // отменённые не считаем
       const tid = data.trainerId || nameToId[norm(data.trainerName)];
       if (!tid) return;
+      _finLessonsCache.push({id: d.id, ...data, _resolvedTid: tid});
       if (!counts[tid]) counts[tid] = emptyCount();
       data.format === 'online' ? counts[tid].indivOn++ : counts[tid].indivOff++;
     });
@@ -2287,6 +2434,7 @@ async function loadFinance() {
       if (!date || date < fromVal || date > toVal) return;
       const tid = data.trainerId || nameToId[norm(data.trainerName)];
       if (!tid) return;
+      _finGroupsCache.push({id: d.id, ...data, _resolvedTid: tid});
       if (!counts[tid]) counts[tid] = emptyCount();
       data.format === 'online' ? counts[tid].groupOn++ : counts[tid].groupOff++;
     });
@@ -2312,8 +2460,9 @@ async function loadFinance() {
       const safeName = (t.name || t.email).replace(/'/g,"\\'");
       const hasRates = Object.values(r).some(v => v > 0);
 
-      const cell = (count, label, rate) => `
-        <div style="background:var(--surface2);border-radius:10px;padding:8px 10px;text-align:center">
+      const cell = (count, label, rate, drillType) => `
+        <div class="${count>0&&isAdmin?'fin-cell-btn':''}" style="background:var(--surface2);border-radius:10px;padding:8px 10px;text-align:center"
+          ${count>0&&isAdmin?`onclick="openFinDrill('${t.id}','${drillType}','${t.name||''}')"`:''}>
           <div style="font-size:1.2rem;font-weight:800">${count}</div>
           <div style="font-size:.68rem;color:var(--text2);line-height:1.3">${label}</div>
           <div style="font-size:.68rem;color:var(--accent);margin-top:2px">${rate > 0 ? rate+'₽' : '—'}</div>
@@ -2327,10 +2476,10 @@ async function loadFinance() {
         </div>
         <div class="card-body">
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:12px">
-            ${cell(c.indivOff, 'Инд.<br>офлайн', r.indivOff)}
-            ${cell(c.indivOn,  'Инд.<br>онлайн',  r.indivOn)}
-            ${cell(c.groupOff, 'Груп.<br>офлайн', r.groupOff)}
-            ${cell(c.groupOn,  'Груп.<br>онлайн',  r.groupOn)}
+            ${cell(c.indivOff, 'Инд.<br>офлайн', r.indivOff, 'indivOff')}
+            ${cell(c.indivOn,  'Инд.<br>онлайн',  r.indivOn,  'indivOn')}
+            ${cell(c.groupOff, 'Груп.<br>офлайн', r.groupOff, 'groupOff')}
+            ${cell(c.groupOn,  'Груп.<br>онлайн',  r.groupOn,  'groupOn')}
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
             <span style="font-weight:700">К выплате</span>
@@ -2439,7 +2588,155 @@ document.addEventListener('click', e => {
     const d = rateBtn.dataset;
     askRatePassword(d.tid, d.name, +d.ioff, +d.ion, +d.goff, +d.gon);
   }
+  // Клик по имени ученика → карточка ученика
+  const siBtn = e.target.closest('[data-si-email]');
+  if (siBtn && siBtn.dataset.siEmail) {
+    e.stopPropagation();
+    openStudentInfoModal(siBtn.dataset.siEmail);
+  }
 });
+
+// ══════════════════════════════════════════════
+//  STUDENT INFO MODAL
+// ══════════════════════════════════════════════
+async function openStudentInfoModal(email) {
+  if (!email) return;
+  const s = students.find(x => x.email === email);
+  if (!s) { toast('Ученик не найден', 'err'); return; }
+
+  document.getElementById('si-name').textContent = '👤 ' + s.name;
+  document.getElementById('si-body').innerHTML = '<div style="color:var(--text2);font-size:.85rem">Загрузка...</div>';
+  _openModal('student-info-modal');
+
+  try {
+    // Считаем использованные занятия
+    const snap = await db.collection('lessons').where('studentEmail','==',email).get();
+    const allLessons = snap.docs.map(d=>({id:d.id,...d.data()}));
+    const used = allLessons.filter(l => l.status !== 'cancelled').length;
+    const remaining = s.purchased - used;
+    const lastLesson = allLessons.filter(l=>l._date).sort((a,b)=>b._date>a._date?1:-1)[0];
+    const lastDate = lastLesson?._date
+      ? new Date(lastLesson._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})
+      : 'нет занятий';
+
+    // Срок действия пакета
+    let expiryStr = '';
+    if (s.nextExpiry) {
+      const daysLeft = Math.ceil((s.nextExpiry - new Date()) / 86400000);
+      expiryStr = daysLeft > 0
+        ? `<span style="color:${daysLeft<=14?'var(--orange)':'var(--text2)'}">Пакет истекает через ${daysLeft} дн.</span>`
+        : `<span style="color:var(--red)">Пакет истёк</span>`;
+    }
+
+    // Тренер
+    const assignedTrainer = _trainersCache.find(t => (t.assignedStudents||[]).includes(email));
+    const trainerStr = assignedTrainer
+      ? `<span style="color:var(--accent2)">${esc(assignedTrainer.name)}</span>`
+      : '<span style="color:var(--text2)">не закреплён</span>';
+
+    document.getElementById('si-body').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-size:1.6rem;font-weight:800;color:${remaining<=0?'var(--red)':remaining<=2?'var(--orange)':'var(--green)'}">${remaining}</div>
+          <div style="font-size:.7rem;color:var(--text2)">Осталось занятий</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center">
+          <div style="font-size:1.6rem;font-weight:800;color:var(--accent2)">${used}</div>
+          <div style="font-size:.7rem;color:var(--text2)">Проведено</div>
+        </div>
+      </div>
+      <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📅 Последнее занятие: <span style="color:var(--text)">${lastDate}</span></div>
+      <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">🎯 Тренер: ${trainerStr}</div>
+      <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📦 Куплено: <span style="color:var(--text)">${s.purchased} занятий</span></div>
+      ${expiryStr ? `<div style="font-size:.82rem;margin-bottom:6px">${expiryStr}</div>` : ''}
+      ${s.phone ? `<div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <span style="font-size:.82rem;color:var(--text2)">📞 ${esc(s.phone)}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('${esc(s.phone)}').then(()=>toast('Скопировано','ok'))">Копировать</button>
+      </div>` : ''}`;
+  } catch(e) {
+    document.getElementById('si-body').innerHTML = `<div style="color:var(--red);font-size:.85rem">Ошибка: ${e.message}</div>`;
+  }
+}
+
+// ══════════════════════════════════════════════
+//  FINANCE DRILL-DOWN
+// ══════════════════════════════════════════════
+let _finLessonsCache = [];
+let _finGroupsCache  = [];
+
+function openFinDrill(trainerId, type, trainerName) {
+  const isGroup   = type.startsWith('group');
+  const isOnline  = type.endsWith('On');
+  const typeLabel = (isGroup ? 'Груп.' : 'Инд.') + ' ' + (isOnline ? 'онлайн' : 'офлайн');
+
+  document.getElementById('fin-drill-title').textContent = `${trainerName} · ${typeLabel}`;
+
+  const lessons = _finLessonsCache.filter(l => {
+    if (l._resolvedTid !== trainerId) return false;
+    const lg = l.type === 'group';
+    const lo = l.format === 'online';
+    if (type === 'indivOff') return !lg && !lo;
+    if (type === 'indivOn')  return !lg &&  lo;
+    if (type === 'groupOff') return  lg && !lo;
+    if (type === 'groupOn')  return  lg &&  lo;
+    return false;
+  }).sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1);
+
+  document.getElementById('fin-drill-body').innerHTML = lessons.length
+    ? lessons.map(l => {
+        const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+        return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(45,49,66,.4)">
+          <div>
+            <div style="font-weight:600;font-size:.88rem">${esc(l.studentName||'—')}</div>
+            <div style="font-size:.72rem;color:var(--text2)">${d}${l.notes?` · ${esc(l.notes.slice(0,40))}`:''}</div>
+          </div>
+          <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}" style="align-self:center">${l.format==='online'?'Онл':'Офл'}</span>
+        </div>`;
+      }).join('')
+    : '<div class="empty">Нет занятий</div>';
+
+  _openModal('fin-drill-modal');
+}
+
+// ══════════════════════════════════════════════
+//  HOME REMINDERS — кому написать сегодня
+// ══════════════════════════════════════════════
+async function loadHomeReminders(usedMap) {
+  const isAdmin = currentTrainer.role === 'admin';
+  const myAssigned = currentTrainer.assignedStudents || [];
+
+  // Фильтруем: нужные ученики
+  let pool = isAdmin ? students.filter(s => s.purchased > 0) :
+    myAssigned.length ? students.filter(s => myAssigned.includes(s.email) && s.purchased > 0) : [];
+
+  const remind = [];
+  for (const s of pool) {
+    const used = usedMap[s.email] || 0;
+    const rem  = s.purchased - used;
+    if (rem <= 2) remind.push({ s, rem });
+  }
+
+  const el = document.getElementById('home-remind-card');
+  if (!el) return;
+  if (!remind.length) { el.style.display = 'none'; return; }
+
+  remind.sort((a,b) => a.rem - b.rem);
+  el.style.display = '';
+  document.getElementById('home-remind-body').innerHTML = remind.slice(0,6).map(({s, rem}) => {
+    const color = rem <= 0 ? 'var(--red)' : 'var(--orange)';
+    const label = rem <= 0 ? '0 занятий' : `${rem} зан.`;
+    return `<div class="remind-item">
+      <div>
+        <div style="font-weight:600;font-size:.85rem">${esc(s.name)}</div>
+        ${s.phone ? `<div style="font-size:.72rem;color:var(--text2)">${esc(s.phone)}</div>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="balance-badge" style="background:rgba(239,68,68,.12);color:${color}">${label}</span>
+        ${s.phone ? `<button class="copy-btn" onclick="navigator.clipboard.writeText('${esc(s.phone)}').then(()=>toast('Номер скопирован','ok'))">📋</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
 </script>
 </body>
 </html>
