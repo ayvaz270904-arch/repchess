@@ -832,8 +832,17 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div class="modal-title" id="attend-modal-title">📋 Посещаемость</div>
     <input type="hidden" id="attend-group-id">
     <div class="form-row" id="attend-expected-wrap">
-      <div class="form-label">Ожидаемые ученики</div>
-      <div id="attend-expected-list"><div class="empty" style="padding:12px">Список пуст — добавьте учеников через редактирование занятия</div></div>
+      <div class="form-label" style="display:flex;align-items:center;justify-content:space-between">
+        <span>Ожидаемые ученики</span>
+      </div>
+      <div id="attend-expected-list"></div>
+      <!-- Поиск для добавления ожидаемых учеников прямо в модале -->
+      <div class="student-search-wrap" style="margin-top:8px">
+        <input class="form-inp" id="attend-add-inp" type="text" placeholder="+ Добавить ученика в список..."
+          oninput="searchAttendExpected(this.value)" onfocus="searchAttendExpected(this.value)" autocomplete="off"
+          style="font-size:.85rem;padding:9px 12px">
+        <div class="student-results" id="attend-add-results" style="display:none"></div>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-label">Пришли дополнительно <span style="color:var(--text2);text-transform:none;font-size:.72rem">(не в списке)</span></div>
@@ -1366,16 +1375,17 @@ function searchStudents(q, prefix) {
 
   if (!matches.length) { resultsEl.style.display='none'; return; }
 
-  // Для администратора: определяем выбранного тренера, чтобы пометить "чужих" учеников
+  // Для индивидуальных (rec): определяем выбранного тренера, чтобы пометить "чужих" учеников
+  // Для групповых (grp): любого ученика можно добавить, назначение не требуется
   let selectedTrainerId = null;
-  if (isAdmin) {
-    const selElId = prefix === 'rec' ? 'rec-trainer-sel' : 'grp-trainer-sel';
-    selectedTrainerId = document.getElementById(selElId)?.value || null;
+  if (isAdmin && prefix === 'rec') {
+    selectedTrainerId = document.getElementById('rec-trainer-sel')?.value || null;
   }
 
   resultsEl.innerHTML = matches.map(s => {
     let blocked = false, blockLabel = '', blockReason = '';
-    if (isAdmin && selectedTrainerId) {
+    // Блокировка только для индивидуальных занятий
+    if (prefix === 'rec' && isAdmin && selectedTrainerId) {
       const selTrainer = _trainersCache.find(t => t.id === selectedTrainerId);
       const selAssigned = selTrainer?.assignedStudents || [];
       const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(s.email));
@@ -1399,7 +1409,7 @@ function searchStudents(q, prefix) {
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
         <div class="balance-badge ${blocked ? 'balance-low' : s.purchased>0?'balance-ok':'balance-low'}">${blocked ? blockReason : s.purchased+' куп.'}</div>
-        ${!blocked && prefix==='grp' ? ((s.purchasedGroup||0)>0?'<span class="tag tag-group-buyer">👥 группа</span>':((s.purchasedIndiv||0)>0?'<span class="tag tag-indiv-buyer">👤 индив.</span>':'')):''}
+        ${prefix==='grp' ? ((s.purchasedGroup||0)>0?'<span class="tag tag-group-buyer">👥 группа</span>':((s.purchasedIndiv||0)>0?'<span class="tag tag-indiv-buyer">👤 индив.</span>':'')):''}
       </div>
     </div>`;
   }).join('');
@@ -1438,18 +1448,7 @@ async function selectStudent(email, prefix) {
 
   } else if (prefix === 'grp') {
     if (grpSelectedStudents.find(x => x.email === email)) return;
-    // Для администратора: проверяем конфликт назначений
-    if (currentTrainer.role === 'admin') {
-      const grpTrainerId = document.getElementById('grp-trainer-sel')?.value;
-      if (grpTrainerId) {
-        const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(email));
-        if (assignedTo && assignedTo.id !== grpTrainerId) {
-          const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
-          toast(`${s.name} закреплён за ${tName} — добавить нельзя`, 'err');
-          return;
-        }
-      }
-    }
+    // Групповые занятия: назначение тренер→ученик не требуется
     grpSelectedStudents.push(s);
     renderGrpTags();
     document.getElementById('grp-student-inp').value = '';
@@ -1733,31 +1732,9 @@ async function submitGroupLesson() {
     const selId = document.getElementById('grp-trainer-sel').value;
     if (!selId) { toast('Выбери тренера', 'err'); return; }
     const selTrainer = _trainersCache.find(t => t.id === selId);
-    const selAssigned = selTrainer?.assignedStudents || [];
-    // Жёсткая проверка: каждый ученик должен быть закреплён за выбранным тренером
-    for (const s of grpSelectedStudents) {
-      if (!selAssigned.includes(s.email)) {
-        const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(s.email));
-        if (assignedTo && assignedTo.id !== selId) {
-          const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
-          toast(`${s.name} закреплён за ${tName} — сохранение невозможно`, 'err');
-        } else {
-          toast(`${s.name} не закреплён за этим тренером — назначьте его сначала`, 'err');
-        }
-        return;
-      }
-    }
+    // Групповые занятия: ученики могут не быть закреплены за тренером — это нормально
     trainerId   = selId;
     trainerName = selTrainer?.name || selId;
-  } else if (!isAdmin && !editingGroupId && grpSelectedStudents.length > 0) {
-    // Тренер: проверяем назначение только тех учеников, которых добавили
-    const myAssigned = currentTrainer.assignedStudents || [];
-    for (const s of grpSelectedStudents) {
-      if (!myAssigned.includes(s.email)) {
-        toast(`${s.name} не закреплён за вами — обратитесь к администратору`, 'err');
-        return;
-      }
-    }
   }
 
   const btn = document.getElementById('grp-submit');
@@ -3136,9 +3113,13 @@ async function openAttendModal(groupId) {
   const isAdmin = currentTrainer.role === 'admin';
 
   // Список ожидаемых учеников с чекбоксами
+  _attendNewExpected = []; // сброс новых добавленных
   const listEl = document.getElementById('attend-expected-list');
+  document.getElementById('attend-add-inp').value = '';
+  document.getElementById('attend-add-results').style.display = 'none';
+
   if (!expectedEmails.length) {
-    listEl.innerHTML = '<div style="color:var(--text2);font-size:.82rem;padding:8px 0">Список ожидаемых учеников пуст. Добавьте учеников через ✏️ редактирование.</div>';
+    listEl.innerHTML = '';
   } else {
     listEl.innerHTML = expectedEmails.map((email, i) => {
       const name = expectedNames[i] || email;
@@ -3148,8 +3129,8 @@ async function openAttendModal(groupId) {
       const contactHtml = isAdmin && s?.phone
         ? `<span style="font-size:.7rem;color:var(--text2)">${esc(s.phone)}</span>`
         : '';
-      return `<div class="attend-row" id="attend-row-${i}">
-        <div class="attend-check ${checked?'on':''}" onclick="toggleAttend(this,${i})">${checked?'✓':''}</div>
+      return `<div class="attend-row" data-attend-email="${esc(email)}">
+        <div class="attend-check ${checked?'on':''}" onclick="toggleAttend(this)">${checked?'✓':''}</div>
         <div style="flex:1;min-width:0">
           <div style="font-weight:600;font-size:.88rem">${esc(name)}</div>
           ${contactHtml}
@@ -3169,7 +3150,7 @@ async function openAttendModal(groupId) {
   _openModal('attend-modal');
 }
 
-function toggleAttend(el, idx) {
+function toggleAttend(el) {
   el.classList.toggle('on');
   el.textContent = el.classList.contains('on') ? '✓' : '';
 }
@@ -3190,21 +3171,92 @@ function addExtraAttendeeRow() {
   if (inputs.length) inputs[inputs.length-1].focus();
 }
 
+// ── Поиск учеников для добавления в список ожидаемых прямо из модала посещаемости
+let _attendNewExpected = []; // новые ученики, добавленные прямо в модале
+
+function searchAttendExpected(q) {
+  const resultsEl = document.getElementById('attend-add-results');
+  // Уже добавленные (существующие + новые)
+  const groupId = document.getElementById('attend-group-id').value;
+  const g = _editGroupCache[groupId] || {};
+  const alreadyEmails = new Set([...(g.studentEmails||[]), ..._attendNewExpected.map(s=>s.email)]);
+
+  let pool = students;
+  let matches = q.length > 0
+    ? pool.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase()))
+    : pool.slice(0, 15);
+  // Убираем уже добавленных
+  matches = matches.filter(s => !alreadyEmails.has(s.email)).slice(0, 10);
+
+  if (!matches.length) { resultsEl.style.display = 'none'; return; }
+  resultsEl.innerHTML = matches.map(s => `
+    <div class="student-result-item" onclick="addAttendExpected('${esc(s.email)}')">
+      <div>
+        <div class="student-name">${esc(s.name)}</div>
+        <div class="student-meta">${s.id} · ${esc(s.email)}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+        <div class="balance-badge ${s.purchased>0?'balance-ok':'balance-low'}">${s.purchased} куп.</div>
+        ${(s.purchasedGroup||0)>0?'<span class="tag tag-group-buyer">👥 группа</span>':((s.purchasedIndiv||0)>0?'<span class="tag tag-indiv-buyer">👤 индив.</span>':'')}
+      </div>
+    </div>`).join('');
+  resultsEl.style.display = '';
+}
+
+function addAttendExpected(email) {
+  const s = students.find(x => x.email === email);
+  if (!s) return;
+  document.getElementById('attend-add-results').style.display = 'none';
+  document.getElementById('attend-add-inp').value = '';
+
+  // Проверка дублей
+  const groupId = document.getElementById('attend-group-id').value;
+  const g = _editGroupCache[groupId] || {};
+  const alreadyEmails = [...(g.studentEmails||[]), ..._attendNewExpected.map(x=>x.email)];
+  if (alreadyEmails.includes(email)) return;
+
+  _attendNewExpected.push({email: s.email, name: s.name});
+
+  // Добавляем строку в список с чекбоксом (по умолчанию отмечен)
+  const listEl = document.getElementById('attend-expected-list');
+  const div = document.createElement('div');
+  div.className = 'attend-row';
+  div.dataset.attendEmail = email;
+  div.dataset.attendNew = '1'; // пометка что новый
+  const isAdmin = currentTrainer.role === 'admin';
+  div.innerHTML = `
+    <div class="attend-check on" onclick="toggleAttend(this)">✓</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-weight:600;font-size:.88rem">${esc(s.name)}</div>
+      ${isAdmin && s.phone ? `<span style="font-size:.7rem;color:var(--text2)">${esc(s.phone)}</span>` : ''}
+    </div>
+    <button onclick="this.closest('[data-attend-email]').remove();_attendNewExpected=_attendNewExpected.filter(x=>x.email!=='${esc(email)}')"
+      style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.85rem;padding:2px 4px" title="Убрать">✕</button>`;
+  listEl.appendChild(div);
+}
+
 async function submitAttendance() {
   const groupId = document.getElementById('attend-group-id').value;
   const g = _editGroupCache[groupId];
   if (!g) { toast('Ошибка: занятие не найдено', 'err'); return; }
 
-  const expectedEmails = g.studentEmails || [];
-  const expectedNames  = g.studentNames  || [];
+  // Объединяем оригинальных ожидаемых с теми, кого добавили прямо в модале
+  const origEmails = g.studentEmails || [];
+  const origNames  = g.studentNames  || [];
+  const newEmails  = _attendNewExpected.map(s => s.email);
+  const newNames   = _attendNewExpected.map(s => s.name);
+  const expectedEmails = [...origEmails, ...newEmails];
+  const expectedNames  = [...origNames,  ...newNames];
 
-  // Собираем отмеченных учеников
+  // Собираем отмеченных учеников по data-attend-email атрибуту
   const attendedEmails = [], attendedNames = [];
-  document.querySelectorAll('#attend-expected-list .attend-row').forEach((row, i) => {
+  document.querySelectorAll('#attend-expected-list .attend-row[data-attend-email]').forEach(row => {
     const check = row.querySelector('.attend-check');
-    if (check && check.classList.contains('on') && i < expectedEmails.length) {
-      attendedEmails.push(expectedEmails[i]);
-      attendedNames.push(expectedNames[i] || expectedEmails[i]);
+    if (check && check.classList.contains('on')) {
+      const email = row.dataset.attendEmail;
+      attendedEmails.push(email);
+      const idx = expectedEmails.indexOf(email);
+      attendedNames.push(idx >= 0 ? (expectedNames[idx] || email) : email);
     }
   });
 
@@ -3237,52 +3289,76 @@ async function submitAttendance() {
   try {
     const batch = db.batch();
 
-    // Обновляем groupLesson
-    batch.update(db.collection('groupLessons').doc(groupId), {
+    // Обновляем groupLesson (включая список ожидаемых, если добавили новых прямо в модале)
+    const updateData = {
       attendanceMarked: true,
       attendedEmails,
       attendedNames,
       extraAttendees,
       mismatch: hasMismatch,
       mismatchNote: mismatchNote.join('; '),
-    });
+    };
+    // Если в модале добавили новых ожидаемых — обновляем официальный список
+    if (_attendNewExpected.length > 0) {
+      updateData.studentEmails = expectedEmails;
+      updateData.studentNames  = expectedNames;
+      updateData.count = expectedEmails.length;
+    }
+    batch.update(db.collection('groupLessons').doc(groupId), updateData);
 
-    // Обновляем индивидуальные записи для ожидаемых учеников
+    // Обновляем/создаём индивидуальные balance-записи для ожидаемых учеников
     const indSnap = await db.collection('lessons').where('groupLessonId','==',groupId).get();
-    indSnap.docs.forEach(doc => {
-      const email = doc.data().studentEmail;
-      const attended = attendedEmails.includes(email);
-      batch.update(doc.ref, {
-        status: attended ? 'done' : 'absent',
-        attended,
-      });
-    });
+    const existingByEmail = {};
+    indSnap.docs.forEach(doc => { existingByEmail[doc.data().studentEmail] = doc; });
 
-    // Создаём новые записи для дополнительных посетителей
+    for (const email of expectedEmails) {
+      const attended = attendedEmails.includes(email);
+      const s = students.find(x => x.email === email);
+      if (existingByEmail[email]) {
+        batch.update(existingByEmail[email].ref, { status: attended ? 'done' : 'absent', attended });
+      } else {
+        // Новый ученик — создаём balance-запись
+        const ref = db.collection('lessons').doc();
+        batch.set(ref, {
+          trainerId: g.trainerId, trainerName: g.trainerName,
+          studentEmail: email, studentName: s?.name || email, studentId: s?.id || '',
+          _date: g._date, format: g.format, type: 'group', notes: g.notes || '',
+          status: attended ? 'done' : 'absent', attended,
+          groupLessonId: groupId,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    // Создаём balance-записи для дополнительных посетителей (extraAttendees) — по имени
+    // (они уже могут быть в lessons — не дублируем при повторном сохранении)
+    const existingExtra = new Set(
+      indSnap.docs.filter(d => d.data().isExtraAttendee).map(d => d.data().studentName)
+    );
     for (const name of extraAttendees) {
-      const ref = db.collection('lessons').doc();
-      batch.set(ref, {
-        trainerId: g.trainerId,
-        trainerName: g.trainerName,
-        studentEmail: '',
-        studentName: name,
-        studentId: '',
-        _date: g._date,
-        format: g.format,
-        type: 'group',
-        notes: g.notes || '',
-        status: 'done',
-        attended: true,
-        groupLessonId: groupId,
-        isExtraAttendee: true,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
+      if (!existingExtra.has(name)) {
+        const ref = db.collection('lessons').doc();
+        batch.set(ref, {
+          trainerId: g.trainerId, trainerName: g.trainerName,
+          studentEmail: '', studentName: name, studentId: '',
+          _date: g._date, format: g.format, type: 'group', notes: g.notes || '',
+          status: 'done', attended: true, groupLessonId: groupId, isExtraAttendee: true,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     }
 
     await batch.commit();
 
     // Обновляем кэш
-    _editGroupCache[groupId] = { ...g, attendanceMarked: true, attendedEmails, attendedNames, extraAttendees, mismatch: hasMismatch };
+    const updatedG = { ...g, attendanceMarked: true, attendedEmails, attendedNames, extraAttendees, mismatch: hasMismatch };
+    if (_attendNewExpected.length > 0) {
+      updatedG.studentEmails = expectedEmails;
+      updatedG.studentNames  = expectedNames;
+      updatedG.count = expectedEmails.length;
+    }
+    _editGroupCache[groupId] = updatedG;
+    _attendNewExpected = [];
 
     _closeModal('attend-modal');
     toast('Посещаемость сохранена ✓', 'ok');
