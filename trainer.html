@@ -1207,26 +1207,32 @@ async function loadHomePage() {
   });
   loadHomeReminders(usedMap); // async, не блокирует рендер
 
-  // Статистика (только инд. занятия — группы уже создают записи в lessons)
+  // Статистика: инд. занятия + групповые как единицы
   const now = new Date();
   const weekAgo  = new Date(now - 7*86400000);
   const monthAgo = new Date(now - 30*86400000);
-  const allLessons = indivAll;
+  const weekStr  = weekAgo.toISOString().slice(0,10);
+  const monthStr = monthAgo.toISOString().slice(0,10);
+  const allIndiv = indivAll.filter(l => l.type !== 'group');
   const isDoneLesson = l => !l.status || l.status === 'done'; // undefined = legacy done
-  const weekCnt  = allLessons.filter(l=>l._date && isDoneLesson(l) && l._date >= weekAgo.toISOString().slice(0,10)).length;
-  const monthCnt = allLessons.filter(l=>l._date && isDoneLesson(l) && l._date >= monthAgo.toISOString().slice(0,10)).length;
-  const uniqueW  = new Set(allLessons.filter(l=>l._date && isDoneLesson(l) && l._date >= weekAgo.toISOString().slice(0,10)).map(l=>l.studentEmail)).size;
+  const weekIndiv  = allIndiv.filter(l=>l._date && isDoneLesson(l) && l._date >= weekStr).length;
+  const monthIndiv = allIndiv.filter(l=>l._date && isDoneLesson(l) && l._date >= monthStr).length;
+  const weekGrp    = grpAll.filter(g=>g._date && g._date >= weekStr).length;
+  const monthGrp   = grpAll.filter(g=>g._date && g._date >= monthStr).length;
+  const weekCnt    = weekIndiv + weekGrp;
+  const monthCnt   = monthIndiv + monthGrp;
+  const uniqueW    = new Set(allIndiv.filter(l=>l._date && isDoneLesson(l) && l._date >= weekStr).map(l=>l.studentEmail)).size;
 
   document.getElementById('home-stats').innerHTML = `
     <div class="stat-card sc-blue">
       <div class="stat-label">За неделю</div>
       <div class="stat-val">${weekCnt}</div>
-      <div class="stat-sub">${uniqueW} учеников</div>
+      <div class="stat-sub">${weekIndiv} инд · ${weekGrp} груп.</div>
     </div>
     <div class="stat-card sc-green">
       <div class="stat-label">За месяц</div>
       <div class="stat-val">${monthCnt}</div>
-      <div class="stat-sub">занятий</div>
+      <div class="stat-sub">${monthIndiv} инд · ${monthGrp} груп.</div>
     </div>`;
 
   // Лента последних: группы одной карточкой + индив. без group-дубликатов
@@ -1244,8 +1250,8 @@ async function loadHomePage() {
     ? feed.map(item => item._isGroup ? groupFeedItemHTML(item) : lessonItemHTML(item)).join('')
     : '<div class="empty">Занятия ещё не записаны</div>';
 
-  // Список под формой индив. занятий — показываем ВСЕ уроки (включая из групп)
-  const recAll = indivAll.slice().sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1).slice(0, 20);
+  // Список под формой индив. занятий — только индивидуальные, без группо-дубликатов
+  const recAll = indivAll.filter(l=>l.type!=='group').slice().sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1).slice(0, 20);
   document.getElementById('rec-recent-list').innerHTML = recAll.length
     ? recAll.map(l => lessonItemHTML(l)).join('')
     : '<div class="empty">Занятия ещё не записаны</div>';
@@ -1925,12 +1931,12 @@ async function loadHistory() {
   const to   = document.getElementById('hist-to').value;
   const isAdmin = currentTrainer.role === 'admin';
 
-  // Инд. занятия
+  // Инд. занятия (исключаем per-student записи из групповых)
   const snap = isAdmin
     ? await db.collection('lessons').get()
     : await db.collection('lessons').where('trainerId','==',currentUser.uid).get();
   let lessons = snap.docs.map(d=>({id:d.id,...d.data()}))
-    .filter(l => !_deletedLessonIds.has(l.id));
+    .filter(l => !_deletedLessonIds.has(l.id) && l.type !== 'group');
   lessons.forEach(l => { _editLessonCache[l.id] = l; });
   lessons.sort((a,b)=>(b._date||'')>(a._date||'')?1:-1);
   if (from) lessons = lessons.filter(l=>l._date>=from);
@@ -1950,8 +1956,7 @@ async function loadHistory() {
   _histLessonsCache = lessons;
   _histGroupsCache  = groups;
 
-  // Статистика
-  const indivOnly = lessons.filter(l=>l.type!=='group');
+  // Статистика (lessons уже содержит только индив. занятия)
   const offline = lessons.filter(l=>l.format==='offline').length;
   const online  = lessons.filter(l=>l.format==='online').length;
   const unique  = new Set(lessons.map(l=>l.studentEmail)).size;
@@ -1960,7 +1965,7 @@ async function loadHistory() {
   document.getElementById('hist-stats').innerHTML = `
     <div class="stat-card sc-blue">
       <div class="stat-label">Инд. занятий</div>
-      <div class="stat-val">${indivOnly.length}</div>
+      <div class="stat-val">${lessons.length}</div>
       <div class="stat-sub">${offline} офл · ${online} онл</div>
     </div>
     <div class="stat-card sc-green">
@@ -1984,9 +1989,9 @@ function renderHistoryList() {
   let count = 0;
 
   if (_histTab === 'all' || _histTab === 'indiv') {
-    // Показываем ВСЕ записи из lessons (включая созданные из групп)
+    // Показываем индивидуальные занятия (групповые идут отдельным блоком)
     if (lessons.length) {
-      if (_histTab === 'all') html += `<div style="font-size:.75rem;font-weight:700;color:var(--text2);padding:10px 0 6px;text-transform:uppercase;letter-spacing:.04em">Все записи учеников (${lessons.length})</div>`;
+      if (_histTab === 'all') html += `<div style="font-size:.75rem;font-weight:700;color:var(--text2);padding:10px 0 6px;text-transform:uppercase;letter-spacing:.04em">Индивидуальные (${lessons.length})</div>`;
       html += lessons.map(l => histLessonItemHTML(l)).join('');
       count += lessons.length;
     } else if (_histTab === 'indiv') {
@@ -2087,29 +2092,43 @@ async function loadAdminData() {
   const from = document.getElementById('adm-from').value;
   const to   = document.getElementById('adm-to').value;
 
-  // Load all lessons
+  // Load individual lessons (исключаем per-student записи из групповых занятий)
   let snap;
   try { snap = await db.collection('lessons').orderBy('_date','desc').limit(500).get(); }
   catch(e) { snap = await db.collection('lessons').limit(500).get(); }
-  let lessons = snap.docs.map(d=>({id:d.id,...d.data()}));
+  let lessons = snap.docs.map(d=>({id:d.id,...d.data()}))
+    .filter(l => l.type !== 'group'); // ключевой фильтр
   lessons.forEach(l => { _editLessonCache[l.id] = l; });
   lessons.sort((a,b)=>(b._date||'')>(a._date||'')?1:-1);
   if (from) lessons = lessons.filter(l=>l._date>=from);
   if (to)   lessons = lessons.filter(l=>l._date<=to);
 
-  // Trainer stats — детальная разбивка
+  // Load group lessons as single records
+  let grpAdmSnap;
+  try { grpAdmSnap = await db.collection('groupLessons').orderBy('_date','desc').limit(300).get(); }
+  catch(e) { grpAdmSnap = await db.collection('groupLessons').limit(300).get(); }
+  let groupLessons = grpAdmSnap.docs.map(d=>({id:d.id,...d.data(),_isGroup:true}));
+  groupLessons.sort((a,b)=>(b._date||'')>(a._date||'')?1:-1);
+  if (from) groupLessons = groupLessons.filter(g=>g._date>=from);
+  if (to)   groupLessons = groupLessons.filter(g=>g._date<=to);
+
+  // Trainer stats — инд. занятия из lessons + группы из groupLessons (каждое = 1)
   const trainerMap = {};
   for (const l of lessons) {
     if (!trainerMap[l.trainerId]) trainerMap[l.trainerId] = {
       name: l.trainerName, offIndiv:0, offGroup:0, onIndiv:0, onGroup:0
     };
     const t = trainerMap[l.trainerId];
-    const isGroup = l.type === 'group';
-    const isOnline = l.format === 'online';
-    if (!isOnline && !isGroup) t.offIndiv++;
-    else if (!isOnline && isGroup) t.offGroup++;
-    else if (isOnline && !isGroup) t.onIndiv++;
-    else t.onGroup++;
+    l.format === 'online' ? t.onIndiv++ : t.offIndiv++;
+  }
+  for (const g of groupLessons) {
+    const tid = g.trainerId;
+    if (!tid) continue;
+    if (!trainerMap[tid]) trainerMap[tid] = {
+      name: g.trainerName, offIndiv:0, offGroup:0, onIndiv:0, onGroup:0
+    };
+    const t = trainerMap[tid];
+    g.format === 'online' ? t.onGroup++ : t.offGroup++;
   }
   document.getElementById('adm-trainer-body').innerHTML = Object.values(trainerMap).map(t => {
     const total = t.offIndiv + t.offGroup + t.onIndiv + t.onGroup;
@@ -2123,18 +2142,38 @@ async function loadAdminData() {
     </tr>`;
   }).join('') || '<tr><td colspan="6" class="empty">Нет данных</td></tr>';
 
-  // Recent lessons
-  const recent = lessons.slice(0,50);
-  document.getElementById('adm-lessons-count').textContent = lessons.length + ' занятий';
-  document.getElementById('adm-lessons-body').innerHTML = recent.map(l=>{
-    const dt = l._date?new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}):'—';
-    return`<tr>
-      <td>${dt}</td>
-      <td><b>${esc(l.studentName||'—')}</b><div style="font-size:.7rem;color:var(--text2)">${l.studentId||''}</div></td>
-      <td class="dim">${esc(l.trainerName||'—')}</td>
-      <td><span class="tag ${l.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${l.format==='online'?'Онлайн':'Офлайн'}</span></td>
-      <td><span class="tag ${l.type==='group'?'tag-group':'tag-indiv'}" style="padding:1px 6px">${l.type==='group'?'Группа':'Индив.'}</span></td>
-    </tr>`;}).join('') || '<tr><td colspan="5" class="empty">Нет занятий</td></tr>';
+  // Объединяем инд. и групповые занятия, сортируем по дате
+  const combined = [
+    ...lessons.map(l => ({...l, _rowType:'indiv'})),
+    ...groupLessons.map(g => ({...g, _rowType:'group'}))
+  ].sort((a,b)=>(b._date||'')>(a._date||'')?1:-1).slice(0,60);
+
+  document.getElementById('adm-lessons-count').textContent = (lessons.length + groupLessons.length) + ' занятий';
+  document.getElementById('adm-lessons-body').innerHTML = combined.map(item => {
+    const dt = item._date ? new Date(item._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+    if (item._rowType === 'group') {
+      const attendCount = item.attendanceMarked
+        ? (item.attendedEmails||[]).length + (item.extraAttendees||[]).length
+        : (item.count || 0);
+      const mismatchTag = _groupHasMismatch(item) ? `<span class="tag tag-mismatch" style="padding:1px 5px;font-size:.68rem">⚠️</span>` : '';
+      const attendTag = item.attendanceMarked ? `<span class="tag tag-attendance-ok" style="padding:1px 5px;font-size:.68rem">✅</span>` : '';
+      return `<tr>
+        <td>${dt}</td>
+        <td><b>👥 ${esc(item.venue||'Группа')}</b><div style="font-size:.7rem;color:var(--text2)">${attendCount} чел. ${attendTag}${mismatchTag}</div></td>
+        <td class="dim">${esc(item.trainerName||'—')}</td>
+        <td><span class="tag ${item.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${item.format==='online'?'Онлайн':'Офлайн'}</span></td>
+        <td><span class="tag tag-group" style="padding:1px 6px">Группа</span></td>
+      </tr>`;
+    } else {
+      return `<tr>
+        <td>${dt}</td>
+        <td><b>${esc(item.studentName||'—')}</b><div style="font-size:.7rem;color:var(--text2)">${item.studentId||''}</div></td>
+        <td class="dim">${esc(item.trainerName||'—')}</td>
+        <td><span class="tag ${item.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${item.format==='online'?'Онлайн':'Офлайн'}</span></td>
+        <td><span class="tag tag-indiv" style="padding:1px 6px">Индив.</span></td>
+      </tr>`;
+    }
+  }).join('') || '<tr><td colspan="5" class="empty">Нет занятий</td></tr>';
 
   // Trainer list
   const trainersSnap = await db.collection('trainers').get();
@@ -2735,6 +2774,7 @@ async function loadFinance() {
 
     lessonsSnap.forEach(d => {
       const data = d.data();
+      if (data.type === 'group') return; // Групповые учитываются отдельно через groupLessons
       const date = data._date || data.date || '';
       if (!date || date < fromVal || date > toVal) return;
       // Считаем только явно проведённые (done) + старые без статуса (legacy)
@@ -2989,29 +3029,48 @@ function openFinDrill(trainerId, type, trainerName) {
 
   document.getElementById('fin-drill-title').textContent = `${trainerName} · ${typeLabel}`;
 
-  const lessons = _finLessonsCache.filter(l => {
-    if (l._resolvedTid !== trainerId) return false;
-    const lg = l.type === 'group';
-    const lo = l.format === 'online';
-    if (type === 'indivOff') return !lg && !lo;
-    if (type === 'indivOn')  return !lg &&  lo;
-    if (type === 'groupOff') return  lg && !lo;
-    if (type === 'groupOn')  return  lg &&  lo;
-    return false;
-  }).sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1);
+  if (isGroup) {
+    // Групповые занятия — из _finGroupsCache (каждый doc = 1 занятие)
+    const groups = _finGroupsCache.filter(g => {
+      if (g._resolvedTid !== trainerId) return false;
+      return type === 'groupOff' ? g.format !== 'online' : g.format === 'online';
+    }).sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1);
 
-  document.getElementById('fin-drill-body').innerHTML = lessons.length
-    ? lessons.map(l => {
-        const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
-        return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(45,49,66,.4)">
-          <div>
-            <div style="font-weight:600;font-size:.88rem">${esc(l.studentName||'—')}</div>
-            <div style="font-size:.72rem;color:var(--text2)">${d}${l.notes?` · ${esc(l.notes.slice(0,40))}`:''}</div>
-          </div>
-          <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}" style="align-self:center">${l.format==='online'?'Онл':'Офл'}</span>
-        </div>`;
-      }).join('')
-    : '<div class="empty">Нет занятий</div>';
+    document.getElementById('fin-drill-body').innerHTML = groups.length
+      ? groups.map(g => {
+          const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+          const cnt = g.attendanceMarked
+            ? (g.attendedEmails||[]).length + (g.extraAttendees||[]).length
+            : (g.count||0);
+          return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(45,49,66,.4)">
+            <div>
+              <div style="font-weight:600;font-size:.88rem">👥 ${esc(g.venue||'Группа')} <span style="font-size:.72rem;color:var(--text2)">(${cnt} чел.)</span></div>
+              <div style="font-size:.72rem;color:var(--text2)">${d}${g.notes?` · ${esc(g.notes.slice(0,40))}`:''}</div>
+            </div>
+            <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}" style="align-self:center">${g.format==='online'?'Онл':'Офл'}</span>
+          </div>`;
+        }).join('')
+      : '<div class="empty">Нет занятий</div>';
+  } else {
+    // Индивидуальные занятия — из _finLessonsCache
+    const lessons = _finLessonsCache.filter(l => {
+      if (l._resolvedTid !== trainerId) return false;
+      return type === 'indivOff' ? l.format !== 'online' : l.format === 'online';
+    }).sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1);
+
+    document.getElementById('fin-drill-body').innerHTML = lessons.length
+      ? lessons.map(l => {
+          const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+          return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(45,49,66,.4)">
+            <div>
+              <div style="font-weight:600;font-size:.88rem">${esc(l.studentName||'—')}</div>
+              <div style="font-size:.72rem;color:var(--text2)">${d}${l.notes?` · ${esc(l.notes.slice(0,40))}`:''}</div>
+            </div>
+            <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}" style="align-self:center">${l.format==='online'?'Онл':'Офл'}</span>
+          </div>`;
+        }).join('')
+      : '<div class="empty">Нет занятий</div>';
+  }
 
   _openModal('fin-drill-modal');
 }
