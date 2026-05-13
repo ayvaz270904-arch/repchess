@@ -1759,26 +1759,48 @@ function searchStudentsForAssign(q, trainerId) {
     s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase())
   ).slice(0,6);
   if (!matches.length) { resultsEl.style.display='none'; return; }
-  resultsEl.innerHTML = matches.map(s => `
-    <div class="student-result-item" onclick="assignStudent('${esc(trainerId)}','${esc(s.email)}')">
+  resultsEl.innerHTML = matches.map(s => {
+    // Проверяем, закреплён ли ученик за другим тренером
+    const takenBy = _trainersCache.find(t =>
+      t.id !== trainerId && (t.assignedStudents || []).includes(s.email)
+    );
+    const takenByName = takenBy ? (takenBy.name || '').split(' ').slice(0,2).join(' ') : null;
+    return `
+    <div class="student-result-item"
+      onclick="${takenBy ? 'void 0' : `assignStudent('${esc(trainerId)}','${esc(s.email)}')`}"
+      style="${takenBy ? 'opacity:.45;cursor:not-allowed' : ''}">
       <div>
         <div class="student-name">${esc(s.name)}</div>
-        <div class="student-meta">${s.id} · ${esc(s.email)}</div>
+        <div class="student-meta">${s.id} · ${esc(s.email)}${takenByName ? ` · 🔒 у ${esc(takenByName)}` : ''}</div>
       </div>
-      <span class="balance-badge ${s.purchased>0?'balance-ok':'balance-low'}">${s.purchased} зан.</span>
-    </div>`).join('');
+      <span class="balance-badge ${takenBy ? 'balance-low' : s.purchased>0 ? 'balance-ok' : 'balance-low'}">${takenBy ? 'занят' : s.purchased+' зан.'}</span>
+    </div>`;
+  }).join('');
   resultsEl.style.display = '';
 }
 
 async function assignStudent(trainerId, email) {
   document.getElementById(`assign-results-${trainerId}`).style.display = 'none';
   document.getElementById(`assign-inp-${trainerId}`).value = '';
+
+  // Повторная проверка — ученик не должен быть у другого тренера
+  const takenBy = _trainersCache.find(t =>
+    t.id !== trainerId && (t.assignedStudents || []).includes(email)
+  );
+  if (takenBy) {
+    const sName = students.find(s => s.email === email)?.name || email;
+    toast(`${sName} уже закреплён за ${(takenBy.name||'').split(' ')[1]||takenBy.name}`, 'err');
+    return;
+  }
+
   try {
     await db.collection('trainers').doc(trainerId).update({
       assignedStudents: firebase.firestore.FieldValue.arrayUnion(email)
     });
     toast('Ученик назначен ✓', 'ok');
     const snap = await db.collection('trainers').get();
+    // Обновляем кеш тренеров
+    _trainersCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     loadTrainerAssignments(snap);
   } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
 }
@@ -1790,6 +1812,7 @@ async function removeStudentAssignment(trainerId, email) {
     });
     toast('Ученик убран из списка', 'ok');
     const snap = await db.collection('trainers').get();
+    _trainersCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     loadTrainerAssignments(snap);
   } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
 }
@@ -2262,6 +2285,24 @@ async function loadFinance() {
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="color:var(--text2)">Итого к выплате тренерам</span>
           <span style="font-size:1.2rem;font-weight:800;color:var(--green)">${totalPayout > 0 ? totalPayout.toLocaleString('ru') + ' ₽' : '—'}</span>
+        </div>`;
+    } else if (toShow.length > 0) {
+      // Для тренера — показываем его собственную зарплату в сводной карточке
+      const me = toShow[0];
+      const myC = counts[me.id] || emptyCount();
+      const myR = {
+        indivOff: me.rateIndivOff || 0,
+        indivOn:  me.rateIndivOn  || 0,
+        groupOff: me.rateGroupOff || 0,
+        groupOn:  me.rateGroupOn  || 0,
+      };
+      const myPayout = myC.indivOff*myR.indivOff + myC.indivOn*myR.indivOn + myC.groupOff*myR.groupOff + myC.groupOn*myR.groupOn;
+      const hasMyRates = Object.values(myR).some(v => v > 0);
+      summaryCard.style.display = '';
+      document.getElementById('fin-summary-body').innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="color:var(--text2)">Ваша зарплата за период</span>
+          <span style="font-size:1.2rem;font-weight:800;color:var(--green)">${myPayout > 0 ? myPayout.toLocaleString('ru') + ' ₽' : hasMyRates ? '0 ₽' : '—'}</span>
         </div>`;
     }
 
