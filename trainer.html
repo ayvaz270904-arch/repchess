@@ -214,6 +214,18 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 /* ── FIN DRILL ── */
 .fin-cell-btn{cursor:pointer;transition:transform .1s;}
 .fin-cell-btn:hover{transform:scale(1.04);outline:1px solid var(--accent);border-radius:10px;}
+
+/* ── PENDING LESSON ── */
+.tag-pending{background:rgba(249,115,22,.18);color:var(--orange);}
+.lesson-pending-dot{width:8px;height:8px;border-radius:50%;background:var(--orange);flex-shrink:0;animation:pulse-dot 1.4s ease-in-out infinite;}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
+.lesson-needs-confirm{border-left:3px solid var(--orange);padding-left:10px;margin-left:-10px;}
+.edit-btn-confirm{background:rgba(249,115,22,.15)!important;border:1px solid rgba(249,115,22,.4)!important;border-radius:8px!important;color:var(--orange)!important;}
+
+/* ── STUDENT DB (admin) ── */
+.sdb-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4);cursor:pointer;}
+.sdb-item:last-child{border-bottom:none;}
+.sdb-item:hover{background:var(--surface2);margin:0 -18px;padding:10px 18px;border-radius:8px;}
 </style>
 </head>
 <body>
@@ -427,7 +439,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       </div>
 
       <!-- Manage trainers -->
-      <div class="card">
+      <div class="card" style="margin-bottom:14px">
         <div class="card-head">
           <span class="card-title">Тренеры</span>
           <button class="btn-sm btn-gold" style="color:#fff;background:var(--accent);border:none;font-weight:700" onclick="openAddTrainerModal()">+ Добавить</button>
@@ -437,6 +449,43 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
             <thead><tr><th>Имя</th><th>Email</th><th>Роль</th><th></th></tr></thead>
             <tbody id="adm-trainers-body"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- Student database -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <span class="card-title">📚 База учеников</span>
+          <span class="dim" id="sdb-count" style="font-size:.78rem"></span>
+        </div>
+        <div class="card-body">
+          <input class="form-inp" id="sdb-search" type="text" placeholder="Поиск по имени или email..."
+            oninput="renderStudentDB(this.value)" style="margin-bottom:12px">
+          <div id="sdb-list"><div class="empty">Загрузка...</div></div>
+        </div>
+      </div>
+
+      <!-- Quick links -->
+      <div class="card">
+        <div class="card-head"><span class="card-title">🔗 Быстрые ссылки</span></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4)">
+            <div>
+              <div style="font-weight:600;font-size:.88rem">📋 Журнал тренера</div>
+              <div style="font-size:.72rem;color:var(--text2)" id="journal-link-text">текущая страница</div>
+            </div>
+            <button class="copy-btn" onclick="navigator.clipboard.writeText(location.href).then(()=>toast('Ссылка скопирована','ok'))">Копировать</button>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0">
+            <div>
+              <div style="font-weight:600;font-size:.88rem">📊 CRM (Google Sheets)</div>
+              <div style="font-size:.72rem;color:var(--text2)">база клиентов и оплат</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="copy-btn" onclick="navigator.clipboard.writeText('https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk').then(()=>toast('Ссылка скопирована','ok'))">Копировать</button>
+              <a href="https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk" target="_blank" style="text-decoration:none"><button class="copy-btn" style="color:var(--accent2);border-color:rgba(74,158,255,.3)">Открыть</button></a>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -512,21 +561,16 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <input type="hidden" id="rec-format" value="offline">
     </div>
     <input type="hidden" id="rec-type" value="individual">
-    <div class="form-row">
-      <div class="form-label">Статус занятия</div>
-      <div class="toggle-group">
-        <button class="toggle-btn on" onclick="toggle('rec-status',this,'done')">✅ Проведено</button>
-        <button class="toggle-btn" onclick="toggle('rec-status',this,'cancelled')">❌ Отменено</button>
-        <button class="toggle-btn" onclick="toggle('rec-status',this,'rescheduled')">🔄 Перенесено</button>
-      </div>
-      <input type="hidden" id="rec-status" value="done">
-    </div>
+    <input type="hidden" id="rec-status" value="pending">
     <div class="form-row" id="rec-trainer-row" style="display:none">
       <div class="form-label">Тренер</div>
       <select class="form-sel" id="rec-trainer-sel" onchange="checkRecTrainerAssignment()">
         <option value="">— выберите тренера —</option>
       </select>
       <div id="rec-trainer-warn" style="color:var(--orange);font-size:.78rem;margin-top:6px;display:none">⚠️ Ученик не закреплён за этим тренером</div>
+    </div>
+    <div class="form-row" style="background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:10px;padding:10px 14px">
+      <div style="font-size:.8rem;color:var(--orange)">💡 Занятие создаётся как «запланированное». После его проведения отметь результат через ✏️</div>
     </div>
     <div class="form-row">
       <div class="form-label">Заметки <span style="color:var(--text2);text-transform:none;font-size:.72rem">(необязательно)</span></div>
@@ -692,27 +736,56 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <div class="form-label">Ученик</div>
       <div id="edit-lesson-student" style="font-weight:700;padding:8px 0;color:var(--text)"></div>
     </div>
-    <div class="form-row">
-      <div class="form-label">Дата</div>
-      <input class="form-inp" id="edit-lesson-date" type="date">
-    </div>
-    <div class="form-row">
-      <div class="form-label">Формат</div>
-      <div class="toggle-group">
-        <button class="toggle-btn on" id="edit-fmt-offline" onclick="editToggleFmt('offline',this)">📍 Офлайн</button>
-        <button class="toggle-btn" id="edit-fmt-online" onclick="editToggleFmt('online',this)">💻 Онлайн</button>
+    <!-- Сообщение о блокировке (только для тренера после подтверждения) -->
+    <div id="edit-locked-msg" style="display:none;margin-bottom:14px">
+      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:10px;padding:12px 16px;font-size:.85rem;color:var(--text2)">
+        🔒 Занятие подтверждено — редактирование заблокировано. Обратитесь к администратору при необходимости изменений.
       </div>
-      <input type="hidden" id="edit-lesson-format" value="offline">
     </div>
-    <div class="form-row">
-      <div class="form-label">Заметки</div>
-      <textarea class="form-ta" id="edit-lesson-notes" placeholder="Темы, прогресс, замечания..."></textarea>
+    <!-- Редактируемые поля -->
+    <div id="edit-editable-wrap">
+      <div class="form-row">
+        <div class="form-label">Дата</div>
+        <input class="form-inp" id="edit-lesson-date" type="date">
+      </div>
+      <div class="form-row">
+        <div class="form-label">Формат</div>
+        <div class="toggle-group">
+          <button class="toggle-btn on" id="edit-fmt-offline" onclick="editToggleFmt('offline',this)">📍 Офлайн</button>
+          <button class="toggle-btn" id="edit-fmt-online" onclick="editToggleFmt('online',this)">💻 Онлайн</button>
+        </div>
+        <input type="hidden" id="edit-lesson-format" value="offline">
+      </div>
+      <div class="form-row">
+        <div class="form-label">Результат занятия</div>
+        <div class="toggle-group">
+          <button class="toggle-btn" id="edit-status-done" onclick="toggle('edit-lesson-status',this,'done')">✅ Проведено</button>
+          <button class="toggle-btn" id="edit-status-cancelled" onclick="toggle('edit-lesson-status',this,'cancelled')">❌ Отменено</button>
+          <button class="toggle-btn" id="edit-status-rescheduled" onclick="toggle('edit-lesson-status',this,'rescheduled')">🔄 Перенесено</button>
+        </div>
+        <input type="hidden" id="edit-lesson-status" value="">
+        <div style="font-size:.72rem;color:var(--text2);margin-top:6px">После выбора «Проведено» или «Отменено» занятие будет заблокировано от изменений</div>
+      </div>
+      <div class="form-row">
+        <div class="form-label">Заметки <span style="color:var(--text2);text-transform:none;font-size:.72rem">(необязательно)</span></div>
+        <div class="note-chips">
+          <button type="button" class="note-chip" onclick="addNoteChip('edit-lesson-notes','Дебют')">♟ Дебют</button>
+          <button type="button" class="note-chip" onclick="addNoteChip('edit-lesson-notes','Тактика')">⚔️ Тактика</button>
+          <button type="button" class="note-chip" onclick="addNoteChip('edit-lesson-notes','Эндшпиль')">🏁 Эндшпиль</button>
+          <button type="button" class="note-chip" onclick="addNoteChip('edit-lesson-notes','Миттельшпиль')">⚡ Миттельшпиль</button>
+          <button type="button" class="note-chip" onclick="addNoteChip('edit-lesson-notes','Анализ партий')">🔍 Анализ</button>
+          <button type="button" class="note-chip" onclick="addNoteChip('edit-lesson-notes','Разбор ошибок')">📋 Разбор</button>
+          <button type="button" class="note-chip" onclick="addNoteChip('edit-lesson-notes','ДЗ выдано')">📝 ДЗ</button>
+          <button type="button" class="note-chip" onclick="addNoteChip('edit-lesson-notes','Позиционная игра')">🗺 Позиция</button>
+        </div>
+        <textarea class="form-ta" id="edit-lesson-notes" placeholder="Темы, прогресс, замечания..."></textarea>
+      </div>
+      <button class="btn-full btn-gold" onclick="saveEditLesson()" id="edit-save-btn">Сохранить</button>
+      <div style="height:8px"></div>
+      <button class="btn-full" id="edit-delete-btn" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:13px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%" onclick="confirmDeleteLesson()">🗑 Удалить занятие</button>
+      <div style="height:8px"></div>
     </div>
-    <button class="btn-full btn-gold" onclick="saveEditLesson()" id="edit-save-btn">Сохранить</button>
-    <div style="height:8px"></div>
-    <button class="btn-full" id="edit-delete-btn" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:13px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%" onclick="confirmDeleteLesson()">🗑 Удалить занятие</button>
-    <div style="height:8px"></div>
-    <button class="btn-full btn-ghost" onclick="closeEditModal()">Отмена</button>
+    <button class="btn-full btn-ghost" onclick="closeEditModal()">Закрыть</button>
   </div>
 </div>
 
@@ -1074,7 +1147,7 @@ async function loadHomePage() {
 
   // Строим карту использованных занятий по ученикам (для напоминаний)
   const usedMap = {};
-  indivAll.filter(l => l.status !== 'cancelled').forEach(l => {
+  indivAll.filter(l => !l.status || l.status === 'done').forEach(l => {
     if (l.studentEmail) usedMap[l.studentEmail] = (usedMap[l.studentEmail]||0) + 1;
   });
   loadHomeReminders(usedMap); // async, не блокирует рендер
@@ -1084,9 +1157,10 @@ async function loadHomePage() {
   const weekAgo  = new Date(now - 7*86400000);
   const monthAgo = new Date(now - 30*86400000);
   const allLessons = indivAll;
-  const weekCnt  = allLessons.filter(l=>l._date && l.status !== 'cancelled' && l._date >= weekAgo.toISOString().slice(0,10)).length;
-  const monthCnt = allLessons.filter(l=>l._date && l.status !== 'cancelled' && l._date >= monthAgo.toISOString().slice(0,10)).length;
-  const uniqueW  = new Set(allLessons.filter(l=>l._date && l.status !== 'cancelled' && l._date >= weekAgo.toISOString().slice(0,10)).map(l=>l.studentEmail)).size;
+  const isDoneLesson = l => !l.status || l.status === 'done'; // undefined = legacy done
+  const weekCnt  = allLessons.filter(l=>l._date && isDoneLesson(l) && l._date >= weekAgo.toISOString().slice(0,10)).length;
+  const monthCnt = allLessons.filter(l=>l._date && isDoneLesson(l) && l._date >= monthAgo.toISOString().slice(0,10)).length;
+  const uniqueW  = new Set(allLessons.filter(l=>l._date && isDoneLesson(l) && l._date >= weekAgo.toISOString().slice(0,10)).map(l=>l.studentEmail)).size;
 
   document.getElementById('home-stats').innerHTML = `
     <div class="stat-card sc-blue">
@@ -1144,21 +1218,43 @@ function groupFeedItemHTML(g) {
 
 function lessonItemHTML(l) {
   const d = l._date ? new Date(l._date + 'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+  const today = localDateStr(new Date());
+  const isAdmin = currentTrainer.role === 'admin';
+
+  const isPending     = l.status === 'pending' || (!l.status && false); // undefined = legacy done
+  const isDone        = l.status === 'done';
   const isCancelled   = l.status === 'cancelled';
   const isRescheduled = l.status === 'rescheduled';
-  return `<div class="lesson-item${isCancelled?' is-cancelled':''}">
+
+  const pastDate = l._date && l._date <= today;
+  const needsConfirm = isPending && pastDate;   // прошло — нужно подтвердить
+  const isScheduled  = isPending && !pastDate;  // в будущем — запланировано
+
+  // Кнопка редактирования: скрыта для тренера после финального подтверждения
+  const isLocked = (isDone || isCancelled) && !isAdmin;
+  const editBtnHTML = isLocked ? '' :
+    `<button data-edit-id="${l.id}" class="${needsConfirm?'edit-btn-confirm':''}"
+      style="background:none;border:none;cursor:pointer;color:${needsConfirm?'var(--orange)':'var(--text2)'};font-size:.85rem;padding:2px 4px;line-height:1;min-width:28px;min-height:28px" title="${needsConfirm?'Подтвердить занятие':'Редактировать'}">${needsConfirm?'❓':'✏️'}</button>`;
+
+  return `<div class="lesson-item${isCancelled?' is-cancelled':''}${needsConfirm?' lesson-needs-confirm':''}">
     <div class="lesson-row1">
-      <span class="lesson-student" style="cursor:pointer" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
-      <div style="display:flex;align-items:center;gap:6px">
+      <div style="display:flex;align-items:center;gap:7px;min-width:0">
+        ${needsConfirm ? '<div class="lesson-pending-dot"></div>' : ''}
+        <span class="lesson-student" style="cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <span class="lesson-date">${d}</span>
-        <button data-edit-id="${l.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.85rem;padding:2px 4px;line-height:1;min-width:28px;min-height:28px" title="Редактировать">✏️</button>
+        ${editBtnHTML}
       </div>
     </div>
     <div class="lesson-row2">
       <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
-      ${isCancelled?'<span class="tag tag-cancelled">Отменено</span>':''}
-      ${isRescheduled?'<span class="tag tag-rescheduled">Перенесено</span>':''}
-      ${l.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
+      ${needsConfirm ? '<span class="tag tag-pending">Подтвердить</span>' : ''}
+      ${isScheduled  ? '<span class="tag" style="background:rgba(74,158,255,.1);color:var(--accent2)">📅 Запланировано</span>' : ''}
+      ${isDone       ? '<span class="tag" style="background:rgba(34,197,94,.1);color:var(--green)">✅</span>' : ''}
+      ${isCancelled  ? '<span class="tag tag-cancelled">Отменено</span>' : ''}
+      ${isRescheduled? '<span class="tag tag-rescheduled">Перенесено</span>' : ''}
+      ${l.trainerName&&isAdmin?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
       ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,40))}${l.notes.length>40?'…':''}</span>`:''}
     </div>
   </div>`;
@@ -1193,12 +1289,19 @@ function searchStudents(q, prefix) {
   }
 
   resultsEl.innerHTML = matches.map(s => {
-    let blocked = false, blockLabel = '';
+    let blocked = false, blockLabel = '', blockReason = '';
     if (isAdmin && selectedTrainerId) {
+      const selTrainer = _trainersCache.find(t => t.id === selectedTrainerId);
+      const selAssigned = selTrainer?.assignedStudents || [];
       const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(s.email));
       if (assignedTo && assignedTo.id !== selectedTrainerId) {
         blocked = true;
         blockLabel = ` · 🔒 у ${esc((assignedTo.name||'').split(' ').slice(0,2).join(' '))}`;
+        blockReason = 'занят';
+      } else if (!selAssigned.includes(s.email)) {
+        blocked = true;
+        blockLabel = ' · не закреплён';
+        blockReason = 'не назначен';
       }
     }
     return `
@@ -1209,7 +1312,7 @@ function searchStudents(q, prefix) {
         <div class="student-name">${esc(s.name)}</div>
         <div class="student-meta">${s.id} · ${esc(s.email)}${blockLabel}</div>
       </div>
-      <div class="balance-badge ${blocked ? 'balance-low' : s.purchased>0?'balance-ok':'balance-low'}">${blocked ? 'занят' : s.purchased+' куп.'}</div>
+      <div class="balance-badge ${blocked ? 'balance-low' : s.purchased>0?'balance-ok':'balance-low'}">${blocked ? blockReason : s.purchased+' куп.'}</div>
     </div>`;
   }).join('');
   resultsEl.style.display = '';
@@ -1326,7 +1429,7 @@ async function submitLesson() {
   const format = document.getElementById('rec-format').value;
   const type   = document.getElementById('rec-type').value;
   const notes  = document.getElementById('rec-notes').value.trim();
-  const status = document.getElementById('rec-status').value || 'done';
+  const status = 'pending'; // Тренер подтверждает ПОСЛЕ занятия через редактирование
 
   if (!email) { toast('Выбери ученика', 'err'); return; }
   if (!date)  { toast('Укажи дату', 'err'); return; }
@@ -1338,16 +1441,28 @@ async function submitLesson() {
   if (isAdmin) {
     const selId = document.getElementById('rec-trainer-sel').value;
     if (!selId) { toast('Выбери тренера', 'err'); return; }
-    // Жёсткая проверка конфликта назначений
-    const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(email));
-    if (assignedTo && assignedTo.id !== selId) {
-      const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
-      toast(`Ученик закреплён за ${tName} — сохранение невозможно`, 'err');
+    // Жёсткая проверка: ученик должен быть закреплён за выбранным тренером
+    const selTrainer = _trainersCache.find(t => t.id === selId);
+    const selAssigned = selTrainer?.assignedStudents || [];
+    if (!selAssigned.includes(email)) {
+      const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(email));
+      if (assignedTo) {
+        const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
+        toast(`Ученик закреплён за ${tName} — сохранение невозможно`, 'err');
+      } else {
+        toast('Ученик не закреплён за этим тренером — назначьте его сначала', 'err');
+      }
       return;
     }
-    const selTrainer = _trainersCache.find(t => t.id === selId);
     trainerId   = selId;
     trainerName = selTrainer?.name || selId;
+  } else {
+    // Тренер: жёсткая проверка — ученик должен быть в списке назначенных
+    const myAssigned = currentTrainer.assignedStudents || [];
+    if (!myAssigned.includes(email)) {
+      toast('Этот ученик не закреплён за вами — обратитесь к администратору', 'err');
+      return;
+    }
   }
 
   const s = students.find(x => x.email === email);
@@ -1386,13 +1501,7 @@ function openIndivModal() {
   const offlineBtn = document.querySelector('#indiv-modal .toggle-btn');
   if (offlineBtn) offlineBtn.classList.add('on');
   document.getElementById('rec-format').value = 'offline';
-  // сброс статуса
-  document.querySelectorAll('#indiv-modal .toggle-group').forEach(g => {
-    if (g.nextElementSibling && g.nextElementSibling.id === 'rec-status') {
-      g.querySelectorAll('.toggle-btn').forEach((b,i) => b.classList.toggle('on', i===0));
-    }
-  });
-  document.getElementById('rec-status').value = 'done';
+  document.getElementById('rec-status').value = 'pending';
   document.getElementById('rec-submit').textContent = 'Записать занятие';
   document.getElementById('rec-submit').disabled = false;
   // Выбор тренера — только для администратора
@@ -1535,18 +1644,32 @@ async function submitGroupLesson() {
   if (isAdmin && !editingGroupId) {
     const selId = document.getElementById('grp-trainer-sel').value;
     if (!selId) { toast('Выбери тренера', 'err'); return; }
-    // Жёсткая проверка конфликтов для каждого ученика в группе
+    const selTrainer = _trainersCache.find(t => t.id === selId);
+    const selAssigned = selTrainer?.assignedStudents || [];
+    // Жёсткая проверка: каждый ученик должен быть закреплён за выбранным тренером
     for (const s of grpSelectedStudents) {
-      const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(s.email));
-      if (assignedTo && assignedTo.id !== selId) {
-        const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
-        toast(`${s.name} закреплён за ${tName} — сохранение невозможно`, 'err');
+      if (!selAssigned.includes(s.email)) {
+        const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(s.email));
+        if (assignedTo && assignedTo.id !== selId) {
+          const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
+          toast(`${s.name} закреплён за ${tName} — сохранение невозможно`, 'err');
+        } else {
+          toast(`${s.name} не закреплён за этим тренером — назначьте его сначала`, 'err');
+        }
         return;
       }
     }
-    const selTrainer = _trainersCache.find(t => t.id === selId);
     trainerId   = selId;
     trainerName = selTrainer?.name || selId;
+  } else if (!isAdmin && !editingGroupId) {
+    // Тренер: проверяем назначение каждого ученика
+    const myAssigned = currentTrainer.assignedStudents || [];
+    for (const s of grpSelectedStudents) {
+      if (!myAssigned.includes(s.email)) {
+        toast(`${s.name} не закреплён за вами — обратитесь к администратору`, 'err');
+        return;
+      }
+    }
   }
 
   const btn = document.getElementById('grp-submit');
@@ -1599,6 +1722,7 @@ async function submitGroupLesson() {
         studentName:  s.name,
         studentId:    s.id,
         _date: date, format, type: 'group', notes,
+        status: 'pending',
         groupLessonId: grpRef.id,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
@@ -1764,21 +1888,40 @@ function renderHistoryList() {
 
 function histLessonItemHTML(l) {
   const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
+  const today = localDateStr(new Date());
+  const isAdmin = currentTrainer.role === 'admin';
+
+  const isPending     = l.status === 'pending';
+  const isDone        = l.status === 'done';
   const isCancelled   = l.status === 'cancelled';
   const isRescheduled = l.status === 'rescheduled';
-  return `<div class="lesson-item${isCancelled?' is-cancelled':''}">
+
+  const needsConfirm = isPending && l._date && l._date <= today;
+  const isScheduled  = isPending && l._date && l._date > today;
+  const isLocked = (isDone || isCancelled) && !isAdmin;
+  const editBtnHTML = isLocked ? '' :
+    `<button data-edit-id="${esc(l.id)}" class="${needsConfirm?'edit-btn-confirm':''}"
+      style="background:none;border:none;cursor:pointer;color:${needsConfirm?'var(--orange)':'var(--text2)'};font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">${needsConfirm?'❓':'✏️'}</button>`;
+
+  return `<div class="lesson-item${isCancelled?' is-cancelled':''}${needsConfirm?' lesson-needs-confirm':''}">
     <div class="lesson-row1">
-      <span class="lesson-student" style="cursor:pointer" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
-      <div style="display:flex;align-items:center;gap:6px">
+      <div style="display:flex;align-items:center;gap:7px;min-width:0">
+        ${needsConfirm ? '<div class="lesson-pending-dot"></div>' : ''}
+        <span class="lesson-student" style="cursor:pointer" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <span class="lesson-date">${d}</span>
-        <button data-edit-id="${esc(l.id)}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
+        ${editBtnHTML}
       </div>
     </div>
     <div class="lesson-row2">
       <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
-      ${isCancelled?'<span class="tag tag-cancelled">Отменено</span>':''}
-      ${isRescheduled?'<span class="tag tag-rescheduled">Перенесено</span>':''}
-      ${l.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
+      ${needsConfirm ? '<span class="tag tag-pending">Подтвердить</span>' : ''}
+      ${isScheduled  ? '<span class="tag" style="background:rgba(74,158,255,.1);color:var(--accent2)">📅 Запланировано</span>' : ''}
+      ${isDone       ? '<span class="tag" style="background:rgba(34,197,94,.1);color:var(--green)">✅</span>' : ''}
+      ${isCancelled  ? '<span class="tag tag-cancelled">Отменено</span>' : ''}
+      ${isRescheduled? '<span class="tag tag-rescheduled">Перенесено</span>' : ''}
+      ${l.trainerName&&isAdmin?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
       ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,60))}${l.notes.length>60?'…':''}</span>`:''}
     </div>
   </div>`;
@@ -1885,6 +2028,9 @@ async function loadAdminData() {
 
   // Students with empty balance
   await loadBalanceAlerts();
+
+  // База учеников (рендерим сразу)
+  renderStudentDB(document.getElementById('sdb-search')?.value || '');
 }
 
 async function loadBalanceAlerts() {
@@ -2048,6 +2194,10 @@ async function openEditModal(lessonId) {
     }
     if (!lesson) { toast('Занятие не найдено в кеше. Перезагрузи страницу.', 'err'); return; }
 
+    const isAdmin = currentTrainer.role === 'admin';
+    // Занятие заблокировано для тренера после подтверждения (done/cancelled)
+    const isLocked = (lesson.status === 'done' || lesson.status === 'cancelled') && !isAdmin;
+
     document.getElementById('edit-lesson-id').value = lessonId;
     document.getElementById('edit-lesson-student').textContent = lesson.studentName || lesson.studentEmail || '—';
     document.getElementById('edit-lesson-date').value = lesson._date || '';
@@ -2057,6 +2207,18 @@ async function openEditModal(lessonId) {
     document.getElementById('edit-lesson-format').value = fmt;
     document.getElementById('edit-fmt-offline').classList.toggle('on', fmt === 'offline');
     document.getElementById('edit-fmt-online').classList.toggle('on', fmt === 'online');
+
+    // Статус
+    const status = lesson.status || '';
+    document.getElementById('edit-lesson-status').value = status;
+    ['done','cancelled','rescheduled'].forEach(s => {
+      const btn = document.getElementById(`edit-status-${s}`);
+      if (btn) btn.classList.toggle('on', status === s);
+    });
+
+    // Показываем/скрываем форму редактирования
+    document.getElementById('edit-locked-msg').style.display = isLocked ? '' : 'none';
+    document.getElementById('edit-editable-wrap').style.display = isLocked ? 'none' : '';
 
     // Сбрасываем кнопки
     const delBtn = document.getElementById('edit-delete-btn');
@@ -2086,17 +2248,26 @@ async function saveEditLesson() {
   const date   = document.getElementById('edit-lesson-date').value;
   const format = document.getElementById('edit-lesson-format').value;
   const notes  = document.getElementById('edit-lesson-notes').value.trim();
+  const status = document.getElementById('edit-lesson-status').value;
   if (!date) { toast('Укажи дату', 'err'); return; }
 
   const btn = document.getElementById('edit-save-btn');
   btn.disabled = true; btn.textContent = 'Сохранение...';
   try {
-    await db.collection('lessons').doc(id).update({ _date: date, format, notes });
-    delete _editLessonCache[id];
-    toast('Изменения сохранены ✓', 'ok');
+    const updateData = { _date: date, format, notes };
+    if (status) updateData.status = status;
+    await db.collection('lessons').doc(id).update(updateData);
+    // Обновляем кэш без удаления
+    if (_editLessonCache[id]) {
+      _editLessonCache[id] = { ..._editLessonCache[id], _date: date, format, notes, ...(status ? { status } : {}) };
+    } else {
+      delete _editLessonCache[id];
+    }
+    const locked = status === 'done' || status === 'cancelled';
+    toast(locked ? 'Занятие подтверждено и заблокировано ✓' : 'Изменения сохранены ✓', 'ok');
     closeEditModal();
     loadHomePage();
-    if (document.getElementById('page-history').style.display !== 'none') loadHistory();
+    if (document.getElementById('page-history').classList.contains('on')) loadHistory();
     if (currentTrainer.role === 'admin') loadAdminData();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
@@ -2420,7 +2591,8 @@ async function loadFinance() {
       const data = d.data();
       const date = data._date || data.date || '';
       if (!date || date < fromVal || date > toVal) return;
-      if (data.status === 'cancelled') return; // отменённые не считаем
+      // Считаем только явно проведённые (done) + старые без статуса (legacy)
+      if (data.status === 'cancelled' || data.status === 'pending' || data.status === 'rescheduled') return;
       const tid = data.trainerId || nameToId[norm(data.trainerName)];
       if (!tid) return;
       _finLessonsCache.push({id: d.id, ...data, _resolvedTid: tid});
@@ -2696,6 +2868,52 @@ function openFinDrill(trainerId, type, trainerName) {
     : '<div class="empty">Нет занятий</div>';
 
   _openModal('fin-drill-modal');
+}
+
+// ══════════════════════════════════════════════
+//  STUDENT DATABASE (admin)
+// ══════════════════════════════════════════════
+function renderStudentDB(q) {
+  const listEl = document.getElementById('sdb-list');
+  const countEl = document.getElementById('sdb-count');
+  if (!listEl) return;
+
+  let pool = students.slice();
+  if (q && q.length > 0) {
+    const lq = q.toLowerCase();
+    pool = pool.filter(s => s.name.toLowerCase().includes(lq) || s.email.includes(lq));
+  }
+  pool.sort((a,b) => a.name.localeCompare(b.name, 'ru'));
+
+  countEl.textContent = pool.length + ' учеников';
+
+  if (!pool.length) {
+    listEl.innerHTML = '<div class="empty">Ученики не найдены</div>';
+    return;
+  }
+
+  listEl.innerHTML = pool.slice(0, 50).map(s => {
+    const assignedTrainer = _trainersCache.find(t => (t.assignedStudents||[]).includes(s.email));
+    const trainerLabel = assignedTrainer
+      ? `<span style="color:var(--accent2);font-size:.72rem">👤 ${esc(assignedTrainer.name.split(' ').slice(0,2).join(' '))}</span>`
+      : `<span style="color:var(--text2);font-size:.72rem">не закреплён</span>`;
+    const bal = s.purchased || 0;
+    const balClass = bal <= 0 ? 'balance-empty' : bal <= 2 ? 'balance-low' : 'balance-ok';
+    return `<div class="sdb-item" data-si-email="${esc(s.email)}" onclick="openStudentInfoModal('${esc(s.email)}')">
+      <div style="min-width:0">
+        <div style="font-weight:600;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</div>
+        <div style="font-size:.72rem;color:var(--text2);margin-top:2px">${s.id} · ${esc(s.email)}</div>
+        <div style="margin-top:3px">${trainerLabel}</div>
+      </div>
+      <div style="flex-shrink:0;margin-left:10px">
+        <span class="balance-badge ${balClass}">${bal} куп.</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  if (pool.length > 50) {
+    listEl.innerHTML += `<div style="text-align:center;padding:12px;font-size:.8rem;color:var(--text2)">Показано 50 из ${pool.length}. Уточните поиск.</div>`;
+  }
 }
 
 // ══════════════════════════════════════════════
