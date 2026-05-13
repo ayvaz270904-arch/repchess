@@ -222,6 +222,17 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .lesson-needs-confirm{border-left:3px solid var(--orange);padding-left:10px;margin-left:-10px;}
 .edit-btn-confirm{background:rgba(249,115,22,.15)!important;border:1px solid rgba(249,115,22,.4)!important;border-radius:8px!important;color:var(--orange)!important;}
 
+/* ── ATTENDANCE ── */
+.attend-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4);}
+.attend-row:last-child{border-bottom:none;}
+.attend-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--border);background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;transition:all .15s;}
+.attend-check.on{background:var(--green);border-color:var(--green);}
+.attend-check.absent{background:rgba(239,68,68,.15);border-color:var(--red);}
+.tag-mismatch{background:rgba(239,68,68,.15);color:var(--red);}
+.tag-attendance-ok{background:rgba(34,197,94,.12);color:var(--green);}
+.tag-group-buyer{background:rgba(168,85,247,.1);color:var(--purple);font-size:.65rem;}
+.tag-indiv-buyer{background:rgba(74,158,255,.1);color:var(--accent2);font-size:.65rem;}
+
 /* ── STUDENT DB (admin) ── */
 .sdb-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4);cursor:pointer;}
 .sdb-item:last-child{border-bottom:none;}
@@ -394,6 +405,9 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 
       <!-- Alerts: students with empty balance -->
       <div id="admin-alerts"></div>
+
+      <!-- Group mismatch alerts -->
+      <div id="admin-group-mismatches"></div>
 
       <!-- Trainer stats -->
       <div class="card" style="margin-bottom:14px">
@@ -811,6 +825,30 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
   </div>
 </div>
 
+<!-- ATTENDANCE MODAL -->
+<div class="overlay" id="attend-modal" style="display:none" onclick="if(event.target===this)_closeModal('attend-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="attend-modal-title">📋 Посещаемость</div>
+    <input type="hidden" id="attend-group-id">
+    <div class="form-row" id="attend-expected-wrap">
+      <div class="form-label">Ожидаемые ученики</div>
+      <div id="attend-expected-list"><div class="empty" style="padding:12px">Список пуст — добавьте учеников через редактирование занятия</div></div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Пришли дополнительно <span style="color:var(--text2);text-transform:none;font-size:.72rem">(не в списке)</span></div>
+      <div id="attend-extra-list" style="margin-bottom:8px"></div>
+      <button class="btn-sm" onclick="addExtraAttendeeRow()" style="font-size:.8rem">+ Добавить</button>
+    </div>
+    <div id="attend-mismatch-warn" style="display:none;margin-bottom:10px">
+      <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:10px;padding:10px 14px;font-size:.82rem;color:var(--orange)">⚠️ <span id="attend-mismatch-text"></span></div>
+    </div>
+    <button class="btn-full btn-gold" id="attend-submit-btn" onclick="submitAttendance()">Сохранить посещаемость</button>
+    <div style="height:8px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('attend-modal')">Отмена</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -912,12 +950,27 @@ let _editGroupCache = {};
 //  PRICE HISTORY (same as )
 // ══════════════════════════════════════════════
 const PRICE_CHANGE = new Date('2026-03-18');
-const PRICES_OLD = {1500:{l:1},5500:{l:4},12000:{l:10},1000:{l:1},3600:{l:4},8000:{l:10},2500:{l:1},9000:{l:4},21000:{l:10},1700:{l:1},6400:{l:4},15000:{l:10}};
-const PRICES_NEW = {1800:{l:1},6500:{l:4},15500:{l:10},1200:{l:1},4400:{l:4},10000:{l:10},2800:{l:1},23500:{l:10},2000:{l:1},7200:{l:4},17000:{l:10},6000:{l:1}};
+// g:true = групповые занятия (самый дешёвый тариф за занятие)
+const PRICES_OLD = {
+  1500:{l:1},5500:{l:4},12000:{l:10},
+  1000:{l:1,g:true},3600:{l:4,g:true},8000:{l:10,g:true},
+  2500:{l:1},9000:{l:4},21000:{l:10},
+  1700:{l:1},6400:{l:4},15000:{l:10}
+};
+const PRICES_NEW = {
+  1800:{l:1},6500:{l:4},15500:{l:10},
+  1200:{l:1,g:true},4400:{l:4,g:true},10000:{l:10,g:true},
+  2800:{l:1},23500:{l:10},
+  2000:{l:1},7200:{l:4},17000:{l:10},6000:{l:1,g:true}
+};
 
 function getLessonsFromPayment(price, date) {
   const catalog = (date && date >= PRICE_CHANGE) ? PRICES_NEW : PRICES_OLD;
   return (catalog[Math.round(price)] || {l:1}).l;
+}
+function isGroupPayment(price, date) {
+  const catalog = (date && date >= PRICE_CHANGE) ? PRICES_NEW : PRICES_OLD;
+  return !!(catalog[Math.round(price)] || {}).g;
 }
 
 // ══════════════════════════════════════════════
@@ -1019,7 +1072,7 @@ async function loadStudents() {
     for (const row of rows) {
       const email = (row['Email']||'').toLowerCase().trim();
       if (!email || email === 'test@mail.ru') continue;
-      if (!map[email]) map[email] = { name: row['Name']||'', email, phone: row['Phone']||'', purchased: 0, firstDate: null, nextExpiry: null };
+      if (!map[email]) map[email] = { name: row['Name']||'', email, phone: row['Phone']||'', purchased: 0, purchasedGroup: 0, purchasedIndiv: 0, firstDate: null, nextExpiry: null };
       const m = map[email];
       if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
 
@@ -1029,6 +1082,7 @@ async function loadStudents() {
         const date  = row['sent'] ? new Date(row['sent'].replace(' ','T')) : null;
         if (price > 0) {
           const cnt = getLessonsFromPayment(price, date);
+          const isGrp = isGroupPayment(price, date);
           // Срок действия: 1 зан = 1 мес, 4 зан = 3 мес, 10 зан = 6 мес
           const expiryMonths = cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1;
           let expiryDate = null;
@@ -1036,6 +1090,7 @@ async function loadStudents() {
           const isExpired = expiryDate && expiryDate < new Date();
           if (!isExpired) {
             m.purchased += cnt;
+            if (isGrp) m.purchasedGroup += cnt; else m.purchasedIndiv += cnt;
             if (!m.firstDate || (date && date < m.firstDate)) m.firstDate = date;
           }
           // Ближайшая дата истечения (для предупреждений)
@@ -1198,20 +1253,32 @@ async function loadHomePage() {
 
 function groupFeedItemHTML(g) {
   const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
-  const names = (g.studentNames||[]).slice(0,3).join(', ') + (g.count>3 ? ` и ещё ${g.count-3}` : '');
-  return `<div class="lesson-item">
+  const names = (g.studentNames||[]).slice(0,3).join(', ') + ((g.count||0)>3 ? ` и ещё ${g.count-3}` : '');
+  const today = localDateStr(new Date());
+  const pastDate = g._date && g._date <= today;
+  const needsAttend = !g.attendanceMarked && pastDate && (g.studentEmails||[]).length > 0;
+  const hasMismatch = _groupHasMismatch(g);
+  return `<div class="lesson-item${hasMismatch?' lesson-needs-confirm':''}">
     <div class="lesson-row1">
-      <span class="lesson-student">👥 ${esc(g.venue||'Групповое')}</span>
-      <div style="display:flex;align-items:center;gap:6px">
+      <div style="display:flex;align-items:center;gap:7px">
+        ${needsAttend ? '<div class="lesson-pending-dot"></div>' : ''}
+        <span class="lesson-student">👥 ${esc(g.venue||'Групповое')}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <span class="lesson-date">${d}</span>
-        <button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
+        ${(pastDate || currentTrainer.role==='admin') && !g.attendanceMarked
+          ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--green);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Отметить посещаемость">📋</button>`
+          : `<button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>`}
       </div>
     </div>
     <div class="lesson-row2">
-      <span class="tag tag-group">${g.count} чел.</span>
+      <span class="tag tag-group">${g.count||0} чел.</span>
       <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
+      ${g.attendanceMarked ? `<span class="tag tag-attendance-ok">✅ посещ.</span>` : ''}
+      ${hasMismatch ? `<span class="tag tag-mismatch">⚠️</span>` : ''}
+      ${needsAttend ? `<span class="tag tag-pending">Отметить</span>` : ''}
       ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
-      <span class="dim" style="font-size:.73rem">${esc(names)}</span>
+      ${names ? `<span class="dim" style="font-size:.73rem">${esc(names)}</span>` : ''}
     </div>
   </div>`;
 }
@@ -1275,9 +1342,21 @@ function searchStudents(q, prefix) {
     pool = students.filter(s => myAssigned.includes(s.email));
   }
 
-  const matches = q.length > 0
-    ? pool.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase())).slice(0, 10)
-    : pool.slice(0, 10);
+  let matches = q.length > 0
+    ? pool.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase()))
+    : pool.slice();
+
+  // Для групповых занятий (prefix === 'grp') — сначала те, у кого куплены группы
+  if (prefix === 'grp') {
+    matches.sort((a, b) => {
+      const aGrp = (a.purchasedGroup||0) > 0;
+      const bGrp = (b.purchasedGroup||0) > 0;
+      if (aGrp && !bGrp) return -1;
+      if (!aGrp && bGrp) return 1;
+      return 0;
+    });
+  }
+  matches = matches.slice(0, 12);
 
   if (!matches.length) { resultsEl.style.display='none'; return; }
 
@@ -1312,7 +1391,10 @@ function searchStudents(q, prefix) {
         <div class="student-name">${esc(s.name)}</div>
         <div class="student-meta">${s.id} · ${esc(s.email)}${blockLabel}</div>
       </div>
-      <div class="balance-badge ${blocked ? 'balance-low' : s.purchased>0?'balance-ok':'balance-low'}">${blocked ? blockReason : s.purchased+' куп.'}</div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+        <div class="balance-badge ${blocked ? 'balance-low' : s.purchased>0?'balance-ok':'balance-low'}">${blocked ? blockReason : s.purchased+' куп.'}</div>
+        ${!blocked && prefix==='grp' ? ((s.purchasedGroup||0)>0?'<span class="tag tag-group-buyer">👥 группа</span>':((s.purchasedIndiv||0)>0?'<span class="tag tag-indiv-buyer">👤 индив.</span>':'')):''}
+      </div>
     </div>`;
   }).join('');
   resultsEl.style.display = '';
@@ -1635,7 +1717,7 @@ async function submitGroupLesson() {
 
   if (!date)  { toast('Укажи дату', 'err'); return; }
   if (!venue) { toast('Укажи место', 'err'); return; }
-  if (!grpSelectedStudents.length) { toast('Добавь хотя бы одного ученика', 'err'); return; }
+  // Студенты необязательны при создании — добавляются позже через редактирование
 
   // Для администратора — используем выбранного тренера (только при создании)
   const isAdmin = currentTrainer.role === 'admin';
@@ -1661,8 +1743,8 @@ async function submitGroupLesson() {
     }
     trainerId   = selId;
     trainerName = selTrainer?.name || selId;
-  } else if (!isAdmin && !editingGroupId) {
-    // Тренер: проверяем назначение каждого ученика
+  } else if (!isAdmin && !editingGroupId && grpSelectedStudents.length > 0) {
+    // Тренер: проверяем назначение только тех учеников, которых добавили
     const myAssigned = currentTrainer.assignedStudents || [];
     for (const s of grpSelectedStudents) {
       if (!myAssigned.includes(s.email)) {
@@ -1710,6 +1792,10 @@ async function submitGroupLesson() {
       studentNames:  grpSelectedStudents.map(s=>s.name),
       studentIds:    grpSelectedStudents.map(s=>s.id),
       count: grpSelectedStudents.length,
+      attendanceMarked: false,
+      attendedEmails: [],
+      attendedNames: [],
+      extraAttendees: [],
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -1758,25 +1844,63 @@ async function loadGroupLessons() {
   docs.forEach(d => { _editGroupCache[d.id] = {id: d.id, ...d.data()}; });
   const list = document.getElementById('group-list');
   if (!docs.length) { list.innerHTML='<div class="empty">Групповых занятий пока нет</div>'; return; }
+  const today = localDateStr(new Date());
+  const isAdmin = currentTrainer.role === 'admin';
+
   list.innerHTML = docs.map(d => {
     const g = d.data();
+    const gid = d.id;
     const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}) : '';
-    return `<div class="card" style="cursor:default">
+    const pastDate = g._date && g._date <= today;
+
+    // Attendance status
+    const attended = g.attendanceMarked;
+    const hasMismatch = attended && _groupHasMismatch(g);
+    const needsAttend = !attended && pastDate && (g.studentEmails||[]).length > 0;
+
+    // Attendance summary for display (no contacts for trainer)
+    let attendSummaryHtml = '';
+    if (attended) {
+      const attendedList = [...(g.attendedNames||[]), ...(g.extraAttendees||[])];
+      const extraCount = (g.extraAttendees||[]).length;
+      attendSummaryHtml = `
+        <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:8px;font-size:.78rem">
+          <div style="font-weight:700;margin-bottom:6px;color:var(--green)">✅ Посещаемость отмечена (${attendedList.length} чел.)</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            ${attendedList.map(n=>`<span style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:2px 8px">${esc(n)}</span>`).join('')}
+          </div>
+          ${extraCount>0?`<div style="margin-top:6px;color:var(--orange);font-size:.72rem">+${extraCount} дополнительных</div>`:''}
+          ${hasMismatch?`<div style="margin-top:6px;color:var(--red);font-size:.72rem">⚠️ Несоответствие со списком</div>`:''}
+        </div>`;
+    }
+
+    return `<div class="card" style="cursor:default${hasMismatch?';border-color:rgba(239,68,68,.3)':''}">
       <div class="card-head">
         <div>
           <div style="font-weight:700">${esc(g.venue)}</div>
-          <div style="font-size:.75rem;color:var(--text2)">${dt} · ${g.count} учеников · <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${g.format==='online'?'Онлайн':'Офлайн'}</span></div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
+            <span style="font-size:.75rem;color:var(--text2)">${dt}</span>
+            <span style="font-size:.75rem;color:var(--text2)">${g.count||0} уч.</span>
+            <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${g.format==='online'?'Онлайн':'Офлайн'}</span>
+            ${attended?`<span class="tag tag-attendance-ok" style="padding:1px 6px">✅ отмечено</span>`:''}
+            ${hasMismatch?`<span class="tag tag-mismatch" style="padding:1px 6px">⚠️ несоответствие</span>`:''}
+            ${needsAttend?`<span class="tag tag-pending" style="padding:1px 6px;animation:pulse-dot 1.5s infinite">Отметить!</span>`:''}
+          </div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          ${currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName||'')}</span>`:''}
-          <button data-edit-group-id="${d.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px">✏️</button>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          ${isAdmin?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName||'')}</span>`:''}
+          ${(pastDate || isAdmin) && !attended ? `<button onclick="openAttendModal('${gid}')" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--green);font-size:.75rem;padding:5px 9px;cursor:pointer;white-space:nowrap">📋 Посещ.</button>` : ''}
+          ${attended && isAdmin ? `<button onclick="openAttendModal('${gid}')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.75rem;padding:5px 9px;cursor:pointer">✏️ Изм.</button>` : ''}
+          <button data-edit-group-id="${gid}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px">✏️</button>
         </div>
       </div>
       <div class="card-body" style="padding:10px 18px">
         <div style="display:flex;flex-wrap:wrap;gap:6px">
           ${(g.studentNames||[]).map(n=>`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:.78rem">${esc(n)}</span>`).join('')}
+          ${!(g.studentNames||[]).length ? `<span style="color:var(--text2);font-size:.8rem">Ожидаемые ученики не добавлены</span>` : ''}
         </div>
         ${g.notes?`<div style="font-size:.78rem;color:var(--text2);margin-top:8px">${esc(g.notes)}</div>`:''}
+        ${attendSummaryHtml}
       </div>
     </div>`;
   }).join('');
@@ -2029,6 +2153,9 @@ async function loadAdminData() {
   // Students with empty balance
   await loadBalanceAlerts();
 
+  // Несоответствия в посещаемости групповых
+  await loadGroupMismatches();
+
   // База учеников (рендерим сразу)
   renderStudentDB(document.getElementById('sdb-search')?.value || '');
 }
@@ -2081,19 +2208,38 @@ async function loadTrainerAssignments(trainersSnap) {
 
   if (!nonAdmin.length) { el.innerHTML = '<div class="empty">Нет тренеров</div>'; return; }
 
-  el.innerHTML = nonAdmin.map(t => {
+  // Ученики с индивидуальными пакетами — им нужен тренер
+  const needsTrainer = students.filter(s =>
+    (s.purchasedIndiv||0) > 0 &&
+    !_trainersCache.some(t => (t.assignedStudents||[]).includes(s.email))
+  );
+
+  const needsTrainerHtml = needsTrainer.length ? `
+    <div style="padding:10px 0 6px;border-bottom:1px solid var(--border);margin-bottom:12px">
+      <div style="font-size:.75rem;font-weight:700;color:var(--accent2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">
+        👤 Куплены индивидуальные — нужен тренер (${needsTrainer.length})
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${needsTrainer.map(s => `<div style="background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.2);border-radius:8px;padding:4px 10px;font-size:.78rem;cursor:pointer" onclick="openStudentInfoModal('${esc(s.email)}')" title="${esc(s.email)}">${esc(s.name.split(' ').slice(0,2).join(' '))}</div>`).join('')}
+      </div>
+    </div>` : '';
+
+  el.innerHTML = needsTrainerHtml + nonAdmin.map(t => {
     const assigned = t.assignedStudents || [];
     const tags = assigned.map(email => {
       const s = students.find(x => x.email === email);
       const name = s ? s.name : email;
-      return `<div class="group-student-tag">${esc(name)}
+      const typeTag = (s?.purchasedIndiv||0)>0
+        ? '<span class="tag tag-indiv-buyer" style="padding:1px 5px">инд.</span>'
+        : (s?.purchasedGroup||0)>0 ? '<span class="tag tag-group-buyer" style="padding:1px 5px">гр.</span>' : '';
+      return `<div class="group-student-tag">${esc(name)} ${typeTag}
         <button onclick="removeStudentAssignment('${esc(t.id)}','${esc(email)}')">✕</button>
       </div>`;
     }).join('');
     return `<div style="padding:14px 0;border-bottom:1px solid var(--border)">
       <div style="font-weight:700;margin-bottom:8px">${esc(t.name)}</div>
       <div id="assign-tags-${t.id}" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
-        ${tags || '<span style="color:var(--text2);font-size:.8rem">Ученики не назначены — видит всех</span>'}
+        ${tags || '<span style="color:var(--text2);font-size:.8rem">Ученики не назначены</span>'}
       </div>
       <div class="student-search-wrap" style="max-width:320px">
         <input class="form-inp" id="assign-inp-${t.id}" placeholder="Добавить ученика..."
@@ -2868,6 +3014,230 @@ function openFinDrill(trainerId, type, trainerName) {
     : '<div class="empty">Нет занятий</div>';
 
   _openModal('fin-drill-modal');
+}
+
+// ══════════════════════════════════════════════
+//  GROUP MISMATCHES (admin)
+// ══════════════════════════════════════════════
+async function loadGroupMismatches() {
+  const el = document.getElementById('admin-group-mismatches');
+  if (!el) return;
+  try {
+    const snap = await db.collection('groupLessons').where('mismatch','==',true).limit(20).get();
+    if (!snap.size) { el.innerHTML = ''; return; }
+    const items = snap.docs.map(d => {
+      const g = d.data();
+      const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+      return `<div class="alert" style="background:rgba(249,115,22,.06);border-color:rgba(249,115,22,.25)">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-text">
+          <b>${esc(g.venue||'Групповое')}</b> ${dt} — <span style="color:var(--orange)">${esc(g.mismatchNote||'несоответствие посещаемости')}</span>
+          <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:none;border:1px solid rgba(249,115,22,.3);border-radius:6px;color:var(--orange);font-size:.72rem;padding:2px 8px;cursor:pointer">Просмотреть</button>
+        </div>
+      </div>`;
+    }).join('');
+    el.innerHTML = `<div class="card" style="margin-bottom:14px;border-color:rgba(249,115,22,.3)">
+      <div class="card-head" style="border-color:rgba(249,115,22,.2)"><span class="card-title" style="color:var(--orange)">⚠️ Несоответствия посещаемости</span></div>
+      <div class="card-body">${items}</div>
+    </div>`;
+  } catch(e) { el.innerHTML = ''; }
+}
+
+// ══════════════════════════════════════════════
+//  GROUP ATTENDANCE
+// ══════════════════════════════════════════════
+
+function _groupHasMismatch(g) {
+  if (!g.attendanceMarked) return false;
+  const expected = g.studentEmails || [];
+  const attended = g.attendedEmails || [];
+  if (expected.length !== attended.length) return true;
+  return expected.some(e => !attended.includes(e));
+}
+
+async function openAttendModal(groupId) {
+  let g = _editGroupCache[groupId];
+  if (!g) {
+    try {
+      const doc = await db.collection('groupLessons').doc(groupId).get();
+      if (!doc.exists) { toast('Занятие не найдено', 'err'); return; }
+      g = { id: doc.id, ...doc.data() };
+      _editGroupCache[groupId] = g;
+    } catch(e) { toast('Ошибка: ' + e.message, 'err'); return; }
+  }
+
+  document.getElementById('attend-group-id').value = groupId;
+  const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long'}) : '';
+  document.getElementById('attend-modal-title').textContent = `📋 Посещаемость — ${esc(g.venue||'Группа')} ${dt}`;
+
+  const expectedEmails = g.studentEmails || [];
+  const expectedNames  = g.studentNames  || [];
+  const alreadyAttended = g.attendedEmails || [];
+  const existingExtra   = g.extraAttendees || [];
+  const isAdmin = currentTrainer.role === 'admin';
+
+  // Список ожидаемых учеников с чекбоксами
+  const listEl = document.getElementById('attend-expected-list');
+  if (!expectedEmails.length) {
+    listEl.innerHTML = '<div style="color:var(--text2);font-size:.82rem;padding:8px 0">Список ожидаемых учеников пуст. Добавьте учеников через ✏️ редактирование.</div>';
+  } else {
+    listEl.innerHTML = expectedEmails.map((email, i) => {
+      const name = expectedNames[i] || email;
+      const checked = g.attendanceMarked ? alreadyAttended.includes(email) : true; // по умолчанию все отмечены
+      // Контакт показываем только администратору
+      const s = students.find(x => x.email === email);
+      const contactHtml = isAdmin && s?.phone
+        ? `<span style="font-size:.7rem;color:var(--text2)">${esc(s.phone)}</span>`
+        : '';
+      return `<div class="attend-row" id="attend-row-${i}">
+        <div class="attend-check ${checked?'on':''}" onclick="toggleAttend(this,${i})">${checked?'✓':''}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:.88rem">${esc(name)}</div>
+          ${contactHtml}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // Дополнительные посетители
+  const extraEl = document.getElementById('attend-extra-list');
+  extraEl.innerHTML = '';
+  existingExtra.forEach(name => _appendExtraRow(name));
+
+  document.getElementById('attend-mismatch-warn').style.display = 'none';
+  document.getElementById('attend-submit-btn').disabled = false;
+  document.getElementById('attend-submit-btn').textContent = 'Сохранить посещаемость';
+  _openModal('attend-modal');
+}
+
+function toggleAttend(el, idx) {
+  el.classList.toggle('on');
+  el.textContent = el.classList.contains('on') ? '✓' : '';
+}
+
+function _appendExtraRow(value) {
+  const el = document.getElementById('attend-extra-list');
+  const div = document.createElement('div');
+  div.className = 'attend-row';
+  div.style.gap = '8px';
+  div.innerHTML = `<input class="form-inp extra-attend-inp" type="text" placeholder="Имя Фамилия" value="${esc(value)}" style="flex:1;padding:8px 12px;font-size:.85rem;margin-bottom:0">
+    <button onclick="this.closest('.attend-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;padding:4px">✕</button>`;
+  el.appendChild(div);
+}
+
+function addExtraAttendeeRow() {
+  _appendExtraRow('');
+  const inputs = document.querySelectorAll('.extra-attend-inp');
+  if (inputs.length) inputs[inputs.length-1].focus();
+}
+
+async function submitAttendance() {
+  const groupId = document.getElementById('attend-group-id').value;
+  const g = _editGroupCache[groupId];
+  if (!g) { toast('Ошибка: занятие не найдено', 'err'); return; }
+
+  const expectedEmails = g.studentEmails || [];
+  const expectedNames  = g.studentNames  || [];
+
+  // Собираем отмеченных учеников
+  const attendedEmails = [], attendedNames = [];
+  document.querySelectorAll('#attend-expected-list .attend-row').forEach((row, i) => {
+    const check = row.querySelector('.attend-check');
+    if (check && check.classList.contains('on') && i < expectedEmails.length) {
+      attendedEmails.push(expectedEmails[i]);
+      attendedNames.push(expectedNames[i] || expectedEmails[i]);
+    }
+  });
+
+  // Дополнительные посетители (ввод текстом)
+  const extraAttendees = [];
+  document.querySelectorAll('.extra-attend-inp').forEach(inp => {
+    const v = inp.value.trim();
+    if (v) extraAttendees.push(v);
+  });
+
+  // Определяем несоответствие
+  const absent = expectedEmails.filter(e => !attendedEmails.includes(e));
+  const hasMismatch = absent.length > 0 || extraAttendees.length > 0;
+  const mismatchNote = [];
+  if (absent.length) {
+    const absentNames = absent.map(e => expectedNames[expectedEmails.indexOf(e)] || e);
+    mismatchNote.push(`Не пришли: ${absentNames.join(', ')}`);
+  }
+  if (extraAttendees.length) mismatchNote.push(`Дополнительно: ${extraAttendees.join(', ')}`);
+
+  if (hasMismatch) {
+    const warnEl = document.getElementById('attend-mismatch-warn');
+    document.getElementById('attend-mismatch-text').textContent = mismatchNote.join('; ');
+    warnEl.style.display = '';
+  }
+
+  const btn = document.getElementById('attend-submit-btn');
+  btn.disabled = true; btn.textContent = 'Сохранение...';
+
+  try {
+    const batch = db.batch();
+
+    // Обновляем groupLesson
+    batch.update(db.collection('groupLessons').doc(groupId), {
+      attendanceMarked: true,
+      attendedEmails,
+      attendedNames,
+      extraAttendees,
+      mismatch: hasMismatch,
+      mismatchNote: mismatchNote.join('; '),
+    });
+
+    // Обновляем индивидуальные записи для ожидаемых учеников
+    const indSnap = await db.collection('lessons').where('groupLessonId','==',groupId).get();
+    indSnap.docs.forEach(doc => {
+      const email = doc.data().studentEmail;
+      const attended = attendedEmails.includes(email);
+      batch.update(doc.ref, {
+        status: attended ? 'done' : 'absent',
+        attended,
+      });
+    });
+
+    // Создаём новые записи для дополнительных посетителей
+    for (const name of extraAttendees) {
+      const ref = db.collection('lessons').doc();
+      batch.set(ref, {
+        trainerId: g.trainerId,
+        trainerName: g.trainerName,
+        studentEmail: '',
+        studentName: name,
+        studentId: '',
+        _date: g._date,
+        format: g.format,
+        type: 'group',
+        notes: g.notes || '',
+        status: 'done',
+        attended: true,
+        groupLessonId: groupId,
+        isExtraAttendee: true,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
+
+    // Обновляем кэш
+    _editGroupCache[groupId] = { ...g, attendanceMarked: true, attendedEmails, attendedNames, extraAttendees, mismatch: hasMismatch };
+
+    _closeModal('attend-modal');
+    toast('Посещаемость сохранена ✓', 'ok');
+    loadGroupLessons();
+    loadHomePage();
+    if (currentTrainer.role === 'admin') {
+      if (hasMismatch) toast('⚠️ Обнаружено несоответствие — проверьте список', 'err');
+      loadAdminData();
+    }
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+    btn.disabled = false;
+    btn.textContent = 'Сохранить посещаемость';
+  }
 }
 
 // ══════════════════════════════════════════════
