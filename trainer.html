@@ -482,8 +482,8 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
               <div style="font-size:.72rem;color:var(--text2)">база клиентов и оплат</div>
             </div>
             <div style="display:flex;gap:6px">
-              <button class="copy-btn" onclick="navigator.clipboard.writeText('https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk').then(()=>toast('Ссылка скопирована','ok'))">Копировать</button>
-              <a href="https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk" target="_blank" style="text-decoration:none"><button class="copy-btn" style="color:var(--accent2);border-color:rgba(74,158,255,.3)">Открыть</button></a>
+              <button class="copy-btn" onclick="navigator.clipboard.writeText('https://ayvaz270904-arch.github.io/repchess/index.html').then(()=>toast('Ссылка скопирована','ok'))">Копировать</button>
+              <a href="https://ayvaz270904-arch.github.io/repchess/index.html" target="_blank" style="text-decoration:none"><button class="copy-btn" style="color:var(--accent2);border-color:rgba(74,158,255,.3)">Открыть</button></a>
             </div>
           </div>
         </div>
@@ -826,8 +826,8 @@ const FIREBASE_CONFIG = {
   appId:             "1:694548342592:web:5c245c1c24c27e0109bca5"
 };
 
-// CRM Google Sheet (для загрузки студентов и баланса)
-const CRM_CSV = 'https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk/export?format=csv&gid=0';
+//  Google Sheet (для загрузки студентов и баланса)
+const _CSV = 'https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk/export?format=csv&gid=0';
 
 // ── Локальная дата без UTC-сдвига ──
 function localDateStr(d) {
@@ -902,14 +902,14 @@ function _closeModal(id) {
 // ══════════════════════════════════════════════
 let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
-let students = [];          // from CRM CSV
+let students = [];          // from  CSV
 let _trainersCache = [];    // all trainers from Firestore
 let grpSelectedStudents = []; // for group lesson modal
 let editingGroupId = null;
 let _editGroupCache = {};
 
 // ══════════════════════════════════════════════
-//  PRICE HISTORY (same as CRM)
+//  PRICE HISTORY (same as )
 // ══════════════════════════════════════════════
 const PRICE_CHANGE = new Date('2026-03-18');
 const PRICES_OLD = {1500:{l:1},5500:{l:4},12000:{l:10},1000:{l:1},3600:{l:4},8000:{l:10},2500:{l:1},9000:{l:4},21000:{l:10},1700:{l:1},6400:{l:4},15000:{l:10}};
@@ -994,23 +994,23 @@ async function showApp() {
 }
 
 // ══════════════════════════════════════════════
-//  LOAD STUDENTS FROM CRM
+//  LOAD STUDENTS FROM 
 // ══════════════════════════════════════════════
-const CRM_CACHE_KEY = 'repchess_crm_v2';
-const CRM_CACHE_TTL = 5 * 60 * 1000; // 5 минут
+const _CACHE_KEY = 'repchess__v2';
+const _CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
 async function loadStudents() {
   // Проверяем sessionStorage кэш
   try {
-    const raw = sessionStorage.getItem(CRM_CACHE_KEY);
+    const raw = sessionStorage.getItem(_CACHE_KEY);
     if (raw) {
       const { data, ts } = JSON.parse(raw);
-      if (Date.now() - ts < CRM_CACHE_TTL) { students = data; return; }
+      if (Date.now() - ts < _CACHE_TTL) { students = data; return; }
     }
   } catch(e) {}
 
   try {
-    const res = await fetch(CRM_CSV + '&t=' + Date.now());
+    const res = await fetch(_CSV + '&t=' + Date.now());
     const txt = await res.text();
     const rows = parseCSV(txt);
 
@@ -1058,10 +1058,10 @@ async function loadStudents() {
     students = [...sorted, ...freeStudents];
 
     // Сохраняем в sessionStorage
-    try { sessionStorage.setItem(CRM_CACHE_KEY, JSON.stringify({ data: students, ts: Date.now() })); } catch(e) {}
+    try { sessionStorage.setItem(_CACHE_KEY, JSON.stringify({ data: students, ts: Date.now() })); } catch(e) {}
 
   } catch(e) {
-    console.warn('Could not load students from CRM:', e);
+    console.warn('Could not load students from :', e);
     students = [];
   }
 }
