@@ -897,7 +897,7 @@ const FIREBASE_CONFIG = {
 };
 
 //  Google Sheet (для загрузки студентов и баланса)
-const _CSV = 'https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk/export?format=csv&gid=0';
+const _CSV = 'https://script.google.com/macros/s/AKfycbykw9tUwp05a1Z_4WejkFamENdCtdLL_xw4q_mlWsIiptMc-ybzNKagUFd-u54hvX6t7w/exec';
 
 // ── Локальная дата без UTC-сдвига ──
 function localDateStr(d) {
@@ -1096,8 +1096,14 @@ async function loadStudents() {
   } catch(e) {}
 
   try {
-    const res = await fetch(_CSV + '&t=' + Date.now());
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const res = await fetch(_CSV + '?token=' + encodeURIComponent(idToken));
     const txt = await res.text();
+    if (txt === 'Unauthorized' || txt === '' || txt.startsWith('Error:')) {
+      console.warn('Student data fetch rejected:', txt);
+      students = [];
+      return;
+    }
     const rows = parseCSV(txt);
 
     // Group by email, compute purchased lessons
