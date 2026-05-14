@@ -1,4 +1,4 @@
-const CACHE = 'repchess-v2';
+const CACHE = 'repchess-v3';
 
 self.addEventListener('install', () => self.skipWaiting());
 
