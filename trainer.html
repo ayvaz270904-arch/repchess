@@ -403,10 +403,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div class="page" id="page-admin">
       <div style="font-weight:700;font-size:1.1rem;margin-bottom:16px">⚙️ Панель администратора</div>
 
-      <!-- Alerts: students with empty balance -->
-      <div id="admin-alerts"></div>
-
-      <!-- Group mismatch alerts -->
+      <!-- Group mismatch / pending approval alerts -->
       <div id="admin-group-mismatches"></div>
 
       <!-- Trainer stats -->
@@ -2218,10 +2215,7 @@ async function loadAdminData() {
   // Назначение учеников
   await loadTrainerAssignments(trainersSnap);
 
-  // Students with empty balance
-  await loadBalanceAlerts();
-
-  // Несоответствия в посещаемости групповых
+  // Несоответствия и занятия на подтверждении
   await loadGroupMismatches();
 
   // База учеников (рендерим сразу)
@@ -2276,23 +2270,7 @@ async function loadTrainerAssignments(trainersSnap) {
 
   if (!nonAdmin.length) { el.innerHTML = '<div class="empty">Нет тренеров</div>'; return; }
 
-  // Ученики с индивидуальными пакетами — им нужен тренер
-  const needsTrainer = students.filter(s =>
-    (s.purchasedIndiv||0) > 0 &&
-    !_trainersCache.some(t => (t.assignedStudents||[]).includes(s.email))
-  );
-
-  const needsTrainerHtml = needsTrainer.length ? `
-    <div style="padding:10px 0 6px;border-bottom:1px solid var(--border);margin-bottom:12px">
-      <div style="font-size:.75rem;font-weight:700;color:var(--accent2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">
-        👤 Куплены индивидуальные — нужен тренер (${needsTrainer.length})
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        ${needsTrainer.map(s => `<div style="background:rgba(74,158,255,.08);border:1px solid rgba(74,158,255,.2);border-radius:8px;padding:4px 10px;font-size:.78rem;cursor:pointer" onclick="openStudentInfoModal('${esc(s.email)}')" title="${esc(s.email)}">${esc(s.name.split(' ').slice(0,2).join(' '))}</div>`).join('')}
-      </div>
-    </div>` : '';
-
-  el.innerHTML = needsTrainerHtml + nonAdmin.map(t => {
+  el.innerHTML = nonAdmin.map(t => {
     const assigned = t.assignedStudents || [];
     const tags = assigned.map(email => {
       const s = students.find(x => x.email === email);
@@ -3118,9 +3096,9 @@ async function loadGroupMismatches() {
       .where('attendanceMarked','==',true).limit(30).get();
     const pending = pendingSnap.docs.filter(d => !d.data().adminApproved);
 
-    // С несоответствием
+    // С несоответствием — только те, что ещё не подтверждены администратором
     const mismatchSnap = await db.collection('groupLessons').where('mismatch','==',true).limit(20).get();
-    const mismatches = mismatchSnap.docs.filter(d => d.data().adminApproved !== false);
+    const mismatches = mismatchSnap.docs.filter(d => !d.data().adminApproved);
 
     if (!pending.length && !mismatches.length) { el.innerHTML = ''; return; }
 
