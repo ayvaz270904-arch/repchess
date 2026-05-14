@@ -831,30 +831,56 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div class="modal-handle"></div>
     <div class="modal-title" id="attend-modal-title">📋 Посещаемость</div>
     <input type="hidden" id="attend-group-id">
-    <div class="form-row" id="attend-expected-wrap">
-      <div class="form-label" style="display:flex;align-items:center;justify-content:space-between">
-        <span>Ожидаемые ученики</span>
+
+    <!-- СТАТУС-БАННЕР (ожидание / отправлено) -->
+    <div id="attend-status-banner" style="display:none;margin-bottom:14px;border-radius:10px;padding:10px 14px;font-size:.82rem"></div>
+
+    <!-- РЕЖИМ ТРЕНЕРА: форма до отправки -->
+    <div id="attend-trainer-form">
+      <div class="form-row">
+        <div class="form-label">Ожидаемые ученики</div>
+        <div id="attend-expected-list"></div>
       </div>
-      <div id="attend-expected-list"></div>
-      <!-- Поиск для добавления ожидаемых учеников прямо в модале -->
-      <div class="student-search-wrap" style="margin-top:8px">
-        <input class="form-inp" id="attend-add-inp" type="text" placeholder="+ Добавить ученика в список..."
-          oninput="searchAttendExpected(this.value)" onfocus="searchAttendExpected(this.value)" autocomplete="off"
-          style="font-size:.85rem;padding:9px 12px">
-        <div class="student-results" id="attend-add-results" style="display:none"></div>
+      <div class="form-row">
+        <div class="form-label">Пришли дополнительно <span style="color:var(--text2);text-transform:none;font-size:.72rem">(не в списке — вписать Фамилию и Имя)</span></div>
+        <div id="attend-extra-list" style="margin-bottom:8px"></div>
+        <button class="btn-sm" onclick="addExtraAttendeeRow()" style="font-size:.8rem">+ Добавить</button>
+      </div>
+      <button class="btn-full btn-gold" id="attend-submit-btn" onclick="submitAttendance()" style="margin-bottom:8px">Отправить отметки администратору</button>
+    </div>
+
+    <!-- РЕЖИМ ПРОСМОТРА (тренер после отправки / читаем results) -->
+    <div id="attend-readonly-view" style="display:none">
+      <div class="form-row">
+        <div class="form-label">Были на занятии</div>
+        <div id="attend-readonly-attended" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div class="form-row" id="attend-readonly-extra-row" style="display:none">
+        <div class="form-label">Дополнительно (вписанные)</div>
+        <div id="attend-readonly-extra" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-label">Пришли дополнительно <span style="color:var(--text2);text-transform:none;font-size:.72rem">(не в списке)</span></div>
-      <div id="attend-extra-list" style="margin-bottom:8px"></div>
-      <button class="btn-sm" onclick="addExtraAttendeeRow()" style="font-size:.8rem">+ Добавить</button>
+
+    <!-- РЕЖИМ АДМИНИСТРАТОРА: кнопки добавления и подтверждения -->
+    <div id="attend-admin-controls" style="display:none">
+      <!-- Поиск для добавления ожидаемых учеников (только для админа) -->
+      <div class="form-row">
+        <div class="form-label">Добавить в список ожидаемых</div>
+        <div class="student-search-wrap">
+          <input class="form-inp" id="attend-add-inp" type="text" placeholder="Поиск ученика..."
+            oninput="searchAttendExpected(this.value)" onfocus="searchAttendExpected(this.value)" autocomplete="off"
+            style="font-size:.85rem;padding:9px 12px">
+          <div class="student-results" id="attend-add-results" style="display:none"></div>
+        </div>
+      </div>
+      <!-- Несоответствие -->
+      <div id="attend-mismatch-warn" style="display:none;margin-bottom:10px">
+        <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:10px;padding:10px 14px;font-size:.82rem;color:var(--orange)">⚠️ <span id="attend-mismatch-text"></span></div>
+      </div>
+      <button class="btn-full btn-gold" id="attend-approve-btn" onclick="approveAttendance()" style="background:var(--green);margin-bottom:8px">✅ Подтвердить занятие</button>
     </div>
-    <div id="attend-mismatch-warn" style="display:none;margin-bottom:10px">
-      <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:10px;padding:10px 14px;font-size:.82rem;color:var(--orange)">⚠️ <span id="attend-mismatch-text"></span></div>
-    </div>
-    <button class="btn-full btn-gold" id="attend-submit-btn" onclick="submitAttendance()">Сохранить посещаемость</button>
-    <div style="height:8px"></div>
-    <button class="btn-full btn-ghost" onclick="_closeModal('attend-modal')">Отмена</button>
+
+    <button class="btn-full btn-ghost" onclick="_closeModal('attend-modal')">Закрыть</button>
   </div>
 </div>
 
@@ -1271,27 +1297,34 @@ function groupFeedItemHTML(g) {
   const names = (g.studentNames||[]).slice(0,3).join(', ') + ((g.count||0)>3 ? ` и ещё ${g.count-3}` : '');
   const today = localDateStr(new Date());
   const pastDate = g._date && g._date <= today;
-  const needsAttend = !g.attendanceMarked && pastDate && (g.studentEmails||[]).length > 0;
+  const submitted = !!g.attendanceMarked;
+  const approved  = !!g.adminApproved;
+  const needsAttend = !submitted && pastDate && (g.studentEmails||[]).length > 0;
+  const needsApproval = currentTrainer.role === 'admin' && submitted && !approved;
   const hasMismatch = _groupHasMismatch(g);
   return `<div class="lesson-item${hasMismatch?' lesson-needs-confirm':''}">
     <div class="lesson-row1">
       <div style="display:flex;align-items:center;gap:7px">
-        ${needsAttend ? '<div class="lesson-pending-dot"></div>' : ''}
+        ${needsAttend || needsApproval ? '<div class="lesson-pending-dot"></div>' : ''}
         <span class="lesson-student">👥 ${esc(g.venue||'Групповое')}</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <span class="lesson-date">${d}</span>
-        ${(pastDate || currentTrainer.role==='admin') && !g.attendanceMarked
+        ${!submitted && (pastDate || currentTrainer.role==='admin')
           ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--green);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Отметить посещаемость">📋</button>`
-          : `<button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>`}
+          : submitted
+            ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="${needsApproval?'Подтвердить':'Просмотр'}">${needsApproval?'✅':'👁'}</button>`
+            : `<button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>`}
       </div>
     </div>
     <div class="lesson-row2">
       <span class="tag tag-group">${g.count||0} чел.</span>
       <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
-      ${g.attendanceMarked ? `<span class="tag tag-attendance-ok">✅ посещ.</span>` : ''}
+      ${approved ? `<span class="tag tag-attendance-ok">✅ подтв.</span>` : ''}
+      ${submitted && !approved ? `<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2)">⏳ проверка</span>` : ''}
       ${hasMismatch ? `<span class="tag tag-mismatch">⚠️</span>` : ''}
       ${needsAttend ? `<span class="tag tag-pending">Отметить</span>` : ''}
+      ${needsApproval ? `<span class="tag" style="background:rgba(74,158,255,.15);color:var(--accent2)">📬 Подтвердить</span>` : ''}
       ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
       ${names ? `<span class="dim" style="font-size:.73rem">${esc(names)}</span>` : ''}
     </div>
@@ -1837,27 +1870,39 @@ async function loadGroupLessons() {
     const pastDate = g._date && g._date <= today;
 
     // Attendance status
-    const attended = g.attendanceMarked;
-    const hasMismatch = attended && _groupHasMismatch(g);
-    const needsAttend = !attended && pastDate && (g.studentEmails||[]).length > 0;
+    const submitted = !!g.attendanceMarked;  // тренер отправил
+    const approved  = !!g.adminApproved;     // admin подтвердил
+    const hasMismatch = submitted && _groupHasMismatch(g);
+    // Тренер: нужно отметить (прошедшее, список не пуст, ещё не отправлено)
+    const needsAttend = !submitted && pastDate && (g.studentEmails||[]).length > 0;
+    // Админ: тренер отправил, ждёт подтверждения
+    const needsApproval = isAdmin && submitted && !approved;
 
-    // Attendance summary for display (no contacts for trainer)
+    // Attendance summary
     let attendSummaryHtml = '';
-    if (attended) {
-      const attendedList = [...(g.attendedNames||[]), ...(g.extraAttendees||[])];
-      const extraCount = (g.extraAttendees||[]).length;
+    if (submitted) {
+      const attendedList = g.attendedNames || [];
+      const extraRaw = g.extraRaw || g.extraAttendees || [];
+      const extraMatched = g.extraMatched || [];
       attendSummaryHtml = `
         <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:8px;font-size:.78rem">
-          <div style="font-weight:700;margin-bottom:6px;color:var(--green)">✅ Посещаемость отмечена (${attendedList.length} чел.)</div>
+          <div style="font-weight:700;margin-bottom:6px;color:${approved?'var(--green)':'var(--orange)'}">
+            ${approved ? '✅ Подтверждено' : '⏳ Ожидает проверки'} (${attendedList.length} чел.)
+          </div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">
             ${attendedList.map(n=>`<span style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:2px 8px">${esc(n)}</span>`).join('')}
           </div>
-          ${extraCount>0?`<div style="margin-top:6px;color:var(--orange);font-size:.72rem">+${extraCount} дополнительных</div>`:''}
-          ${hasMismatch?`<div style="margin-top:6px;color:var(--red);font-size:.72rem">⚠️ Несоответствие со списком</div>`:''}
+          ${extraRaw.length>0?`<div style="margin-top:6px;color:var(--orange);font-size:.72rem">
+            + ${extraRaw.length} дополнительных: ${extraRaw.map((name,i) => {
+              const m = extraMatched[i];
+              return m?.found ? `<span style="color:var(--green)">${esc(name)} ✓</span>` : esc(name);
+            }).join(', ')}
+          </div>`:''}
+          ${hasMismatch?`<div style="margin-top:6px;color:var(--red);font-size:.72rem">⚠️ ${esc(g.mismatchNote||'Несоответствие')}</div>`:''}
         </div>`;
     }
 
-    return `<div class="card" style="cursor:default${hasMismatch?';border-color:rgba(239,68,68,.3)':''}">
+    return `<div class="card" style="cursor:default${needsApproval?';border-color:rgba(74,158,255,.4)':hasMismatch?';border-color:rgba(239,68,68,.3)':''}">
       <div class="card-head">
         <div>
           <div style="font-weight:700">${esc(g.venue)}</div>
@@ -1865,15 +1910,20 @@ async function loadGroupLessons() {
             <span style="font-size:.75rem;color:var(--text2)">${dt}</span>
             <span style="font-size:.75rem;color:var(--text2)">${g.count||0} уч.</span>
             <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${g.format==='online'?'Онлайн':'Офлайн'}</span>
-            ${attended?`<span class="tag tag-attendance-ok" style="padding:1px 6px">✅ отмечено</span>`:''}
+            ${approved?`<span class="tag tag-attendance-ok" style="padding:1px 6px">✅ подтверждено</span>`:''}
+            ${submitted&&!approved?`<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2);padding:1px 6px">⏳ на проверке</span>`:''}
             ${hasMismatch?`<span class="tag tag-mismatch" style="padding:1px 6px">⚠️ несоответствие</span>`:''}
             ${needsAttend?`<span class="tag tag-pending" style="padding:1px 6px;animation:pulse-dot 1.5s infinite">Отметить!</span>`:''}
+            ${needsApproval?`<span class="tag" style="background:rgba(74,158,255,.15);color:var(--accent2);padding:1px 6px">📬 Подтвердить</span>`:''}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           ${isAdmin?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName||'')}</span>`:''}
-          ${(pastDate || isAdmin) && !attended ? `<button onclick="openAttendModal('${gid}')" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--green);font-size:.75rem;padding:5px 9px;cursor:pointer;white-space:nowrap">📋 Посещ.</button>` : ''}
-          ${attended && isAdmin ? `<button onclick="openAttendModal('${gid}')" style="background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.75rem;padding:5px 9px;cursor:pointer">✏️ Изм.</button>` : ''}
+          ${!submitted && (pastDate || isAdmin)
+            ? `<button onclick="openAttendModal('${gid}')" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--green);font-size:.75rem;padding:5px 9px;cursor:pointer;white-space:nowrap">📋 Посещ.</button>`
+            : submitted
+              ? `<button onclick="openAttendModal('${gid}')" style="background:${needsApproval?'rgba(74,158,255,.15)':'none'};border:1px solid ${needsApproval?'rgba(74,158,255,.4)':'var(--border)'};border-radius:8px;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.75rem;padding:5px 9px;cursor:pointer">${needsApproval?'✅ Подтвердить':'👁 Просмотр'}</button>`
+              : ''}
           <button data-edit-group-id="${gid}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px">✏️</button>
         </div>
       </div>
@@ -2101,6 +2151,8 @@ async function loadAdminData() {
   for (const g of groupLessons) {
     const tid = g.trainerId;
     if (!tid) continue;
+    // Только подтверждённые (или legacy без поля)
+    if (g.adminApproved === false) continue;
     if (!trainerMap[tid]) trainerMap[tid] = {
       name: g.trainerName, offIndiv:0, offGroup:0, onIndiv:0, onGroup:0
     };
@@ -2767,6 +2819,8 @@ async function loadFinance() {
       const data = d.data();
       const date = data._date || data.date || '';
       if (!date || date < fromVal || date > toVal) return;
+      // Считаем только подтверждённые администратором (или старые без поля adminApproved — legacy)
+      if (data.adminApproved === false) return;
       const tid = data.trainerId || nameToId[norm(data.trainerName)];
       if (!tid) return;
       _finGroupsCache.push({id: d.id, ...data, _resolvedTid: tid});
@@ -3059,23 +3113,59 @@ async function loadGroupMismatches() {
   const el = document.getElementById('admin-group-mismatches');
   if (!el) return;
   try {
-    const snap = await db.collection('groupLessons').where('mismatch','==',true).limit(20).get();
-    if (!snap.size) { el.innerHTML = ''; return; }
-    const items = snap.docs.map(d => {
-      const g = d.data();
-      const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
-      return `<div class="alert" style="background:rgba(249,115,22,.06);border-color:rgba(249,115,22,.25)">
-        <div class="alert-icon">⚠️</div>
-        <div class="alert-text">
-          <b>${esc(g.venue||'Групповое')}</b> ${dt} — <span style="color:var(--orange)">${esc(g.mismatchNote||'несоответствие посещаемости')}</span>
-          <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:none;border:1px solid rgba(249,115,22,.3);border-radius:6px;color:var(--orange);font-size:.72rem;padding:2px 8px;cursor:pointer">Просмотреть</button>
-        </div>
+    // Ждут подтверждения (тренер отправил, admin ещё не подтвердил)
+    const pendingSnap = await db.collection('groupLessons')
+      .where('attendanceMarked','==',true).limit(30).get();
+    const pending = pendingSnap.docs.filter(d => !d.data().adminApproved);
+
+    // С несоответствием
+    const mismatchSnap = await db.collection('groupLessons').where('mismatch','==',true).limit(20).get();
+    const mismatches = mismatchSnap.docs.filter(d => d.data().adminApproved !== false);
+
+    if (!pending.length && !mismatches.length) { el.innerHTML = ''; return; }
+
+    let html = '';
+
+    if (pending.length) {
+      const items = pending.map(d => {
+        const g = d.data();
+        const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+        return `<div class="alert" style="background:rgba(74,158,255,.06);border-color:rgba(74,158,255,.25)">
+          <div class="alert-icon">📬</div>
+          <div class="alert-text">
+            <b>${esc(g.venue||'Групповое')}</b> ${dt} (${esc(g.trainerName||'')}) — тренер отправил отметки
+            <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:rgba(74,158,255,.15);border:1px solid rgba(74,158,255,.3);border-radius:6px;color:var(--accent2);font-size:.72rem;padding:2px 8px;cursor:pointer">✅ Подтвердить</button>
+          </div>
+        </div>`;
+      }).join('');
+      html += `<div class="card" style="margin-bottom:14px;border-color:rgba(74,158,255,.3)">
+        <div class="card-head" style="border-color:rgba(74,158,255,.2)"><span class="card-title" style="color:var(--accent2)">📬 Ожидают подтверждения (${pending.length})</span></div>
+        <div class="card-body">${items}</div>
       </div>`;
-    }).join('');
-    el.innerHTML = `<div class="card" style="margin-bottom:14px;border-color:rgba(249,115,22,.3)">
-      <div class="card-head" style="border-color:rgba(249,115,22,.2)"><span class="card-title" style="color:var(--orange)">⚠️ Несоответствия посещаемости</span></div>
-      <div class="card-body">${items}</div>
-    </div>`;
+    }
+
+    const uniqueMismatch = mismatches.filter(d =>
+      !pending.find(p => p.id === d.id) // не дублировать если уже в pending
+    );
+    if (uniqueMismatch.length) {
+      const items = uniqueMismatch.map(d => {
+        const g = d.data();
+        const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+        return `<div class="alert" style="background:rgba(249,115,22,.06);border-color:rgba(249,115,22,.25)">
+          <div class="alert-icon">⚠️</div>
+          <div class="alert-text">
+            <b>${esc(g.venue||'Групповое')}</b> ${dt} — <span style="color:var(--orange)">${esc(g.mismatchNote||'несоответствие посещаемости')}</span>
+            <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:none;border:1px solid rgba(249,115,22,.3);border-radius:6px;color:var(--orange);font-size:.72rem;padding:2px 8px;cursor:pointer">Просмотреть</button>
+          </div>
+        </div>`;
+      }).join('');
+      html += `<div class="card" style="margin-bottom:14px;border-color:rgba(249,115,22,.3)">
+        <div class="card-head" style="border-color:rgba(249,115,22,.2)"><span class="card-title" style="color:var(--orange)">⚠️ Несоответствия посещаемости</span></div>
+        <div class="card-body">${items}</div>
+      </div>`;
+    }
+
+    el.innerHTML = html;
   } catch(e) { el.innerHTML = ''; }
 }
 
@@ -3109,44 +3199,171 @@ async function openAttendModal(groupId) {
   const expectedEmails = g.studentEmails || [];
   const expectedNames  = g.studentNames  || [];
   const alreadyAttended = g.attendedEmails || [];
-  const existingExtra   = g.extraAttendees || [];
+  const existingExtra   = g.extraRaw || g.extraAttendees || []; // backward compat
   const isAdmin = currentTrainer.role === 'admin';
+  const submitted = !!g.attendanceMarked;    // тренер отправил
+  const approved  = !!g.adminApproved;       // admin подтвердил
 
-  // Список ожидаемых учеников с чекбоксами
-  _attendNewExpected = []; // сброс новых добавленных
-  const listEl = document.getElementById('attend-expected-list');
-  document.getElementById('attend-add-inp').value = '';
-  document.getElementById('attend-add-results').style.display = 'none';
+  // Показываем/скрываем блоки в зависимости от роли и статуса
+  const trainerForm    = document.getElementById('attend-trainer-form');
+  const readonlyView   = document.getElementById('attend-readonly-view');
+  const adminControls  = document.getElementById('attend-admin-controls');
+  const statusBanner   = document.getElementById('attend-status-banner');
 
-  if (!expectedEmails.length) {
-    listEl.innerHTML = '';
+  _attendNewExpected = [];
+
+  if (!isAdmin && submitted) {
+    // ── ТРЕНЕР, уже отправил → только просмотр ──
+    trainerForm.style.display   = 'none';
+    readonlyView.style.display  = '';
+    adminControls.style.display = 'none';
+    statusBanner.style.display  = '';
+    statusBanner.style.background = approved
+      ? 'rgba(34,197,94,.1)' : 'rgba(249,115,22,.08)';
+    statusBanner.style.border = `1px solid ${approved ? 'rgba(34,197,94,.3)' : 'rgba(249,115,22,.25)'}`;
+    statusBanner.style.color = approved ? 'var(--green)' : 'var(--orange)';
+    statusBanner.textContent = approved
+      ? '✅ Занятие подтверждено администратором'
+      : '⏳ Отметки отправлены, ожидают проверки администратора';
+
+    // Кто был
+    const attended = alreadyAttended.map(email => {
+      const i = expectedEmails.indexOf(email);
+      return expectedNames[i] || email;
+    });
+    document.getElementById('attend-readonly-attended').innerHTML = attended.length
+      ? attended.map(n=>`<span style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:6px;padding:3px 10px;font-size:.82rem">${esc(n)}</span>`).join('')
+      : '<span style="color:var(--text2);font-size:.82rem">никто не отмечен</span>';
+
+    // Дополнительные
+    const extraList = existingExtra;
+    const extraRow = document.getElementById('attend-readonly-extra-row');
+    if (extraList.length) {
+      extraRow.style.display = '';
+      document.getElementById('attend-readonly-extra').innerHTML = extraList.map(item => {
+        const label = typeof item === 'object' ? item.name : item;
+        const found = typeof item === 'object' ? item.found : null;
+        const color = found === true ? 'var(--green)' : found === false ? 'var(--orange)' : 'var(--text2)';
+        return `<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:.82rem;color:${color}">${esc(label)}</span>`;
+      }).join('');
+    } else {
+      extraRow.style.display = 'none';
+    }
+
+  } else if (!isAdmin && !submitted) {
+    // ── ТРЕНЕР, ещё не отправил → форма с чекбоксами ──
+    trainerForm.style.display   = '';
+    readonlyView.style.display  = 'none';
+    adminControls.style.display = 'none';
+    statusBanner.style.display  = 'none';
+
+    const listEl = document.getElementById('attend-expected-list');
+    if (!expectedEmails.length) {
+      listEl.innerHTML = '<div style="color:var(--text2);font-size:.82rem;padding:8px 0">Список пуст — администратор ещё не добавил ожидаемых учеников.</div>';
+    } else {
+      listEl.innerHTML = expectedEmails.map((email, i) => {
+        const name = expectedNames[i] || email;
+        return `<div class="attend-row" data-attend-email="${esc(email)}">
+          <div class="attend-check on" onclick="toggleAttend(this)">✓</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:.88rem">${esc(name)}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    const extraEl = document.getElementById('attend-extra-list');
+    extraEl.innerHTML = '';
+    existingExtra.forEach(item => _appendExtraRow(typeof item === 'object' ? item.name : item));
+
+    document.getElementById('attend-submit-btn').disabled = false;
+    document.getElementById('attend-submit-btn').textContent = 'Отправить отметки администратору';
+
   } else {
-    listEl.innerHTML = expectedEmails.map((email, i) => {
-      const name = expectedNames[i] || email;
-      const checked = g.attendanceMarked ? alreadyAttended.includes(email) : true; // по умолчанию все отмечены
-      // Контакт показываем только администратору
-      const s = students.find(x => x.email === email);
-      const contactHtml = isAdmin && s?.phone
-        ? `<span style="font-size:.7rem;color:var(--text2)">${esc(s.phone)}</span>`
-        : '';
-      return `<div class="attend-row" data-attend-email="${esc(email)}">
-        <div class="attend-check ${checked?'on':''}" onclick="toggleAttend(this)">${checked?'✓':''}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:600;font-size:.88rem">${esc(name)}</div>
-          ${contactHtml}
-        </div>
-      </div>`;
-    }).join('');
+    // ── АДМИНИСТРАТОР → полный контроль ──
+    trainerForm.style.display   = submitted ? 'none' : '';
+    readonlyView.style.display  = 'none';
+    adminControls.style.display = '';
+    statusBanner.style.display  = submitted ? '' : 'none';
+
+    if (submitted) {
+      statusBanner.style.background = approved ? 'rgba(34,197,94,.1)' : 'rgba(74,158,255,.1)';
+      statusBanner.style.border = `1px solid ${approved ? 'rgba(34,197,94,.3)' : 'rgba(74,158,255,.3)'}`;
+      statusBanner.style.color = approved ? 'var(--green)' : 'var(--accent2)';
+      statusBanner.textContent = approved
+        ? '✅ Занятие подтверждено вами'
+        : '📬 Тренер отправил отметки — проверьте и подтвердите';
+    }
+
+    // Список с чекбоксами (для редактирования администратором)
+    const listEl = document.getElementById('attend-expected-list');
+    if (!expectedEmails.length) {
+      listEl.innerHTML = '';
+    } else {
+      listEl.innerHTML = expectedEmails.map((email, i) => {
+        const name = expectedNames[i] || email;
+        const checked = submitted ? alreadyAttended.includes(email) : true;
+        const s = students.find(x => x.email === email);
+        const contactHtml = s?.phone ? `<span style="font-size:.7rem;color:var(--text2)">${esc(s.phone)}</span>` : '';
+        return `<div class="attend-row" data-attend-email="${esc(email)}">
+          <div class="attend-check ${checked?'on':''}" onclick="toggleAttend(this)">${checked?'✓':''}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:.88rem">${esc(name)}</div>
+            ${contactHtml}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // Дополнительные вписанные тренером + авто-матч
+    if (submitted) {
+      const extraRaw = g.extraRaw || g.extraAttendees || [];
+      const extraMatched = g.extraMatched || [];
+      const extraEl = document.getElementById('attend-extra-list');
+      extraEl.innerHTML = '';
+      if (extraRaw.length) {
+        extraRaw.forEach((name, i) => {
+          const m = extraMatched[i] || {};
+          const foundEl = m.found
+            ? `<span style="font-size:.7rem;color:var(--green)">✓ найден в базе: ${esc(m.email||'')}</span>`
+            : `<span style="font-size:.7rem;color:var(--orange)">не найден в базе</span>`;
+          const div = document.createElement('div');
+          div.className = 'attend-row';
+          div.innerHTML = `<div style="flex:1;min-width:0">
+            <div style="font-weight:600;font-size:.88rem">${esc(name)}</div>
+            ${foundEl}
+          </div>`;
+          extraEl.appendChild(div);
+        });
+      }
+    } else {
+      const extraEl = document.getElementById('attend-extra-list');
+      extraEl.innerHTML = '';
+      existingExtra.forEach(item => _appendExtraRow(typeof item === 'object' ? item.name : item));
+    }
+
+    document.getElementById('attend-add-inp').value = '';
+    document.getElementById('attend-add-results').style.display = 'none';
+
+    // Несоответствие — показываем только если тренер уже отправил
+    const mismatchEl = document.getElementById('attend-mismatch-warn');
+    if (submitted && g.mismatch) {
+      document.getElementById('attend-mismatch-text').textContent = g.mismatchNote || '';
+      mismatchEl.style.display = '';
+    } else {
+      mismatchEl.style.display = 'none';
+    }
+
+    // Кнопка подтверждения
+    const approveBtn = document.getElementById('attend-approve-btn');
+    approveBtn.style.display = submitted ? '' : 'none';
+    approveBtn.textContent = approved ? '✅ Подтверждено (изменить)' : '✅ Подтвердить занятие';
+    approveBtn.style.background = approved ? 'var(--accent2)' : 'var(--green)';
+
+    document.getElementById('attend-submit-btn').disabled = false;
+    document.getElementById('attend-submit-btn').textContent = 'Сохранить изменения';
   }
 
-  // Дополнительные посетители
-  const extraEl = document.getElementById('attend-extra-list');
-  extraEl.innerHTML = '';
-  existingExtra.forEach(name => _appendExtraRow(name));
-
-  document.getElementById('attend-mismatch-warn').style.display = 'none';
-  document.getElementById('attend-submit-btn').disabled = false;
-  document.getElementById('attend-submit-btn').textContent = 'Сохранить посещаемость';
   _openModal('attend-modal');
 }
 
@@ -3171,8 +3388,8 @@ function addExtraAttendeeRow() {
   if (inputs.length) inputs[inputs.length-1].focus();
 }
 
-// ── Поиск учеников для добавления в список ожидаемых прямо из модала посещаемости
-let _attendNewExpected = []; // новые ученики, добавленные прямо в модале
+// ── Поиск учеников для добавления в список ожидаемых (только для администратора)
+let _attendNewExpected = [];
 
 function searchAttendExpected(q) {
   const resultsEl = document.getElementById('attend-add-results');
@@ -3235,24 +3452,40 @@ function addAttendExpected(email) {
   listEl.appendChild(div);
 }
 
+// ── Авто-матч имени из свободного текста → ученик в базе
+function _matchNameToStudent(rawName) {
+  const norm = s => s.toLowerCase().replace(/\s+/g,' ').trim();
+  const n = norm(rawName);
+  // Точное совпадение
+  let found = students.find(s => norm(s.name) === n);
+  if (found) return found;
+  // Попробуем переставить части (Фамилия Имя → Имя Фамилия)
+  const parts = n.split(' ');
+  if (parts.length === 2) {
+    const swapped = parts[1] + ' ' + parts[0];
+    found = students.find(s => norm(s.name) === swapped);
+    if (found) return found;
+  }
+  // Частичное совпадение: все части rawName входят в имя студента
+  found = students.find(s => parts.every(p => norm(s.name).includes(p)));
+  return found || null;
+}
+
+// ── ТРЕНЕР: отправка отметок администратору
 async function submitAttendance() {
   const groupId = document.getElementById('attend-group-id').value;
   const g = _editGroupCache[groupId];
   if (!g) { toast('Ошибка: занятие не найдено', 'err'); return; }
 
-  // Объединяем оригинальных ожидаемых с теми, кого добавили прямо в модале
-  const origEmails = g.studentEmails || [];
-  const origNames  = g.studentNames  || [];
-  const newEmails  = _attendNewExpected.map(s => s.email);
-  const newNames   = _attendNewExpected.map(s => s.name);
-  const expectedEmails = [...origEmails, ...newEmails];
-  const expectedNames  = [...origNames,  ...newNames];
+  const isAdmin = currentTrainer.role === 'admin';
+  const expectedEmails = [...(g.studentEmails || []), ..._attendNewExpected.map(s=>s.email)];
+  const expectedNames  = [...(g.studentNames  || []), ..._attendNewExpected.map(s=>s.name)];
 
-  // Собираем отмеченных учеников по data-attend-email атрибуту
+  // Отмеченные чекбоксы
   const attendedEmails = [], attendedNames = [];
   document.querySelectorAll('#attend-expected-list .attend-row[data-attend-email]').forEach(row => {
     const check = row.querySelector('.attend-check');
-    if (check && check.classList.contains('on')) {
+    if (check?.classList.contains('on')) {
       const email = row.dataset.attendEmail;
       attendedEmails.push(email);
       const idx = expectedEmails.indexOf(email);
@@ -3260,45 +3493,50 @@ async function submitAttendance() {
     }
   });
 
-  // Дополнительные посетители (ввод текстом)
-  const extraAttendees = [];
+  // Дополнительные (от тренера — только текст)
+  const extraRaw = [];
   document.querySelectorAll('.extra-attend-inp').forEach(inp => {
-    const v = inp.value.trim();
-    if (v) extraAttendees.push(v);
+    const v = inp.value.trim(); if (v) extraRaw.push(v);
   });
 
-  // Определяем несоответствие
+  // Авто-матч: пробуем найти каждое имя в базе
+  const extraMatched = extraRaw.map(name => {
+    const found = _matchNameToStudent(name);
+    return found
+      ? { name, email: found.email, found: true }
+      : { name, email: '', found: false };
+  });
+
+  // Несоответствие
   const absent = expectedEmails.filter(e => !attendedEmails.includes(e));
-  const hasMismatch = absent.length > 0 || extraAttendees.length > 0;
+  const hasMismatch = absent.length > 0 || extraRaw.length > 0;
   const mismatchNote = [];
   if (absent.length) {
     const absentNames = absent.map(e => expectedNames[expectedEmails.indexOf(e)] || e);
     mismatchNote.push(`Не пришли: ${absentNames.join(', ')}`);
   }
-  if (extraAttendees.length) mismatchNote.push(`Дополнительно: ${extraAttendees.join(', ')}`);
-
-  if (hasMismatch) {
-    const warnEl = document.getElementById('attend-mismatch-warn');
-    document.getElementById('attend-mismatch-text').textContent = mismatchNote.join('; ');
-    warnEl.style.display = '';
-  }
+  if (extraRaw.length) mismatchNote.push(`Дополнительно: ${extraRaw.join(', ')}`);
 
   const btn = document.getElementById('attend-submit-btn');
-  btn.disabled = true; btn.textContent = 'Сохранение...';
+  btn.disabled = true;
+  btn.textContent = isAdmin ? 'Сохранение...' : 'Отправка...';
 
   try {
     const batch = db.batch();
 
-    // Обновляем groupLesson (включая список ожидаемых, если добавили новых прямо в модале)
     const updateData = {
       attendanceMarked: true,
       attendedEmails,
       attendedNames,
-      extraAttendees,
+      extraRaw,         // сырые имена от тренера
+      extraMatched,     // с результатами матча
+      extraAttendees: extraRaw, // backward compat
       mismatch: hasMismatch,
       mismatchNote: mismatchNote.join('; '),
     };
-    // Если в модале добавили новых ожидаемых — обновляем официальный список
+    // Для администратора подтверждение сразу; для тренера — на проверке
+    if (isAdmin) updateData.adminApproved = true;
+    // Если добавили новых ожидаемых (только admin)
     if (_attendNewExpected.length > 0) {
       updateData.studentEmails = expectedEmails;
       updateData.studentNames  = expectedNames;
@@ -3306,41 +3544,37 @@ async function submitAttendance() {
     }
     batch.update(db.collection('groupLessons').doc(groupId), updateData);
 
-    // Обновляем/создаём индивидуальные balance-записи для ожидаемых учеников
+    // Обновляем/создаём balance-записи для ожидаемых учеников
     const indSnap = await db.collection('lessons').where('groupLessonId','==',groupId).get();
     const existingByEmail = {};
     indSnap.docs.forEach(doc => { existingByEmail[doc.data().studentEmail] = doc; });
-
     for (const email of expectedEmails) {
       const attended = attendedEmails.includes(email);
       const s = students.find(x => x.email === email);
       if (existingByEmail[email]) {
         batch.update(existingByEmail[email].ref, { status: attended ? 'done' : 'absent', attended });
       } else {
-        // Новый ученик — создаём balance-запись
         const ref = db.collection('lessons').doc();
         batch.set(ref, {
           trainerId: g.trainerId, trainerName: g.trainerName,
           studentEmail: email, studentName: s?.name || email, studentId: s?.id || '',
           _date: g._date, format: g.format, type: 'group', notes: g.notes || '',
-          status: attended ? 'done' : 'absent', attended,
-          groupLessonId: groupId,
+          status: attended ? 'done' : 'absent', attended, groupLessonId: groupId,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
       }
     }
-
-    // Создаём balance-записи для дополнительных посетителей (extraAttendees) — по имени
-    // (они уже могут быть в lessons — не дублируем при повторном сохранении)
-    const existingExtra = new Set(
+    // Balance-записи для найденных в базе из extraMatched
+    const existingExtraNames = new Set(
       indSnap.docs.filter(d => d.data().isExtraAttendee).map(d => d.data().studentName)
     );
-    for (const name of extraAttendees) {
-      if (!existingExtra.has(name)) {
+    for (const m of extraMatched) {
+      if (!existingExtraNames.has(m.name)) {
         const ref = db.collection('lessons').doc();
         batch.set(ref, {
           trainerId: g.trainerId, trainerName: g.trainerName,
-          studentEmail: '', studentName: name, studentId: '',
+          studentEmail: m.found ? m.email : '',
+          studentName: m.name, studentId: '',
           _date: g._date, format: g.format, type: 'group', notes: g.notes || '',
           status: 'done', attended: true, groupLessonId: groupId, isExtraAttendee: true,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -3350,8 +3584,10 @@ async function submitAttendance() {
 
     await batch.commit();
 
-    // Обновляем кэш
-    const updatedG = { ...g, attendanceMarked: true, attendedEmails, attendedNames, extraAttendees, mismatch: hasMismatch };
+    const updatedG = { ...g, attendanceMarked: true, attendedEmails, attendedNames,
+      extraRaw, extraMatched, extraAttendees: extraRaw, mismatch: hasMismatch,
+      mismatchNote: mismatchNote.join('; ') };
+    if (isAdmin) updatedG.adminApproved = true;
     if (_attendNewExpected.length > 0) {
       updatedG.studentEmails = expectedEmails;
       updatedG.studentNames  = expectedNames;
@@ -3361,17 +3597,112 @@ async function submitAttendance() {
     _attendNewExpected = [];
 
     _closeModal('attend-modal');
-    toast('Посещаемость сохранена ✓', 'ok');
+    if (isAdmin) {
+      toast('Занятие подтверждено ✓', 'ok');
+    } else {
+      toast('Отметки отправлены администратору ✓', 'ok');
+    }
     loadGroupLessons();
     loadHomePage();
-    if (currentTrainer.role === 'admin') {
-      if (hasMismatch) toast('⚠️ Обнаружено несоответствие — проверьте список', 'err');
-      loadAdminData();
-    }
+    if (isAdmin) loadAdminData();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false;
-    btn.textContent = 'Сохранить посещаемость';
+    btn.textContent = isAdmin ? 'Сохранить изменения' : 'Отправить отметки администратору';
+  }
+}
+
+// ── АДМИНИСТРАТОР: подтверждение занятия (засчитывается тренеру)
+async function approveAttendance() {
+  const groupId = document.getElementById('attend-group-id').value;
+  const g = _editGroupCache[groupId];
+  if (!g) { toast('Ошибка', 'err'); return; }
+
+  const btn = document.getElementById('attend-approve-btn');
+  btn.disabled = true; btn.textContent = 'Подтверждение...';
+
+  // Также собираем текущее состояние чекбоксов (admin мог изменить)
+  const expectedEmails = [...(g.studentEmails||[]), ..._attendNewExpected.map(s=>s.email)];
+  const expectedNames  = [...(g.studentNames ||[]), ..._attendNewExpected.map(s=>s.name)];
+  const attendedEmails = [], attendedNames = [];
+  document.querySelectorAll('#attend-expected-list .attend-row[data-attend-email]').forEach(row => {
+    const check = row.querySelector('.attend-check');
+    if (check?.classList.contains('on')) {
+      const email = row.dataset.attendEmail;
+      attendedEmails.push(email);
+      const idx = expectedEmails.indexOf(email);
+      attendedNames.push(idx >= 0 ? (expectedNames[idx] || email) : email);
+    }
+  });
+
+  const absent = expectedEmails.filter(e => !attendedEmails.includes(e));
+  const extraRaw = g.extraRaw || g.extraAttendees || [];
+  const hasMismatch = absent.length > 0 || extraRaw.length > 0;
+  const mismatchNote = [];
+  if (absent.length) {
+    const absentNames = absent.map(e => expectedNames[expectedEmails.indexOf(e)] || e);
+    mismatchNote.push(`Не пришли: ${absentNames.join(', ')}`);
+  }
+  if (extraRaw.length) mismatchNote.push(`Дополнительно: ${extraRaw.join(', ')}`);
+
+  try {
+    const batch = db.batch();
+    const updateData = {
+      adminApproved: true,
+      attendanceMarked: true,
+      attendedEmails, attendedNames,
+      mismatch: hasMismatch,
+      mismatchNote: mismatchNote.join('; '),
+    };
+    if (_attendNewExpected.length > 0) {
+      updateData.studentEmails = expectedEmails;
+      updateData.studentNames  = expectedNames;
+      updateData.count = expectedEmails.length;
+    }
+    batch.update(db.collection('groupLessons').doc(groupId), updateData);
+
+    // Обновляем balance-записи
+    const indSnap = await db.collection('lessons').where('groupLessonId','==',groupId).get();
+    const existingByEmail = {};
+    indSnap.docs.forEach(doc => { existingByEmail[doc.data().studentEmail] = doc; });
+    for (const email of expectedEmails) {
+      const attended = attendedEmails.includes(email);
+      const s = students.find(x => x.email === email);
+      if (existingByEmail[email]) {
+        batch.update(existingByEmail[email].ref, { status: attended ? 'done' : 'absent', attended });
+      } else {
+        const ref = db.collection('lessons').doc();
+        batch.set(ref, {
+          trainerId: g.trainerId, trainerName: g.trainerName,
+          studentEmail: email, studentName: s?.name || email, studentId: s?.id || '',
+          _date: g._date, format: g.format, type: 'group', notes: g.notes || '',
+          status: attended ? 'done' : 'absent', attended, groupLessonId: groupId,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    }
+
+    await batch.commit();
+
+    const updatedG = { ...g, adminApproved: true, attendanceMarked: true,
+      attendedEmails, attendedNames, mismatch: hasMismatch };
+    if (_attendNewExpected.length > 0) {
+      updatedG.studentEmails = expectedEmails;
+      updatedG.studentNames  = expectedNames;
+      updatedG.count = expectedEmails.length;
+    }
+    _editGroupCache[groupId] = updatedG;
+    _attendNewExpected = [];
+
+    _closeModal('attend-modal');
+    toast('Занятие подтверждено ✓ Тренеру засчитано', 'ok');
+    loadGroupLessons();
+    loadHomePage();
+    loadAdminData();
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+    btn.disabled = false;
+    btn.textContent = '✅ Подтвердить занятие';
   }
 }
 
