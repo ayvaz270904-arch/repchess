@@ -317,7 +317,7 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 // ══════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/1OEHQhJfUDycfoNXsbPSU4jJHSAPAFSFct_NsHJXZdSk/export?format=csv&gid=0';
+const CSV_URL = 'https://script.google.com/macros/s/AKfycby6zlg7YD5MGjXp_NoSXXYUyua24OxgK-VMdlOL2V_D9xecpJVzpXezKvMg68DgsGcyPg/exec';
 const REFRESH_MS = 5 * 60 * 1000;
 
 // ══════════════════════════════════════════
@@ -568,10 +568,21 @@ function computeFiltered() {
 async function doRefresh() {
   setPill('Загружаю...','spin');
   try {
-    const res = await fetch(CSV_URL + '&t=' + Date.now());
+    // Ждём, пока Firebase Auth инициализируется (анонимный вход)
+    const user = await new Promise(resolve => {
+      const unsub = firebase.auth().onAuthStateChanged(u => { unsub(); resolve(u); });
+    });
+    let tokenParam = '';
+    if (user) {
+      try {
+        const tok = await user.getIdToken();
+        tokenParam = '?token=' + encodeURIComponent(tok);
+      } catch(e) { console.warn('getIdToken failed:', e); }
+    }
+    const res = await fetch(CSV_URL + tokenParam);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const txt = await res.text();
-    if (!txt || txt.length < 50) throw new Error('Пустой ответ');
+    if (!txt || txt.length < 50 || txt === 'Unauthorized' || txt.startsWith('Error:')) throw new Error('Нет доступа к данным');
     processCSV(txt);
   } catch(e) {
     hide('loading-state'); hide('dashboard');
