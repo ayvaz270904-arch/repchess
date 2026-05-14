@@ -163,9 +163,45 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
 .err-card p{color:var(--text2);font-size:.88rem;line-height:1.7;}
 
 @media(max-width:768px){.chart-grid{grid-template-columns:1fr;}.container{padding:14px;}}
+
+#page-loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:16px;}
+#page-loading .ico{font-size:3rem;animation:pulse 1.3s infinite;}
+#login-page{display:none;}
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:36px 32px;width:100%;max-width:380px;}
+.auth-logo{text-align:center;font-size:2.5rem;margin-bottom:8px;}
+.auth-title{text-align:center;font-size:1.3rem;font-weight:800;color:var(--accent);margin-bottom:4px;}
+.auth-sub{text-align:center;font-size:.82rem;color:var(--text2);margin-bottom:28px;}
+.field-label{font-size:.78rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.field-inp{width:100%;padding:12px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:.95rem;margin-bottom:14px;}
+.field-inp:focus{outline:none;border-color:var(--accent);}
+.field-inp::placeholder{color:var(--text2);}
+.auth-err{color:var(--red);font-size:.82rem;text-align:center;margin-bottom:10px;min-height:18px;}
+.btn-full{width:100%;padding:13px;border-radius:10px;border:none;cursor:pointer;font-size:.95rem;font-weight:700;transition:all .15s;}
 </style>
 </head>
 <body>
+
+<div id="page-loading"><div class="ico">♟</div><div style="color:var(--text2);font-size:.9rem">Загрузка...</div></div>
+
+<div id="login-page">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">♟</div>
+      <div class="auth-title">Rep Chess Education</div>
+      <div class="auth-sub">CRM — аналитика и база учеников</div>
+      <div class="field-label">Email</div>
+      <input class="field-inp" id="login-email" type="email" placeholder="ваш@email.com" autocomplete="email">
+      <div class="field-label">Пароль</div>
+      <input class="field-inp" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')doLogin()">
+      <div class="auth-err" id="login-err"></div>
+      <button class="btn-full btn-gold" onclick="doLogin()">Войти</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
 
 <!-- HEADER -->
 <div class="header">
@@ -174,6 +210,7 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
     <span id="status-pill" class="status-pill spin">Загрузка...</span>
     <span id="next-refresh" class="status-pill" style="display:none"></span>
     <button class="btn btn-gold" onclick="doRefresh()">🔄 Обновить</button>
+    <button class="btn btn-ghost" onclick="doLogout()">Выйти</button>
   </div>
 </div>
 
@@ -428,8 +465,65 @@ try {
     messagingSenderId: "694548342592",
     appId:             "1:694548342592:web:5c245c1c24c27e0109bca5"
   });
-  firebase.auth().signInAnonymously().catch(()=>{});
 } catch(e) { console.warn('Firebase init:', e); }
+
+const auth = firebase.auth();
+
+// Fallback: если Firebase не ответил за 8 сек — показываем логин
+setTimeout(() => {
+  const loading = document.getElementById('page-loading');
+  if (loading && loading.style.display !== 'none') {
+    loading.style.display = 'none';
+    document.getElementById('login-page').style.display = 'block';
+  }
+}, 8000);
+
+auth.onAuthStateChanged(async user => {
+  if (user) {
+    try {
+      const doc = await firebase.firestore().collection('trainers').doc(user.uid).get();
+      if (!doc.exists || doc.data().role !== 'admin') {
+        await auth.signOut();
+        document.getElementById('page-loading').style.display = 'none';
+        document.getElementById('login-page').style.display = 'block';
+        document.getElementById('login-err').textContent = 'Доступ только для администратора';
+        return;
+      }
+    } catch(e) {
+      await auth.signOut();
+      document.getElementById('page-loading').style.display = 'none';
+      document.getElementById('login-page').style.display = 'block';
+      document.getElementById('login-err').textContent = 'Ошибка проверки прав: ' + e.message;
+      return;
+    }
+    document.getElementById('page-loading').style.display = 'none';
+    document.getElementById('login-page').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    doRefresh();
+    scheduleRefresh();
+  } else {
+    document.getElementById('page-loading').style.display = 'none';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('login-page').style.display = 'block';
+    if (_timer) { clearInterval(_timer); _timer = null; }
+  }
+});
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-err');
+  errEl.textContent = '';
+  if (!email || !pass) { errEl.textContent = 'Введите email и пароль'; return; }
+  try {
+    await auth.signInWithEmailAndPassword(email, pass);
+  } catch(e) {
+    errEl.textContent = e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found'
+      ? 'Неверный email или пароль' : 'Ошибка: ' + e.message;
+  }
+}
+
+function doLogout() { auth.signOut(); }
 
 async function loadUsedLessons() {
   try {
@@ -568,18 +662,10 @@ function computeFiltered() {
 async function doRefresh() {
   setPill('Загружаю...','spin');
   try {
-    // Ждём, пока Firebase Auth инициализируется (анонимный вход)
-    const user = await new Promise(resolve => {
-      const unsub = firebase.auth().onAuthStateChanged(u => { unsub(); resolve(u); });
-    });
-    let tokenParam = '';
-    if (user) {
-      try {
-        const tok = await user.getIdToken();
-        tokenParam = '?token=' + encodeURIComponent(tok);
-      } catch(e) { console.warn('getIdToken failed:', e); }
-    }
-    const res = await fetch(CSV_URL + tokenParam);
+    const user = auth.currentUser;
+    if (!user) { setPill('Не авторизован','err'); return; }
+    const tok = await user.getIdToken();
+    const res = await fetch(CSV_URL + '?token=' + encodeURIComponent(tok));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const txt = await res.text();
     if (!txt || txt.length < 50 || txt === 'Unauthorized' || txt.startsWith('Error:')) throw new Error('Нет доступа к данным');
@@ -928,14 +1014,12 @@ function show(id){document.getElementById(id).style.display='';}
 function hide(id){document.getElementById(id).style.display='none';}
 function setPill(t,cls){const el=document.getElementById('status-pill');el.textContent=t;el.className='status-pill '+(cls||'');}
 
-// ══════════════════════════════════════════
-doRefresh();
-scheduleRefresh();
-
 // PWA — Service Worker
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(e=>console.log('SW:',e)));
 }
 </script>
+
+</div><!-- /#app -->
 </body>
 </html>
