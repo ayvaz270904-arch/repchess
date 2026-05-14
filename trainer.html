@@ -3298,7 +3298,7 @@ async function openAttendModal(groupId) {
 
   } else {
     // ── АДМИНИСТРАТОР → полный контроль ──
-    trainerForm.style.display   = submitted ? 'none' : '';
+    trainerForm.style.display   = ''; // всегда показываем форму с чекбоксами
     readonlyView.style.display  = 'none';
     adminControls.style.display = '';
     statusBanner.style.display  = submitted ? '' : 'none';
@@ -3377,8 +3377,15 @@ async function openAttendModal(groupId) {
     approveBtn.textContent = approved ? '✅ Подтверждено (изменить)' : '✅ Подтвердить занятие';
     approveBtn.style.background = approved ? 'var(--accent2)' : 'var(--green)';
 
-    document.getElementById('attend-submit-btn').disabled = false;
-    document.getElementById('attend-submit-btn').textContent = 'Сохранить изменения';
+    // Если тренер уже отправил — кнопка подтверждения заменяет "сохранить"
+    const submitBtn = document.getElementById('attend-submit-btn');
+    if (submitted) {
+      submitBtn.style.display = 'none';
+    } else {
+      submitBtn.style.display = '';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Сохранить изменения';
+    }
   }
 
   _openModal('attend-modal');
