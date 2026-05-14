@@ -1074,6 +1074,7 @@ async function showApp() {
 
   await loadStudents();
   await loadTrainers();
+  await _enrichStudentsWithRemaining(); // обогащаем s.remaining для всех учеников
   loadHomePage();
   showPage('home');
 }
@@ -1179,6 +1180,44 @@ function populateTrainerSelect(selId) {
     sel.appendChild(opt);
   }
   if (current) sel.value = current;
+}
+
+// ══════════════════════════════════════════════
+//  ENRICH STUDENTS WITH REMAINING LESSONS
+// ══════════════════════════════════════════════
+// Одним запросом к Firestore считает использованные занятия для всех учеников.
+// Результат: s.used и s.remaining = s.purchased - used (не меньше 0).
+async function _enrichStudentsWithRemaining() {
+  try {
+    const snap = await db.collection('lessons').get();
+    const usedMap = {};
+    snap.docs.forEach(d => {
+      const data = d.data();
+      if (data.status === 'cancelled') return;
+      if (data.studentEmail) {
+        usedMap[data.studentEmail] = (usedMap[data.studentEmail] || 0) + 1;
+      }
+    });
+    students.forEach(s => {
+      s.used = usedMap[s.email] || 0;
+      s.remaining = Math.max(0, (s.purchased || 0) - s.used);
+    });
+  } catch(e) {
+    console.warn('Could not enrich student remaining:', e);
+    students.forEach(s => { s.remaining = s.remaining ?? s.purchased ?? 0; });
+  }
+}
+
+// Хелперы для значка баланса на основе остатка
+function _remBadgeClass(s) {
+  const r = s.remaining ?? s.purchased ?? 0;
+  if (r <= 0) return 'balance-empty';
+  if (r <= 2) return 'balance-low';
+  return 'balance-ok';
+}
+function _remBadgeText(s) {
+  const r = s.remaining ?? s.purchased ?? 0;
+  return r + ' ост.';
 }
 
 // ══════════════════════════════════════════════
@@ -1438,7 +1477,7 @@ function searchStudents(q, prefix) {
         <div class="student-meta">${s.id} · ${esc(s.email)}${blockLabel}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-        <div class="balance-badge ${blocked ? 'balance-low' : s.purchased>0?'balance-ok':'balance-low'}">${blocked ? blockReason : s.purchased+' куп.'}</div>
+        <div class="balance-badge ${blocked ? 'balance-low' : _remBadgeClass(s)}">${blocked ? blockReason : _remBadgeText(s)}</div>
         ${prefix==='grp' ? ((s.purchasedGroup||0)>0?'<span class="tag tag-group-buyer">👥 группа</span>':((s.purchasedIndiv||0)>0?'<span class="tag tag-indiv-buyer">👤 индив.</span>':'')):''}
       </div>
     </div>`;
@@ -2318,7 +2357,7 @@ function searchStudentsForAssign(q, trainerId) {
         <div class="student-name">${esc(s.name)}</div>
         <div class="student-meta">${s.id} · ${esc(s.email)}${takenByName ? ` · 🔒 у ${esc(takenByName)}` : ''}</div>
       </div>
-      <span class="balance-badge ${takenBy ? 'balance-low' : s.purchased>0 ? 'balance-ok' : 'balance-low'}">${takenBy ? 'занят' : s.purchased+' зан.'}</span>
+      <span class="balance-badge ${takenBy ? 'balance-low' : _remBadgeClass(s)}">${takenBy ? 'занят' : _remBadgeText(s)}</span>
     </div>`;
   }).join('');
   resultsEl.style.display = '';
@@ -3391,7 +3430,7 @@ function searchAttendExpected(q) {
         <div class="student-meta">${s.id} · ${esc(s.email)}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
-        <div class="balance-badge ${s.purchased>0?'balance-ok':'balance-low'}">${s.purchased} куп.</div>
+        <div class="balance-badge ${_remBadgeClass(s)}">${_remBadgeText(s)}</div>
         ${(s.purchasedGroup||0)>0?'<span class="tag tag-group-buyer">👥 группа</span>':((s.purchasedIndiv||0)>0?'<span class="tag tag-indiv-buyer">👤 индив.</span>':'')}
       </div>
     </div>`).join('');
@@ -3711,7 +3750,7 @@ function renderStudentDB(q) {
     const trainerLabel = assignedTrainer
       ? `<span style="color:var(--accent2);font-size:.72rem">👤 ${esc(assignedTrainer.name.split(' ').slice(0,2).join(' '))}</span>`
       : `<span style="color:var(--text2);font-size:.72rem">не закреплён</span>`;
-    const bal = s.purchased || 0;
+    const bal = s.remaining ?? s.purchased ?? 0;
     const balClass = bal <= 0 ? 'balance-empty' : bal <= 2 ? 'balance-low' : 'balance-ok';
     return `<div class="sdb-item" data-si-email="${esc(s.email)}" onclick="openStudentInfoModal('${esc(s.email)}')">
       <div style="min-width:0">
@@ -3720,7 +3759,7 @@ function renderStudentDB(q) {
         <div style="margin-top:3px">${trainerLabel}</div>
       </div>
       <div style="flex-shrink:0;margin-left:10px">
-        <span class="balance-badge ${balClass}">${bal} куп.</span>
+        <span class="balance-badge ${balClass}">${bal} ост.</span>
       </div>
     </div>`;
   }).join('');
