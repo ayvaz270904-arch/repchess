@@ -2236,8 +2236,10 @@ function histGroupItemHTML(g) {
       </div>
     </div>
     <div class="lesson-row2">
-      <span class="tag tag-group">${g.count} чел.</span>
+      <span class="tag tag-group">${g.count} чел.${g.maxStudents ? ' / ' + g.maxStudents : ''}</span>
       <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
+      ${g.isPublic ? `<span style="font-size:.72rem;background:rgba(74,158,255,.12);color:var(--accent2);border:1px solid rgba(74,158,255,.25);border-radius:10px;padding:1px 7px">🌐 TG</span>` : ''}
+      ${g.time ? `<span style="font-size:.72rem;color:var(--text2)">🕐 ${g.time}</span>` : ''}
       ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
