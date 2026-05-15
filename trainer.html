@@ -271,6 +271,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <h1>Rep Chess Education</h1>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
+      <button id="refresh-btn" onclick="refreshCurrentPage()" title="Обновить" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:4px 6px;border-radius:8px;color:var(--text2);transition:transform .3s">🔄</button>
       <span class="trainer-badge" id="user-badge"></span>
       <button class="btn-sm" onclick="doLogout()">Выйти</button>
     </div>
@@ -674,6 +675,10 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <div class="form-label">Временный пароль</div>
       <input class="form-inp" id="new-trainer-pass" type="text" placeholder="Минимум 6 символов">
     </div>
+    <div class="form-row">
+      <div class="form-label">Telegram username <span style="color:var(--text2);text-transform:none;font-size:.72rem">(необязательно, без @)</span></div>
+      <input class="form-inp" id="new-trainer-tg" type="text" placeholder="username">
+    </div>
     <div class="auth-err" id="add-trainer-err"></div>
     <button class="btn-full btn-gold" onclick="addTrainer()">Создать аккаунт</button>
     <div style="height:10px"></div>
@@ -881,6 +886,20 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
   </div>
 </div>
 
+<!-- UNKNOWN PAYMENTS MODAL -->
+<div class="overlay" id="unknown-pay-modal" style="display:none" onclick="if(event.target===this)_closeModal('unknown-pay-modal')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:480px">
+    <div class="modal-handle"></div>
+    <div class="modal-title">❓ Неизвестные тарифы</div>
+    <div style="font-size:.82rem;color:var(--text2);margin-bottom:14px">Алгоритм не смог определить, что было куплено по этим оплатам. Укажите вручную:</div>
+    <div id="unknown-pay-list"></div>
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <button class="btn-full btn-gold" onclick="saveUnknownPayments()">Сохранить и применить</button>
+      <button class="btn-full btn-ghost" onclick="_closeModal('unknown-pay-modal')">Позже</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -977,6 +996,8 @@ let _trainersCache = [];    // all trainers from Firestore
 let grpSelectedStudents = []; // for group lesson modal
 let editingGroupId = null;
 let _editGroupCache = {};
+let _priceOverrides = {};   // price (string) → { lessons, group }
+let _unknownPayments = [];  // [{price, date, email, name}] — неизвестные тарифы
 
 // ══════════════════════════════════════════════
 //  PRICE HISTORY (same as )
@@ -997,12 +1018,63 @@ const PRICES_NEW = {
 };
 
 function getLessonsFromPayment(price, date) {
+  const key = String(Math.round(price));
+  if (_priceOverrides[key]) return _priceOverrides[key].lessons;
   const catalog = (date && date >= PRICE_CHANGE) ? PRICES_NEW : PRICES_OLD;
   return (catalog[Math.round(price)] || {l:1}).l;
 }
 function isGroupPayment(price, date) {
+  const key = String(Math.round(price));
+  if (_priceOverrides[key]) return !!_priceOverrides[key].group;
   const catalog = (date && date >= PRICE_CHANGE) ? PRICES_NEW : PRICES_OLD;
   return !!(catalog[Math.round(price)] || {}).g;
+}
+function isUnknownPrice(price, date) {
+  const key = String(Math.round(price));
+  if (_priceOverrides[key]) return false;
+  const catalog = (date && date >= PRICE_CHANGE) ? PRICES_NEW : PRICES_OLD;
+  return !catalog[Math.round(price)];
+}
+
+async function loadPriceOverrides() {
+  try {
+    const snap = await db.collection('priceOverrides').get();
+    _priceOverrides = {};
+    snap.forEach(doc => { _priceOverrides[doc.id] = doc.data(); });
+  } catch(e) { console.warn('loadPriceOverrides:', e); }
+}
+
+// ══════════════════════════════════════════════
+//  STATUS HELPERS — единая точка вычисления статусов
+// ══════════════════════════════════════════════
+
+// Индивидуальное занятие
+function getLessonFlags(l) {
+  const today     = localDateStr(new Date());
+  const isAdmin   = currentTrainer.role === 'admin';
+  const isPending     = l.status === 'pending';
+  const isDone        = !l.status || l.status === 'done'; // undefined = legacy done
+  const isCancelled   = l.status === 'cancelled';
+  const isRescheduled = l.status === 'rescheduled';
+  const pastDate      = l._date && l._date <= today;
+  const needsConfirm  = isPending && pastDate;
+  const isScheduled   = isPending && !pastDate;
+  const isLocked      = (l.status === 'done' || isCancelled) && !isAdmin;
+  return { isPending, isDone, isCancelled, isRescheduled, pastDate, needsConfirm, isScheduled, isLocked, isAdmin };
+}
+
+// Групповое занятие
+function getGroupFlags(g) {
+  const today        = localDateStr(new Date());
+  const isAdmin      = currentTrainer.role === 'admin';
+  const submitted    = !!g.attendanceMarked;
+  const approved     = !!g.adminApproved;
+  const pastDate     = g._date && g._date <= today;
+  const hasMismatch  = submitted && _groupHasMismatch(g);
+  const needsAttend  = !submitted && pastDate && (g.studentEmails||[]).length > 0;
+  const needsApproval = isAdmin && submitted && !approved;
+  const canEdit      = !submitted || isAdmin;
+  return { submitted, approved, pastDate, hasMismatch, needsAttend, needsApproval, canEdit, isAdmin };
 }
 
 // ══════════════════════════════════════════════
@@ -1072,11 +1144,17 @@ async function showApp() {
   document.getElementById('home-greeting').textContent = gr + ', ' + firstName + '!';
   document.getElementById('home-date').textContent = new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
 
+  await loadPriceOverrides();
+  _unknownPayments = [];
   await loadStudents();
   await loadTrainers();
   await _enrichStudentsWithRemaining(); // обогащаем s.remaining для всех учеников
   loadHomePage();
   showPage('home');
+  // Показываем предупреждение об неизвестных тарифах только администратору
+  if (currentTrainer.role === 'admin' && _unknownPayments.length > 0) {
+    setTimeout(() => showUnknownPaymentsModal(), 800);
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -1122,6 +1200,13 @@ async function loadStudents() {
         if (price > 0) {
           const cnt = getLessonsFromPayment(price, date);
           const isGrp = isGroupPayment(price, date);
+          // Фиксируем неизвестные тарифы для ручной классификации
+          if (isUnknownPrice(price, date)) {
+            const key = String(Math.round(price));
+            if (!_unknownPayments.find(p => p.key === key)) {
+              _unknownPayments.push({ key, price: Math.round(price), date, email, name: m.name });
+            }
+          }
           // Срок действия: 1 зан = 1 мес, 4 зан = 3 мес, 10 зан = 6 мес
           const expiryMonths = cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1;
           let expiryDate = null;
@@ -1282,7 +1367,7 @@ async function loadHomePage() {
   indivAll.filter(l => !l.status || l.status === 'done').forEach(l => {
     if (l.studentEmail) usedMap[l.studentEmail] = (usedMap[l.studentEmail]||0) + 1;
   });
-  loadHomeReminders(usedMap); // async, не блокирует рендер
+  loadHomeReminders(); // async, не блокирует рендер
 
   // Статистика: инд. занятия + групповые как единицы
   const now = new Date();
@@ -1337,13 +1422,7 @@ async function loadHomePage() {
 function groupFeedItemHTML(g) {
   const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
   const names = (g.studentNames||[]).slice(0,3).join(', ') + ((g.count||0)>3 ? ` и ещё ${g.count-3}` : '');
-  const today = localDateStr(new Date());
-  const pastDate = g._date && g._date <= today;
-  const submitted = !!g.attendanceMarked;
-  const approved  = !!g.adminApproved;
-  const needsAttend = !submitted && pastDate && (g.studentEmails||[]).length > 0;
-  const needsApproval = currentTrainer.role === 'admin' && submitted && !approved;
-  const hasMismatch = _groupHasMismatch(g);
+  const { submitted, approved, pastDate, hasMismatch, needsAttend, needsApproval, canEdit, isAdmin } = getGroupFlags(g);
   return `<div class="lesson-item${hasMismatch?' lesson-needs-confirm':''}">
     <div class="lesson-row1">
       <div style="display:flex;align-items:center;gap:7px">
@@ -1375,20 +1454,8 @@ function groupFeedItemHTML(g) {
 
 function lessonItemHTML(l) {
   const d = l._date ? new Date(l._date + 'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
-  const today = localDateStr(new Date());
-  const isAdmin = currentTrainer.role === 'admin';
+  const { isPending, isDone, isCancelled, isRescheduled, needsConfirm, isScheduled, isLocked, isAdmin } = getLessonFlags(l);
 
-  const isPending     = l.status === 'pending' || (!l.status && false); // undefined = legacy done
-  const isDone        = l.status === 'done';
-  const isCancelled   = l.status === 'cancelled';
-  const isRescheduled = l.status === 'rescheduled';
-
-  const pastDate = l._date && l._date <= today;
-  const needsConfirm = isPending && pastDate;   // прошло — нужно подтвердить
-  const isScheduled  = isPending && !pastDate;  // в будущем — запланировано
-
-  // Кнопка редактирования: скрыта для тренера после финального подтверждения
-  const isLocked = (isDone || isCancelled) && !isAdmin;
   const editBtnHTML = isLocked ? '' :
     `<button data-edit-id="${l.id}" class="${needsConfirm?'edit-btn-confirm':''}"
       style="background:none;border:none;cursor:pointer;color:${needsConfirm?'var(--orange)':'var(--text2)'};font-size:.85rem;padding:2px 4px;line-height:1;min-width:28px;min-height:28px" title="${needsConfirm?'Подтвердить занятие':'Редактировать'}">${needsConfirm?'❓':'✏️'}</button>`;
@@ -1709,6 +1776,13 @@ async function openEditGroupModal(groupId) {
       _editGroupCache[groupId] = g;
     } catch(e) { toast('Ошибка: ' + e.message, 'err'); return; }
   }
+
+  // Тренер не может редактировать после отправки посещаемости
+  if (g.attendanceMarked && currentTrainer.role !== 'admin') {
+    toast('Редактирование недоступно — посещаемость уже отправлена', 'err');
+    return;
+  }
+
   editingGroupId = groupId;
   // Заполняем студентов из существующей группы
   grpSelectedStudents = (g.studentEmails||[]).map((email, i) => ({
@@ -1770,13 +1844,18 @@ async function confirmDeleteGroup() {
       el.closest('.lesson-item, .card')?.remove();
     });
 
+    // Удаляем связанные индив. записи из кэша истории
+    const linkedIds = new Set(snap.docs.map(d => d.id));
+    _histLessonsCache = _histLessonsCache.filter(l => !linkedIds.has(l.id));
+    _histGroupsCache  = _histGroupsCache.filter(g => g.id !== deletingId);
+
     closeGroupModal();
     toast('Групповое занятие удалено', 'ok');
 
-    // Фоновая перезагрузка
-    loadGroupLessons();
-    loadHomePage();
-    if (document.getElementById('page-history').classList.contains('on')) loadHistory();
+    // Перерисовываем из кэша без Firestore-запроса
+    if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
+    // Обновляем страницу группового расписания если открыта
+    if (document.getElementById('page-group').classList.contains('on')) loadGroupLessons();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false;
@@ -1902,23 +1981,12 @@ async function loadGroupLessons() {
   docs.forEach(d => { _editGroupCache[d.id] = {id: d.id, ...d.data()}; });
   const list = document.getElementById('group-list');
   if (!docs.length) { list.innerHTML='<div class="empty">Групповых занятий пока нет</div>'; return; }
-  const today = localDateStr(new Date());
-  const isAdmin = currentTrainer.role === 'admin';
 
   list.innerHTML = docs.map(d => {
     const g = d.data();
     const gid = d.id;
     const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}) : '';
-    const pastDate = g._date && g._date <= today;
-
-    // Attendance status
-    const submitted = !!g.attendanceMarked;  // тренер отправил
-    const approved  = !!g.adminApproved;     // admin подтвердил
-    const hasMismatch = submitted && _groupHasMismatch(g);
-    // Тренер: нужно отметить (прошедшее, список не пуст, ещё не отправлено)
-    const needsAttend = !submitted && pastDate && (g.studentEmails||[]).length > 0;
-    // Админ: тренер отправил, ждёт подтверждения
-    const needsApproval = isAdmin && submitted && !approved;
+    const { submitted, approved, pastDate, hasMismatch, needsAttend, needsApproval, canEdit, isAdmin } = getGroupFlags(g);
 
     // Attendance summary
     let attendSummaryHtml = '';
@@ -1966,7 +2034,7 @@ async function loadGroupLessons() {
             : submitted
               ? `<button onclick="openAttendModal('${gid}')" style="background:${needsApproval?'rgba(74,158,255,.15)':'none'};border:1px solid ${needsApproval?'rgba(74,158,255,.4)':'var(--border)'};border-radius:8px;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.75rem;padding:5px 9px;cursor:pointer">${needsApproval?'✅ Подтвердить':'👁 Просмотр'}</button>`
               : ''}
-          <button data-edit-group-id="${gid}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px">✏️</button>
+          ${canEdit ? `<button data-edit-group-id="${gid}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px">✏️</button>` : ''}
         </div>
       </div>
       <div class="card-body" style="padding:10px 18px">
@@ -2086,17 +2154,8 @@ function renderHistoryList() {
 
 function histLessonItemHTML(l) {
   const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
-  const today = localDateStr(new Date());
-  const isAdmin = currentTrainer.role === 'admin';
+  const { isPending, isDone, isCancelled, isRescheduled, needsConfirm, isScheduled, isLocked, isAdmin } = getLessonFlags(l);
 
-  const isPending     = l.status === 'pending';
-  const isDone        = l.status === 'done';
-  const isCancelled   = l.status === 'cancelled';
-  const isRescheduled = l.status === 'rescheduled';
-
-  const needsConfirm = isPending && l._date && l._date <= today;
-  const isScheduled  = isPending && l._date && l._date > today;
-  const isLocked = (isDone || isCancelled) && !isAdmin;
   const editBtnHTML = isLocked ? '' :
     `<button data-edit-id="${esc(l.id)}" class="${needsConfirm?'edit-btn-confirm':''}"
       style="background:none;border:none;cursor:pointer;color:${needsConfirm?'var(--orange)':'var(--text2)'};font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">${needsConfirm?'❓':'✏️'}</button>`;
@@ -2127,12 +2186,13 @@ function histLessonItemHTML(l) {
 
 function histGroupItemHTML(g) {
   const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
+  const { canEdit, isAdmin } = getGroupFlags(g);
   return `<div class="lesson-item">
     <div class="lesson-row1">
       <span class="lesson-student">👥 ${esc(g.venue||'Группа')}</span>
       <div style="display:flex;align-items:center;gap:6px">
         <span class="lesson-date">${d}</span>
-        <button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
+        ${canEdit ? `<button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>` : ''}
       </div>
     </div>
     <div class="lesson-row2">
@@ -2537,9 +2597,9 @@ async function confirmDeleteLesson() {
     closeEditModal();
     toast('Занятие удалено', 'ok');
 
-    // Фоновая перезагрузка
-    loadHomePage();
-    if (document.getElementById('page-history').classList.contains('on')) loadHistory();
+    // Обновляем кэш без Firestore-запроса
+    _histLessonsCache = _histLessonsCache.filter(l => l.id !== id);
+    if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
     if (currentTrainer.role === 'admin') loadAdminData();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
@@ -2558,9 +2618,10 @@ function openAddTrainerModal() {
 }
 
 async function addTrainer() {
-  const name  = document.getElementById('new-trainer-name').value.trim();
-  const email = document.getElementById('new-trainer-email').value.trim();
-  const pass  = document.getElementById('new-trainer-pass').value;
+  const name     = document.getElementById('new-trainer-name').value.trim();
+  const email    = document.getElementById('new-trainer-email').value.trim();
+  const pass     = document.getElementById('new-trainer-pass').value;
+  const telegramUsername = document.getElementById('new-trainer-tg').value.trim().replace(/^@/, '');
   const errEl = document.getElementById('add-trainer-err');
   errEl.textContent = '';
 
@@ -2572,17 +2633,20 @@ async function addTrainer() {
   const secondaryApp = firebase.initializeApp(FIREBASE_CONFIG, secName);
   try {
     const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, pass);
-    await db.collection('trainers').doc(cred.user.uid).set({
+    const trainerDoc = {
       name, email, role: 'trainer',
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       active: true,
-    });
+    };
+    if (telegramUsername) trainerDoc.telegramUsername = telegramUsername;
+    await db.collection('trainers').doc(cred.user.uid).set(trainerDoc);
     await secondaryApp.auth().signOut();
     await secondaryApp.delete();
     toast('Тренер создан: ' + name, 'ok');
     document.getElementById('new-trainer-name').value = '';
     document.getElementById('new-trainer-email').value = '';
     document.getElementById('new-trainer-pass').value = '';
+    document.getElementById('new-trainer-tg').value = '';
     _closeModal('add-trainer-modal');
     loadAdminData();
   } catch(e) {
@@ -2594,6 +2658,31 @@ async function addTrainer() {
 // ══════════════════════════════════════════════
 //  NAVIGATION
 // ══════════════════════════════════════════════
+function refreshCurrentPage() {
+  const btn = document.getElementById('refresh-btn');
+  if (btn) {
+    btn.style.transform = 'rotate(360deg)';
+    setTimeout(() => { btn.style.transform = ''; btn.style.transition = 'none'; setTimeout(() => btn.style.transition = 'transform .3s', 50); }, 350);
+  }
+  const active = document.querySelector('.page.on');
+  if (!active) return;
+  const name = active.id.replace('page-', '');
+  if (name === 'home' || name === 'record') {
+    // Сбрасываем кэш студентов и перезагружаем всё
+    try { sessionStorage.removeItem(_CACHE_KEY); } catch(e) {}
+    loadStudents().then(() => _enrichStudentsWithRemaining()).then(() => loadHomePage());
+  } else if (name === 'history') {
+    loadHistory();
+  } else if (name === 'group') {
+    loadGroupLessons();
+  } else if (name === 'admin') {
+    loadAdminData();
+  } else if (name === 'finance') {
+    // финансы перестраиваются из кэша, не нужен запрос
+    toast('Финансы уже актуальны', 'ok');
+  }
+}
+
 function showPage(name) {
   if (name === 'admin' && currentTrainer?.role !== 'admin') return;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
@@ -3785,7 +3874,85 @@ function renderStudentDB(q) {
 // ══════════════════════════════════════════════
 //  HOME REMINDERS — кому написать сегодня
 // ══════════════════════════════════════════════
-async function loadHomeReminders(usedMap) {
+// ══════════════════════════════════════════════
+//  UNKNOWN PAYMENTS — ручная классификация
+// ══════════════════════════════════════════════
+const _LESSON_OPTIONS = [
+  { value: '1_indiv',  label: '1 занятие — индив.' },
+  { value: '4_indiv',  label: '4 занятия — индив.' },
+  { value: '10_indiv', label: '10 занятий — индив.' },
+  { value: '1_group',  label: '1 занятие — групп.' },
+  { value: '4_group',  label: '4 занятия — групп.' },
+  { value: '10_group', label: '10 занятий — групп.' },
+];
+
+function showUnknownPaymentsModal() {
+  const listEl = document.getElementById('unknown-pay-list');
+  listEl.innerHTML = _unknownPayments.map(p => {
+    const dateStr = p.date ? p.date.toLocaleDateString('ru-RU', {day:'numeric',month:'short',year:'numeric'}) : '—';
+    const opts = _LESSON_OPTIONS.map(o =>
+      `<option value="${o.value}">${o.label}</option>`
+    ).join('');
+    return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
+        <div>
+          <span style="font-weight:700;font-size:.88rem">${esc(p.price)} ₽</span>
+          <span style="font-size:.75rem;color:var(--text2);margin-left:8px">${dateStr}</span>
+        </div>
+        <span style="font-size:.75rem;color:var(--text2)">${esc(p.name)}</span>
+      </div>
+      <select data-price-key="${p.key}" style="width:100%;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.85rem">
+        <option value="">— выбрать тариф —</option>
+        ${opts}
+      </select>
+    </div>`;
+  }).join('');
+  _openModal('unknown-pay-modal');
+}
+
+async function saveUnknownPayments() {
+  const selects = document.querySelectorAll('#unknown-pay-list select[data-price-key]');
+  const toSave = [];
+  let hasEmpty = false;
+  selects.forEach(sel => {
+    if (!sel.value) { hasEmpty = true; return; }
+    const [lessStr, grpStr] = sel.value.split('_');
+    toSave.push({
+      key: sel.dataset.priceKey,
+      lessons: parseInt(lessStr),
+      group: grpStr === 'group'
+    });
+  });
+  if (hasEmpty) { toast('Выберите тариф для каждой оплаты', 'err'); return; }
+
+  const btn = document.querySelector('#unknown-pay-modal .btn-gold');
+  btn.disabled = true; btn.textContent = 'Сохранение...';
+  try {
+    const batch = db.batch();
+    toSave.forEach(item => {
+      batch.set(db.collection('priceOverrides').doc(item.key), {
+        lessons: item.lessons, group: item.group
+      });
+      _priceOverrides[item.key] = { lessons: item.lessons, group: item.group };
+    });
+    await batch.commit();
+
+    // Сбрасываем кэш студентов и перезагружаем с новыми тарифами
+    try { sessionStorage.removeItem(_CACHE_KEY); } catch(e) {}
+    _unknownPayments = [];
+    _closeModal('unknown-pay-modal');
+    toast('Тарифы сохранены, данные обновляются...', 'ok');
+
+    await loadStudents();
+    await _enrichStudentsWithRemaining();
+    loadHomePage();
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+  }
+  btn.disabled = false; btn.textContent = 'Сохранить и применить';
+}
+
+async function loadHomeReminders() {
   const isAdmin = currentTrainer.role === 'admin';
   const myAssigned = currentTrainer.assignedStudents || [];
 
@@ -3795,8 +3962,8 @@ async function loadHomeReminders(usedMap) {
 
   const remind = [];
   for (const s of pool) {
-    const used = usedMap[s.email] || 0;
-    const rem  = s.purchased - used;
+    // Используем уже вычисленный s.remaining (из _enrichStudentsWithRemaining)
+    const rem = s.remaining ?? (s.purchased - (s.used || 0));
     if (rem <= 2) remind.push({ s, rem });
   }
 
