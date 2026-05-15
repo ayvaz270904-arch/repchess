@@ -609,12 +609,33 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div class="modal-handle"></div>
     <div class="modal-title" id="group-modal-title">Новое групповое занятие</div>
     <div class="form-row">
-      <div class="form-label">Дата</div>
-      <input class="form-inp" id="grp-date" type="date">
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">
+          <div class="form-label">Дата</div>
+          <input class="form-inp" id="grp-date" type="date">
+        </div>
+        <div style="width:110px">
+          <div class="form-label">Время</div>
+          <input class="form-inp" id="grp-time" type="time" placeholder="18:00">
+        </div>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-label">Место проведения</div>
       <input class="form-inp" id="grp-venue" type="text" placeholder="Адрес или название клуба">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Макс. участников</div>
+      <input class="form-inp" id="grp-max" type="number" min="1" max="50" placeholder="Например: 8">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Видимость в Telegram</div>
+      <div class="toggle-group">
+        <button class="toggle-btn" onclick="toggle('grp-public',this,'true')" id="grp-public-btn-on">🌐 Открыто для записи</button>
+        <button class="toggle-btn on" onclick="toggle('grp-public',this,'false')" id="grp-public-btn-off">🔒 Только для списка</button>
+      </div>
+      <input type="hidden" id="grp-public" value="false">
+      <div style="font-size:.72rem;color:var(--text2);margin-top:6px">«Открыто» — клиенты видят занятие в Telegram и могут записаться сами</div>
     </div>
     <div class="form-row">
       <div class="form-label">Формат</div>
@@ -1752,8 +1773,13 @@ function openGroupModal() {
   grpSelectedStudents = [];
   renderGrpTags();
   document.getElementById('grp-date').value = localDateStr(new Date());
+  document.getElementById('grp-time').value = '';
   document.getElementById('grp-venue').value = '';
+  document.getElementById('grp-max').value = '';
   document.getElementById('grp-notes').value = '';
+  document.getElementById('grp-public').value = 'false';
+  document.querySelectorAll('#group-modal .toggle-btn').forEach(b => b.classList.remove('on'));
+  document.getElementById('grp-public-btn-off').classList.add('on');
   document.getElementById('grp-submit').textContent = 'Создать занятие';
   document.getElementById('group-modal-title').textContent = 'Новое групповое занятие';
   const delBtn = document.getElementById('grp-delete-btn');
@@ -1790,14 +1816,19 @@ async function openEditGroupModal(groupId) {
   }));
   renderGrpTags();
   document.getElementById('grp-date').value = g._date || '';
+  document.getElementById('grp-time').value = g.time || '';
   document.getElementById('grp-venue').value = g.venue || '';
+  document.getElementById('grp-max').value = g.maxStudents || '';
   document.getElementById('grp-notes').value = g.notes || '';
   // Формат
   const fmt = g.format || 'offline';
   document.getElementById('grp-format').value = fmt;
+  document.getElementById('grp-public').value = g.isPublic ? 'true' : 'false';
   document.querySelectorAll('#group-modal .toggle-btn').forEach(b => b.classList.remove('on'));
   const fmtBtn = document.querySelector(`#group-modal .toggle-btn[onclick*="${fmt}"]`);
   if (fmtBtn) fmtBtn.classList.add('on');
+  const pubBtnId = g.isPublic ? 'grp-public-btn-on' : 'grp-public-btn-off';
+  document.getElementById(pubBtnId)?.classList.add('on');
   document.getElementById('grp-submit').textContent = 'Сохранить изменения';
   document.getElementById('group-modal-title').textContent = 'Редактировать занятие';
   // Показываем кнопку удаления
@@ -1869,10 +1900,13 @@ function closeGroupModal() {
 }
 
 async function submitGroupLesson() {
-  const date   = document.getElementById('grp-date').value;
-  const venue  = document.getElementById('grp-venue').value.trim();
-  const format = document.getElementById('grp-format').value;
-  const notes  = document.getElementById('grp-notes').value.trim();
+  const date       = document.getElementById('grp-date').value;
+  const time       = document.getElementById('grp-time').value;
+  const venue      = document.getElementById('grp-venue').value.trim();
+  const format     = document.getElementById('grp-format').value;
+  const notes      = document.getElementById('grp-notes').value.trim();
+  const maxStudents = parseInt(document.getElementById('grp-max').value) || null;
+  const isPublic   = document.getElementById('grp-public').value === 'true';
 
   if (!date)  { toast('Укажи дату', 'err'); return; }
   if (!venue) { toast('Укажи место', 'err'); return; }
@@ -1900,7 +1934,8 @@ async function submitGroupLesson() {
     if (editingGroupId) {
       // ── РЕЖИМ РЕДАКТИРОВАНИЯ ──
       batch.update(db.collection('groupLessons').doc(editingGroupId), {
-        _date: date, venue, format, notes,
+        _date: date, time, venue, format, notes, isPublic,
+        ...(maxStudents ? { maxStudents } : { maxStudents: null }),
         studentEmails: grpSelectedStudents.map(s=>s.email),
         studentNames:  grpSelectedStudents.map(s=>s.name),
         studentIds:    grpSelectedStudents.map(s=>s.id),
@@ -1924,7 +1959,8 @@ async function submitGroupLesson() {
     const grpRef = db.collection('groupLessons').doc();
     batch.set(grpRef, {
       trainerId, trainerName,
-      _date: date, venue, format, notes,
+      _date: date, time, venue, format, notes, isPublic,
+      ...(maxStudents ? { maxStudents } : {}),
       studentEmails: grpSelectedStudents.map(s=>s.email),
       studentNames:  grpSelectedStudents.map(s=>s.name),
       studentIds:    grpSelectedStudents.map(s=>s.id),
@@ -1933,6 +1969,7 @@ async function submitGroupLesson() {
       attendedEmails: [],
       attendedNames: [],
       extraAttendees: [],
+      registeredTelegramIds: [],
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
 
@@ -1986,6 +2023,8 @@ async function loadGroupLessons() {
     const g = d.data();
     const gid = d.id;
     const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'}) : '';
+    const timeStr = g.time ? ` · ${g.time}` : '';
+    const maxStr = g.maxStudents ? ` · макс. ${g.maxStudents}` : '';
     const { submitted, approved, pastDate, hasMismatch, needsAttend, needsApproval, canEdit, isAdmin } = getGroupFlags(g);
 
     // Attendance summary
@@ -2017,8 +2056,9 @@ async function loadGroupLessons() {
         <div>
           <div style="font-weight:700">${esc(g.venue)}</div>
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
-            <span style="font-size:.75rem;color:var(--text2)">${dt}</span>
-            <span style="font-size:.75rem;color:var(--text2)">${g.count||0} уч.</span>
+            <span style="font-size:.75rem;color:var(--text2)">${dt}${timeStr}</span>
+            <span style="font-size:.75rem;color:var(--text2)">${g.count||0}${maxStr} уч.</span>
+            ${g.isPublic ? `<span style="font-size:.72rem;background:rgba(74,158,255,.12);color:var(--accent2);border:1px solid rgba(74,158,255,.25);border-radius:10px;padding:1px 7px">🌐 TG</span>` : ''}
             <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${g.format==='online'?'Онлайн':'Офлайн'}</span>
             ${approved?`<span class="tag tag-attendance-ok" style="padding:1px 6px">✅ подтверждено</span>`:''}
             ${submitted&&!approved?`<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2);padding:1px 6px">⏳ на проверке</span>`:''}
