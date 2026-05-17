@@ -740,7 +740,10 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
     <div class="modal-title">🔑 Финансовый пароль</div>
-    <div style="color:var(--text2);font-size:.85rem;margin-bottom:14px">Задайте отдельный пароль для доступа к финансам</div>
+    <div id="set-fin-pin-old-row" class="form-row">
+      <div class="form-label">Текущий пароль</div>
+      <input class="form-inp" id="set-fin-pin-old" type="password" placeholder="Введите текущий пароль">
+    </div>
     <div class="form-row">
       <div class="form-label">Новый пароль</div>
       <input class="form-inp" id="set-fin-pin-inp" type="password" placeholder="Придумайте пароль">
@@ -2949,22 +2952,33 @@ async function confirmFinancePin() {
   }
 }
 
-function openSetFinancePin() {
+async function openSetFinancePin() {
+  document.getElementById('set-fin-pin-old').value = '';
   document.getElementById('set-fin-pin-inp').value = '';
   document.getElementById('set-fin-pin-inp2').value = '';
   document.getElementById('set-fin-pin-err').textContent = '';
+  const doc = await db.collection('settings').doc('financePin').get();
+  // Скрываем поле текущего пароля если пароль ещё не задан
+  document.getElementById('set-fin-pin-old-row').style.display = doc.exists ? '' : 'none';
   _openModal('set-fin-pin-modal');
 }
 
 async function saveFinancePin() {
+  const oldPass = document.getElementById('set-fin-pin-old').value;
   const p1 = document.getElementById('set-fin-pin-inp').value;
   const p2 = document.getElementById('set-fin-pin-inp2').value;
   const errEl = document.getElementById('set-fin-pin-err');
   errEl.textContent = '';
-  if (!p1) { errEl.textContent = 'Введите пароль'; return; }
+  if (!p1) { errEl.textContent = 'Введите новый пароль'; return; }
   if (p1 !== p2) { errEl.textContent = 'Пароли не совпадают'; return; }
   if (p1.length < 4) { errEl.textContent = 'Минимум 4 символа'; return; }
   try {
+    const doc = await db.collection('settings').doc('financePin').get();
+    if (doc.exists) {
+      if (!oldPass) { errEl.textContent = 'Введите текущий пароль'; return; }
+      const oldHash = await _sha256(oldPass);
+      if (doc.data().hash !== oldHash) { errEl.textContent = 'Неверный текущий пароль'; return; }
+    }
     const hash = await _sha256(p1);
     await db.collection('settings').doc('financePin').set({ hash });
     _closeModal('set-fin-pin-modal');
