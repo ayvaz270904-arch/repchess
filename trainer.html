@@ -1286,7 +1286,9 @@ function populateTrainerSelect(selId) {
 // Результат: s.used и s.remaining = s.purchased - used (не меньше 0).
 async function _enrichStudentsWithRemaining() {
   try {
-    const snap = await db.collection('lessons').get();
+    const snap = await db.collection('lessons')
+      .where('trainerId', '==', currentUser.uid)
+      .get();
     const usedMap = {};
     snap.docs.forEach(d => {
       const data = d.data();
