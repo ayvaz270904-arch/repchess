@@ -707,6 +707,23 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
   </div>
 </div>
 
+<!-- FINANCE REAUTH MODAL -->
+<div class="overlay" id="fin-reauth-modal" style="display:none" onclick="if(event.target===this)_closeModal('fin-reauth-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔒 Доступ к финансам</div>
+    <div style="color:var(--text2);font-size:.85rem;margin-bottom:14px">Введите ваш пароль для подтверждения</div>
+    <div class="form-row">
+      <div class="form-label">Пароль</div>
+      <input class="form-inp" id="fin-reauth-inp" type="password" placeholder="Ваш пароль от аккаунта" onkeydown="if(event.key==='Enter')confirmFinanceReauth()">
+    </div>
+    <div class="auth-err" id="fin-reauth-err"></div>
+    <button class="btn-full btn-gold" onclick="confirmFinanceReauth()">Подтвердить</button>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('fin-reauth-modal');showPage('home')">Отмена</button>
+  </div>
+</div>
+
 <!-- RATE EDIT MODAL -->
 <!-- FINANCE PASSWORD MODAL -->
 
@@ -2861,9 +2878,33 @@ function calNext(){_calMonth++;if(_calMonth>11){_calMonth=0;_calYear++;}renderCa
 // ══════════════════════════════════════════════
 //  FINANCE
 // ══════════════════════════════════════════════
+let _financeUnlocked = false;
+
 function finCheckAccess() {
-  finInitDates();
-  loadFinance();
+  const isAdmin = currentTrainer?.role === 'admin';
+  if (!isAdmin || _financeUnlocked) {
+    finInitDates(); loadFinance(); return;
+  }
+  document.getElementById('fin-reauth-inp').value = '';
+  document.getElementById('fin-reauth-err').textContent = '';
+  _openModal('fin-reauth-modal');
+}
+
+async function confirmFinanceReauth() {
+  const pass = document.getElementById('fin-reauth-inp').value;
+  const errEl = document.getElementById('fin-reauth-err');
+  errEl.textContent = '';
+  if (!pass) { errEl.textContent = 'Введите пароль'; return; }
+  try {
+    const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, pass);
+    await currentUser.reauthenticateWithCredential(credential);
+    _financeUnlocked = true;
+    _closeModal('fin-reauth-modal');
+    finInitDates();
+    loadFinance();
+  } catch(e) {
+    document.getElementById('fin-reauth-err').textContent = 'Неверный пароль';
+  }
 }
 
 function finInitDates() {
