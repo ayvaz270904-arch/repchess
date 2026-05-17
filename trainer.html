@@ -709,21 +709,6 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 
 <!-- RATE EDIT MODAL -->
 <!-- FINANCE PASSWORD MODAL -->
-<div class="overlay" id="fin-pass-modal" style="display:none" onclick="if(event.target===this)_closeModal('fin-pass-modal')">
-  <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-handle"></div>
-    <div class="modal-title">🔒 Доступ к финансам</div>
-    <div style="color:var(--text2);font-size:.85rem;margin-bottom:14px">Введите пароль администратора для просмотра финансовой информации</div>
-    <div class="form-row">
-      <div class="form-label">Пароль</div>
-      <input class="form-inp" id="fin-pass-inp" type="password" placeholder="Введите пароль" onkeydown="if(event.key==='Enter')confirmFinancePassword()">
-    </div>
-    <div class="auth-err" id="fin-pass-err"></div>
-    <button class="btn-full btn-gold" onclick="confirmFinancePassword()">Войти</button>
-    <div style="height:10px"></div>
-    <button class="btn-full btn-ghost" onclick="_closeModal('fin-pass-modal');showPage('home')">Отмена</button>
-  </div>
-</div>
 
 <div class="overlay" id="rate-modal" style="display:none" onclick="if(event.target===this)_closeModal('rate-modal')">
   <div class="modal" onclick="event.stopPropagation()">
@@ -756,7 +741,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       </div>
     </div>
     <div class="auth-err" id="rate-err"></div>
-    <button class="btn-full btn-gold" id="rate-confirm-btn" onclick="confirmRatePassword()">Подтвердить</button>
+    <button class="btn-full btn-gold" id="rate-confirm-btn" style="display:none">Подтвердить</button>
     <button class="btn-full btn-gold" id="rate-save-btn" style="display:none" onclick="saveRate()">Сохранить ставку</button>
     <div style="height:10px"></div>
     <button class="btn-full btn-ghost" onclick="_closeModal('rate-modal')">Отмена</button>
@@ -2874,28 +2859,7 @@ function calNext(){_calMonth++;if(_calMonth>11){_calMonth=0;_calYear++;}renderCa
 // ══════════════════════════════════════════════
 //  FINANCE
 // ══════════════════════════════════════════════
-let _financeUnlocked = false;
-
 function finCheckAccess() {
-  const isAdmin = currentTrainer?.role === 'admin';
-  if (!isAdmin || _financeUnlocked) {
-    // Тренер — показываем без пароля; админ уже разблокировал
-    finInitDates(); loadFinance(); return;
-  }
-  // Админ — запрашиваем пароль
-  document.getElementById('fin-pass-inp').value = '';
-  document.getElementById('fin-pass-err').textContent = '';
-  _openModal('fin-pass-modal');
-}
-
-function confirmFinancePassword() {
-  const pass = document.getElementById('fin-pass-inp').value;
-  if (pass !== '1289') {
-    document.getElementById('fin-pass-err').textContent = 'Неверный пароль';
-    return;
-  }
-  _financeUnlocked = true;
-  _closeModal('fin-pass-modal');
   finInitDates();
   loadFinance();
 }
