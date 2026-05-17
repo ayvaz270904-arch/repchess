@@ -450,6 +450,17 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         <div class="card-body" id="adm-assignment-body"><div class="empty">Загрузка...</div></div>
       </div>
 
+      <!-- Finance PIN -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <span class="card-title">🔑 Финансовый пароль</span>
+          <button class="btn-sm" style="color:#fff;background:var(--accent);border:none;font-weight:700;padding:5px 12px;border-radius:8px" onclick="openSetFinancePin()">Изменить</button>
+        </div>
+        <div class="card-body" style="color:var(--text2);font-size:.85rem">
+          Отдельный пароль для доступа к разделу «Финансы». Знаете только вы.
+        </div>
+      </div>
+
       <!-- Manage trainers -->
       <div class="card" style="margin-bottom:14px">
         <div class="card-head">
@@ -707,20 +718,41 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
   </div>
 </div>
 
-<!-- FINANCE REAUTH MODAL -->
-<div class="overlay" id="fin-reauth-modal" style="display:none" onclick="if(event.target===this)_closeModal('fin-reauth-modal')">
+<!-- FINANCE PIN MODAL -->
+<div class="overlay" id="fin-pin-modal" style="display:none" onclick="if(event.target===this)_closeModal('fin-pin-modal')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
     <div class="modal-title">🔒 Доступ к финансам</div>
-    <div style="color:var(--text2);font-size:.85rem;margin-bottom:14px">Введите ваш пароль для подтверждения</div>
+    <div style="color:var(--text2);font-size:.85rem;margin-bottom:14px">Введите пароль для просмотра финансов</div>
     <div class="form-row">
       <div class="form-label">Пароль</div>
-      <input class="form-inp" id="fin-reauth-inp" type="password" placeholder="Ваш пароль от аккаунта" onkeydown="if(event.key==='Enter')confirmFinanceReauth()">
+      <input class="form-inp" id="fin-pin-inp" type="password" placeholder="Финансовый пароль" onkeydown="if(event.key==='Enter')confirmFinancePin()">
     </div>
-    <div class="auth-err" id="fin-reauth-err"></div>
-    <button class="btn-full btn-gold" onclick="confirmFinanceReauth()">Подтвердить</button>
+    <div class="auth-err" id="fin-pin-err"></div>
+    <button class="btn-full btn-gold" onclick="confirmFinancePin()">Подтвердить</button>
     <div style="height:10px"></div>
-    <button class="btn-full btn-ghost" onclick="_closeModal('fin-reauth-modal');showPage('home')">Отмена</button>
+    <button class="btn-full btn-ghost" onclick="_closeModal('fin-pin-modal');showPage('home')">Отмена</button>
+  </div>
+</div>
+
+<!-- SET FINANCE PIN MODAL -->
+<div class="overlay" id="set-fin-pin-modal" style="display:none" onclick="if(event.target===this)_closeModal('set-fin-pin-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔑 Финансовый пароль</div>
+    <div style="color:var(--text2);font-size:.85rem;margin-bottom:14px">Задайте отдельный пароль для доступа к финансам</div>
+    <div class="form-row">
+      <div class="form-label">Новый пароль</div>
+      <input class="form-inp" id="set-fin-pin-inp" type="password" placeholder="Придумайте пароль">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Повторите пароль</div>
+      <input class="form-inp" id="set-fin-pin-inp2" type="password" placeholder="Повторите пароль" onkeydown="if(event.key==='Enter')saveFinancePin()">
+    </div>
+    <div class="auth-err" id="set-fin-pin-err"></div>
+    <button class="btn-full btn-gold" onclick="saveFinancePin()">Сохранить</button>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('set-fin-pin-modal')">Отмена</button>
   </div>
 </div>
 
@@ -2880,30 +2912,65 @@ function calNext(){_calMonth++;if(_calMonth>11){_calMonth=0;_calYear++;}renderCa
 // ══════════════════════════════════════════════
 let _financeUnlocked = false;
 
-function finCheckAccess() {
-  const isAdmin = currentTrainer?.role === 'admin';
-  if (!isAdmin || _financeUnlocked) {
-    finInitDates(); loadFinance(); return;
-  }
-  document.getElementById('fin-reauth-inp').value = '';
-  document.getElementById('fin-reauth-err').textContent = '';
-  _openModal('fin-reauth-modal');
+async function _sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-async function confirmFinanceReauth() {
-  const pass = document.getElementById('fin-reauth-inp').value;
-  const errEl = document.getElementById('fin-reauth-err');
+async function finCheckAccess() {
+  const isAdmin = currentTrainer?.role === 'admin';
+  if (!isAdmin || _financeUnlocked) { finInitDates(); loadFinance(); return; }
+  const doc = await db.collection('settings').doc('financePin').get();
+  if (!doc.exists) {
+    // Пароль ещё не задан — предлагаем создать
+    _openModal('set-fin-pin-modal');
+    return;
+  }
+  document.getElementById('fin-pin-inp').value = '';
+  document.getElementById('fin-pin-err').textContent = '';
+  _openModal('fin-pin-modal');
+}
+
+async function confirmFinancePin() {
+  const pass = document.getElementById('fin-pin-inp').value;
+  const errEl = document.getElementById('fin-pin-err');
   errEl.textContent = '';
   if (!pass) { errEl.textContent = 'Введите пароль'; return; }
   try {
-    const credential = firebase.auth.EmailAuthProvider.credential(currentUser.email, pass);
-    await currentUser.reauthenticateWithCredential(credential);
+    const hash = await _sha256(pass);
+    const doc = await db.collection('settings').doc('financePin').get();
+    if (doc.data().hash !== hash) { errEl.textContent = 'Неверный пароль'; return; }
     _financeUnlocked = true;
-    _closeModal('fin-reauth-modal');
+    _closeModal('fin-pin-modal');
     finInitDates();
     loadFinance();
   } catch(e) {
-    document.getElementById('fin-reauth-err').textContent = 'Неверный пароль';
+    errEl.textContent = 'Ошибка: ' + e.message;
+  }
+}
+
+function openSetFinancePin() {
+  document.getElementById('set-fin-pin-inp').value = '';
+  document.getElementById('set-fin-pin-inp2').value = '';
+  document.getElementById('set-fin-pin-err').textContent = '';
+  _openModal('set-fin-pin-modal');
+}
+
+async function saveFinancePin() {
+  const p1 = document.getElementById('set-fin-pin-inp').value;
+  const p2 = document.getElementById('set-fin-pin-inp2').value;
+  const errEl = document.getElementById('set-fin-pin-err');
+  errEl.textContent = '';
+  if (!p1) { errEl.textContent = 'Введите пароль'; return; }
+  if (p1 !== p2) { errEl.textContent = 'Пароли не совпадают'; return; }
+  if (p1.length < 4) { errEl.textContent = 'Минимум 4 символа'; return; }
+  try {
+    const hash = await _sha256(p1);
+    await db.collection('settings').doc('financePin').set({ hash });
+    _closeModal('set-fin-pin-modal');
+    toast('Финансовый пароль сохранён', 'ok');
+  } catch(e) {
+    errEl.textContent = 'Ошибка: ' + e.message;
   }
 }
 
