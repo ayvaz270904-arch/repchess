@@ -3016,12 +3016,15 @@ async function loadFinance() {
     trainersList.forEach(t => { if (t.name) nameToId[norm(t.name)] = t.id; });
 
     // 2. Загружаем занятия и ставки
-    const fetches = [
+    const fetches = isAdmin ? [
       db.collection('lessons').get(),
       db.collection('groupLessons').get(),
+      db.collection('trainerRates').get(),
+    ] : [
+      db.collection('lessons').where('trainerId', '==', currentUser.uid).get(),
+      db.collection('groupLessons').where('trainerId', '==', currentUser.uid).get(),
+      db.collection('trainerRates').doc(currentUser.uid).get(),
     ];
-    if (isAdmin) fetches.push(db.collection('trainerRates').get());
-    else fetches.push(db.collection('trainerRates').doc(currentUser.uid).get());
 
     const [lessonsSnap, groupSnap, ratesResult] = await Promise.all(fetches);
 
