@@ -2907,11 +2907,22 @@ async function loadFinance() {
     const nameToId = {};
     trainersList.forEach(t => { if (t.name) nameToId[norm(t.name)] = t.id; });
 
-    // 2. Загружаем ВСЕ занятия (без фильтра дат — фильтруем в JS)
-    const [lessonsSnap, groupSnap] = await Promise.all([
+    // 2. Загружаем занятия и ставки
+    const fetches = [
       db.collection('lessons').get(),
-      db.collection('groupLessons').get()
-    ]);
+      db.collection('groupLessons').get(),
+    ];
+    if (isAdmin) fetches.push(db.collection('trainerRates').get());
+    else fetches.push(db.collection('trainerRates').doc(currentUser.uid).get());
+
+    const [lessonsSnap, groupSnap, ratesResult] = await Promise.all(fetches);
+
+    const ratesMap = {};
+    if (isAdmin) {
+      ratesResult.forEach(d => { ratesMap[d.id] = d.data(); });
+    } else {
+      if (ratesResult.exists) ratesMap[currentUser.uid] = ratesResult.data();
+    }
 
     // 3. Считаем по тренерам с фильтрацией по дате в JS
     const emptyCount = () => ({ indivOff:0, indivOn:0, groupOff:0, groupOn:0 });
@@ -2954,11 +2965,12 @@ async function loadFinance() {
 
     for (const t of toShow) {
       const c = counts[t.id] || emptyCount();
+      const rd = ratesMap[t.id] || {};
       const r = {
-        indivOff: t.rateIndivOff || 0,
-        indivOn:  t.rateIndivOn  || 0,
-        groupOff: t.rateGroupOff || 0,
-        groupOn:  t.rateGroupOn  || 0,
+        indivOff: rd.rateIndivOff ?? t.rateIndivOff ?? 0,
+        indivOn:  rd.rateIndivOn  ?? t.rateIndivOn  ?? 0,
+        groupOff: rd.rateGroupOff ?? t.rateGroupOff ?? 0,
+        groupOn:  rd.rateGroupOn  ?? t.rateGroupOn  ?? 0,
       };
       const payout =
         c.indivOff * r.indivOff +
@@ -3011,11 +3023,12 @@ async function loadFinance() {
       // Для тренера — показываем его собственную зарплату в сводной карточке
       const me = toShow[0];
       const myC = counts[me.id] || emptyCount();
+      const myRd = ratesMap[me.id] || {};
       const myR = {
-        indivOff: me.rateIndivOff || 0,
-        indivOn:  me.rateIndivOn  || 0,
-        groupOff: me.rateGroupOff || 0,
-        groupOn:  me.rateGroupOn  || 0,
+        indivOff: myRd.rateIndivOff ?? me.rateIndivOff ?? 0,
+        indivOn:  myRd.rateIndivOn  ?? me.rateIndivOn  ?? 0,
+        groupOff: myRd.rateGroupOff ?? me.rateGroupOff ?? 0,
+        groupOn:  myRd.rateGroupOn  ?? me.rateGroupOn  ?? 0,
       };
       const myPayout = myC.indivOff*myR.indivOff + myC.indivOn*myR.indivOn + myC.groupOff*myR.groupOff + myC.groupOn*myR.groupOn;
       const hasMyRates = Object.values(myR).some(v => v > 0);
@@ -3058,7 +3071,7 @@ async function saveRate() {
   const rateGroupOn  = parseInt(document.getElementById('rate-group-on').value)  || 0;
 
   try {
-    await db.collection('trainers').doc(_rateTrainerId).update({ rateIndivOff, rateIndivOn, rateGroupOff, rateGroupOn });
+    await db.collection('trainerRates').doc(_rateTrainerId).set({ rateIndivOff, rateIndivOn, rateGroupOff, rateGroupOn }, { merge: true });
     _closeModal('rate-modal');
     toast('Ставки обновлены', 'ok');
     loadFinance();
