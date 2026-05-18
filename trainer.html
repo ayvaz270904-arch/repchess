@@ -3825,7 +3825,8 @@ async function submitAttendance() {
     batch.update(db.collection('groupLessons').doc(groupId), updateData);
 
     // Обновляем/создаём balance-записи для ожидаемых учеников
-    const indSnap = await db.collection('lessons').where('groupLessonId','==',groupId).get();
+    const _lessonsRef = db.collection('lessons').where('groupLessonId','==',groupId);
+    const indSnap = await (isAdmin ? _lessonsRef : _lessonsRef.where('trainerId','==',currentUser.uid)).get();
     const existingByEmail = {};
     indSnap.docs.forEach(doc => { existingByEmail[doc.data().studentEmail] = doc; });
     for (const email of expectedEmails) {
@@ -3866,7 +3867,7 @@ async function submitAttendance() {
 
     const updatedG = { ...g, attendanceMarked: true, attendedEmails, attendedNames,
       extraRaw, extraMatched, extraAttendees: extraRaw, mismatch: hasMismatch,
-      mismatchNote: mismatchNote.join('; ') };
+      mismatchNote: mismatchNote.join('; '), studentEmails: expectedEmails, studentNames: expectedNames };
     if (isAdmin) updatedG.adminApproved = true;
     if (_attendNewExpected.length > 0) {
       updatedG.studentEmails = expectedEmails;
