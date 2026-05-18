@@ -1208,7 +1208,8 @@ async function showApp() {
   await loadTrainers();
   await _enrichStudentsWithRemaining(); // обогащаем s.remaining для всех учеников
   loadHomePage();
-  showPage('home');
+  const _savedPage = sessionStorage.getItem('_activePage') || 'home';
+  showPage(_savedPage);
   // Показываем предупреждение об неизвестных тарифах только администратору
   if (currentTrainer.role === 'admin' && _unknownPayments.length > 0) {
     setTimeout(() => showUnknownPaymentsModal(), 800);
@@ -1445,16 +1446,19 @@ async function loadHomePage() {
   const monthCnt   = monthIndiv + monthGrp;
   const uniqueW    = new Set(allIndiv.filter(l=>l._date && isDoneLesson(l) && l._date >= weekStr).map(l=>l.studentEmail)).size;
 
+  const fmt = d => d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'});
   document.getElementById('home-stats').innerHTML = `
     <div class="stat-card sc-blue">
       <div class="stat-label">За неделю</div>
       <div class="stat-val">${weekCnt}</div>
       <div class="stat-sub">${weekIndiv} инд · ${weekGrp} груп.</div>
+      <div class="stat-sub">${fmt(weekAgo)} — ${fmt(now)}</div>
     </div>
     <div class="stat-card sc-green">
       <div class="stat-label">За месяц</div>
       <div class="stat-val">${monthCnt}</div>
       <div class="stat-sub">${monthIndiv} инд · ${monthGrp} груп.</div>
+      <div class="stat-sub">${fmt(monthAgo)} — ${fmt(now)}</div>
     </div>`;
 
   // Лента последних: группы одной карточкой + индив. без group-дубликатов
@@ -2265,18 +2269,21 @@ function histLessonItemHTML(l) {
 
 function histGroupItemHTML(g) {
   const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
-  const { canEdit, isAdmin } = getGroupFlags(g);
+  const { submitted, approved, needsApproval, canEdit, isAdmin } = getGroupFlags(g);
   return `<div class="lesson-item">
     <div class="lesson-row1">
       <span class="lesson-student">👥 ${esc(g.venue||'Группа')}</span>
       <div style="display:flex;align-items:center;gap:6px">
         <span class="lesson-date">${d}</span>
+        ${submitted ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="${needsApproval?'Подтвердить':'Просмотр'}">${needsApproval?'✅':'👁'}</button>` : ''}
         ${canEdit ? `<button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>` : ''}
       </div>
     </div>
     <div class="lesson-row2">
       <span class="tag tag-group">${g.count} чел.${g.maxStudents ? ' / ' + g.maxStudents : ''}</span>
       <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
+      ${approved ? `<span class="tag tag-attendance-ok" style="padding:1px 5px;font-size:.68rem">✅ подтв.</span>` : ''}
+      ${submitted&&!approved ? `<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2);padding:1px 5px;font-size:.68rem">⏳ проверка</span>` : ''}
       ${g.isPublic ? `<span style="font-size:.72rem;background:rgba(74,158,255,.12);color:var(--accent2);border:1px solid rgba(74,158,255,.25);border-radius:10px;padding:1px 7px">🌐 TG</span>` : ''}
       ${g.time ? `<span style="font-size:.72rem;color:var(--text2)">🕐 ${g.time}</span>` : ''}
       ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
@@ -2766,16 +2773,21 @@ function refreshCurrentPage() {
 
 function showPage(name) {
   if (name === 'admin' && currentTrainer?.role !== 'admin') return;
+  const prev = sessionStorage.getItem('_activePage');
+  if (prev) sessionStorage.setItem(`_scroll_${prev}`, window.scrollY);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('on'));
   document.getElementById(`page-${name}`).classList.add('on');
   document.querySelector(`[data-page="${name}"]`)?.classList.add('on');
+  sessionStorage.setItem('_activePage', name);
   // Lazy load
   if (name==='record')  loadHomePage();
   if (name==='history') loadHistory();
   if (name==='group')   loadGroupLessons();
   if (name==='admin')   loadAdminData();
   if (name==='finance') { finCheckAccess(); }
+  const savedScroll = parseInt(sessionStorage.getItem(`_scroll_${name}`) || '0');
+  if (savedScroll > 0) requestAnimationFrame(() => window.scrollTo(0, savedScroll));
 }
 
 // ══════════════════════════════════════════════
@@ -3210,12 +3222,15 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(e=>console.log('SW:',e)));
 }
 
-// Делегированный обработчик кликов — надёжнее inline onclick на мобильных
+// Закрытие поиска при клике вне — capture фаза обходит stopPropagation внутри модалов
 document.addEventListener('click', e => {
-  // Закрыть поиск студентов
   if (!e.target.closest('.student-search-wrap')) {
     document.querySelectorAll('.student-results').forEach(el=>el.style.display='none');
   }
+}, true);
+
+// Делегированный обработчик кликов — надёжнее inline onclick на мобильных
+document.addEventListener('click', e => {
   // Кнопка редактирования индивидуального занятия
   const editBtn = e.target.closest('[data-edit-id]');
   if (editBtn) {
