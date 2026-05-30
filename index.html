@@ -548,8 +548,8 @@ async function loadUsedLessons() {
   } catch(e) { console.warn('Firestore read:', e); }
 }
 
-function getBalance(email) {
-  const s = students[email];
+function getBalance(key) {
+  const s = students[key];
   if (!s) return null;
   const now = new Date();
   let purchased = 0;
@@ -565,6 +565,7 @@ function getBalance(email) {
       if (expiry && (!nextExpiry || expiry < nextExpiry)) nextExpiry = expiry;
     }
   }
+  const email = s.email;
   const used = usedLessonsMap[email.toLowerCase()]||0;
   return { purchased, used, remaining: purchased - used, nextExpiry };
 }
@@ -736,9 +737,11 @@ function processCSV(txt) {
 
   for(const row of rows){
     const email=(row['Email']||'').toLowerCase().trim();
+    const _nameLower=(row['Name']||'').toLowerCase().trim();
     if(!email||email==='test@mail.ru')continue;
-    if(!students[email])students[email]={name:row['Name']||'',email,phone:row['Phone']||'',telegram:getTg(row),payments:[],freeCnt:0};
-    const s=students[email];
+    const sKey=email+'||'+_nameLower;
+    if(!students[sKey])students[sKey]={name:row['Name']||'',email,phone:row['Phone']||'',telegram:getTg(row),payments:[],freeCnt:0,key:sKey};
+    const s=students[sKey];
     if((row['Name']||'').length>s.name.length)s.name=row['Name'];
     if(!s.telegram)s.telegram=getTg(row);
     if(!s.phone&&row['Phone'])s.phone=row['Phone'];
@@ -836,7 +839,7 @@ function renderActive(){
   document.getElementById('active-cnt').textContent=`(${list.length})`;
   const tb=document.getElementById('active-tbody');
   if(!list.length){tb.innerHTML=`<tr><td colspan="7" class="empty">Нет активных учеников</td></tr>`;return;}
-  tb.innerHTML=list.map(s=>`<tr onclick="openModal('${esc(s.email)}')" style="cursor:pointer">
+  tb.innerHTML=list.map(s=>`<tr onclick="openModal('${esc(s.key)}')" style="cursor:pointer">
     <td><b>${esc(s.name)}</b></td>
     <td>${s.telegram?`<a class="tg-link" href="https://t.me/${esc(s.telegram)}" target="_blank" onclick="event.stopPropagation()">@${esc(s.telegram)}</a>`:'<span class="dim">—</span>'}</td>
     <td class="dim">${esc(s.phone)||'—'}</td>
@@ -857,10 +860,10 @@ function renderStudents(){
   // Build per-student period stats
   const periodMap={};
   for(const r of filteredRows){
-    const email=(r['Email']||'').toLowerCase();
-    if(!periodMap[email])periodMap[email]={cnt:0,sum:0};
-    periodMap[email].cnt++;
-    periodMap[email].sum+=r._price;
+    const _rKey=(r['Email']||'').toLowerCase()+'||'+(r['Name']||'').toLowerCase().trim();
+    if(!periodMap[_rKey])periodMap[_rKey]={cnt:0,sum:0};
+    periodMap[_rKey].cnt++;
+    periodMap[_rKey].sum+=r._price;
   }
 
   let list=Object.values(students);
@@ -870,7 +873,7 @@ function renderStudents(){
 
   // When period active, only show students with payments in period (unless free tab)
   if(hasPeriod && _tab!=='free'){
-    list=list.filter(s=>periodMap[s.email]);
+    list=list.filter(s=>periodMap[s.key]);
   }
 
   if(q)list=list.filter(s=>s.name.toLowerCase().includes(q)||s.email.includes(q)||s.phone.includes(q)||s.telegram.toLowerCase().includes(q));
@@ -879,8 +882,8 @@ function renderStudents(){
     const k=_sSort.key;
     if(k==='name')return a.name.localeCompare(b.name,'ru')*_sSort.dir;
     // Period sort
-    if(hasPeriod&&k==='payCount'){ return((periodMap[b.email]?.cnt||0)-(periodMap[a.email]?.cnt||0))*_sSort.dir; }
-    if(hasPeriod&&k==='totalSpent'){ return((periodMap[b.email]?.sum||0)-(periodMap[a.email]?.sum||0))*_sSort.dir; }
+    if(hasPeriod&&k==='payCount'){ return((periodMap[b.key]?.cnt||0)-(periodMap[a.key]?.cnt||0))*_sSort.dir; }
+    if(hasPeriod&&k==='totalSpent'){ return((periodMap[b.key]?.sum||0)-(periodMap[a.key]?.sum||0))*_sSort.dir; }
     const va=(k==='firstPay'?a.firstPay:k==='lastPay'?a.lastPay:null)||0;
     const vb=(k==='firstPay'?b.firstPay:k==='lastPay'?b.lastPay:null)||0;
     if(va||vb)return(vb-va)*_sSort.dir;
@@ -892,10 +895,10 @@ function renderStudents(){
   if(!list.length){tb.innerHTML=`<tr><td colspan="9" class="empty">Ничего не найдено</td></tr>`;return;}
 
   tb.innerHTML=list.map(s=>{
-    const pm=periodMap[s.email];
+    const pm=periodMap[s.key];
     const payCnt  = hasPeriod?(pm?.cnt||0):s.payCount;
     const paySum  = hasPeriod?(pm?.sum||0):s.totalSpent;
-    return`<tr onclick="openModal('${esc(s.email)}')" style="cursor:pointer">
+    return`<tr onclick="openModal('${esc(s.key)}')" style="cursor:pointer">
       <td><b>${esc(s.name)}</b></td>
       <td class="dim" style="font-size:.76rem">${esc(s.email)}</td>
       <td>${s.telegram?`<a class="tg-link" href="https://t.me/${esc(s.telegram)}" target="_blank" onclick="event.stopPropagation()">@${esc(s.telegram)}</a>`:'<span class="dim">—</span>'}</td>
@@ -904,14 +907,14 @@ function renderStudents(){
       <td class="dim">${fmtD(s.lastPay)}</td>
       <td style="text-align:center">${payCnt||'<span class="dim">0</span>'}</td>
       <td>${paySum?`<b style="color:var(--accent)">${fmtM(paySum)}</b>`:'<span class="dim">—</span>'}</td>
-      <td style="text-align:center">${balanceBadge(s.email)}</td>
+      <td style="text-align:center">${balanceBadge(s.key)}</td>
       <td>${s.active?'<span class="badge badge-active">Активный</span>':s.hasPaid?'<span class="badge badge-inactive">Неактивный</span>':'<span class="badge badge-free">Пробное</span>'}</td>
     </tr>`;
   }).join('');
 }
 
-function openModal(email){
-  const s=students[email];if(!s)return;
+function openModal(key){
+  const s=students[key];if(!s)return;
   document.getElementById('m-name').textContent=s.name;
   document.getElementById('m-email').textContent=s.email;
   const pays=[...s.payments].reverse();
