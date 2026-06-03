@@ -534,6 +534,11 @@ async function loadUsedLessons() {
       const d = doc.data();
       const email = (d.studentEmail||'').toLowerCase().trim();
       if (!email) return;
+      const nameLower = (d.studentName||'').toLowerCase().trim();
+      // Составной ключ — для точного совпадения по имени+email
+      const cKey = email + '||' + nameLower;
+      usedLessonsMap[cKey] = (usedLessonsMap[cKey]||0) + 1;
+      // Запасной ключ только по email — для обратной совместимости
       usedLessonsMap[email] = (usedLessonsMap[email]||0) + 1;
     });
     // учитываем групповые занятия
@@ -565,8 +570,8 @@ function getBalance(key) {
       if (expiry && (!nextExpiry || expiry < nextExpiry)) nextExpiry = expiry;
     }
   }
-  const email = s.email;
-  const used = usedLessonsMap[email.toLowerCase()]||0;
+  // Сначала ищем точное совпадение email+имя, потом только по email
+  const used = usedLessonsMap[key] ?? usedLessonsMap[s.email.toLowerCase()] ?? 0;
   return { purchased, used, remaining: purchased - used, nextExpiry };
 }
 
