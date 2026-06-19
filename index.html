@@ -708,7 +708,8 @@ function parseCSV(txt) {
   for(let i=1;i<lines.length;i++){
     const l=lines[i].trim();if(!l)continue;
     const vals=splitLine(l),row={};
-    headers.forEach((h,j)=>row[h.trim()]=(vals[j]||'').trim());
+    // Tilda оборачивает значения в кавычки — снимаем одну внешнюю пару
+    headers.forEach((h,j)=>row[h.trim()]=(vals[j]||'').trim().replace(/^"([\s\S]*)"$/,'$1').trim());
     out.push(row);
   }
   return out;
@@ -726,10 +727,15 @@ function splitLine(line){
 function parsePrice(s){if(!s)return 0;return parseFloat(s.replace(/[\s ]/g,'').replace(',','.'))||0;}
 function parseDate(s){
   if(!s)return null;
-  // ISO: YYYY-MM-DD[ T]HH:MM:SS
-  let d=new Date(s.replace(' ','T'));
+  s=String(s).trim().replace(/^"+|"+$/g,'').trim();
+  if(!s)return null;
+  // JS Date.toString() формат: "Thu Jun 18 2026 18:40:29 GMT+0300 (...)" + ISO с T/пробелом
+  let d=new Date(s);
   if(!isNaN(d.getTime()))return d;
-  // Russian: DD.MM.YYYY[ HH:MM:SS]
+  // ISO с пробелом: YYYY-MM-DD HH:MM:SS
+  d=new Date(s.replace(' ','T'));
+  if(!isNaN(d.getTime()))return d;
+  // Русский: DD.MM.YYYY[ HH:MM:SS]
   const m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[T ](\d{2}:\d{2}(?::\d{2})?))?/);
   if(m){d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}${m[4]?'T'+m[4]:''}`);if(!isNaN(d.getTime()))return d;}
   return null;

@@ -1257,7 +1257,7 @@ async function loadStudents() {
       // Check if paid
       if (row['Payment status']==='Paid' || row['Статус оплаты']==='Оплачено' || (row['paymentid']&&/tinkoff|sber/.test(row['paymentid']))) {
         const price = parseFloat((row['price']||'').replace(/[\s ]/g,'').replace(',','.')) || 0;
-        const date  = row['sent'] ? new Date(row['sent'].replace(' ','T')) : null;
+        const date  = parseSentDate(row['sent']);
         if (price > 0) {
           const cnt = getLessonsFromPayment(price, date);
           const isGrp = isGroupPayment(price, date);
@@ -2804,6 +2804,18 @@ function toggle(fieldId, btn, val) {
 // ══════════════════════════════════════════════
 //  CSV PARSER (minimal)
 // ══════════════════════════════════════════════
+function parseSentDate(s){
+  if(!s)return null;
+  s=String(s).trim().replace(/^"+|"+$/g,'').trim();
+  if(!s)return null;
+  let d=new Date(s);                          // JS-формат "Thu Jun 18 2026 ... (Москва)" + ISO
+  if(!isNaN(d.getTime()))return d;
+  d=new Date(s.replace(' ','T'));             // ISO с пробелом
+  if(!isNaN(d.getTime()))return d;
+  const m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[T ](\d{2}:\d{2}(?::\d{2})?))?/); // DD.MM.YYYY
+  if(m){d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}${m[4]?'T'+m[4]:''}`);if(!isNaN(d.getTime()))return d;}
+  return null;
+}
 function parseCSV(txt){
   const lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
   if(!lines.length)return[];
@@ -2812,7 +2824,8 @@ function parseCSV(txt){
   for(let i=1;i<lines.length;i++){
     const l=lines[i].trim();if(!l)continue;
     const vals=splitLine(l),row={};
-    headers.forEach((h,j)=>row[h.trim()]=(vals[j]||'').trim());
+    // Tilda оборачивает значения в кавычки — снимаем одну внешнюю пару
+    headers.forEach((h,j)=>row[h.trim()]=(vals[j]||'').trim().replace(/^"([\s\S]*)"$/,'$1').trim());
     out.push(row);
   }
   return out;
