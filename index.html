@@ -648,7 +648,7 @@ function updateFilterUI() {
 }
 
 function inRange(date) {
-  if (!date) return false;
+  if (!date || isNaN(date.getTime())) return false;
   if (_dateFrom && date < _dateFrom) return false;
   if (_dateTo   && date > _dateTo)   return false;
   return true;
@@ -724,7 +724,16 @@ function splitLine(line){
   res.push(cur);return res;
 }
 function parsePrice(s){if(!s)return 0;return parseFloat(s.replace(/[\s ]/g,'').replace(',','.'))||0;}
-function parseDate(s){if(!s)return null;try{return new Date(s.replace(' ','T'));}catch{return null;}}
+function parseDate(s){
+  if(!s)return null;
+  // ISO: YYYY-MM-DD[ T]HH:MM:SS
+  let d=new Date(s.replace(' ','T'));
+  if(!isNaN(d.getTime()))return d;
+  // Russian: DD.MM.YYYY[ HH:MM:SS]
+  const m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[T ](\d{2}:\d{2}(?::\d{2})?))?/);
+  if(m){d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}${m[4]?'T'+m[4]:''}`);if(!isNaN(d.getTime()))return d;}
+  return null;
+}
 function isPaid(r){return r['Payment status']==='Paid'||r['Статус оплаты']==='Оплачено'||(r['paymentid']&&/tinkoff|sber|pay/.test(r['paymentid']));}
 function getTg(r){
   let s=(r['Ваш_ник_в_Telegram']||r['Input']||'').trim();
@@ -963,7 +972,7 @@ function renderCharts(){
   const rows=filteredRows;
   const wdR=new Array(7).fill(0),hrR=new Array(24).fill(0),mMap={},catMap={};
   for(const r of rows){
-    const d=r._date;if(!d)continue;
+    const d=r._date;if(!d||isNaN(d.getTime()))continue;
     const p=r._price;
     wdR[(d.getDay()+6)%7]+=p;
     hrR[d.getHours()]+=p;
