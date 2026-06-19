@@ -63,6 +63,8 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 
 /* ── CARDS ── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:14px;}
+.card:has(.student-search-wrap){overflow:visible;}
+.card:has(.student-search-wrap) .card-head{border-radius:14px 14px 0 0;overflow:hidden;}
 .card-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
 .card-title{font-weight:700;font-size:.92rem;}
 .card-body{padding:16px 18px;}
