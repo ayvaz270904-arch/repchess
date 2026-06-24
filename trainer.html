@@ -1609,7 +1609,7 @@ function searchStudents(q, prefix) {
     }
     return `
     <div class="student-result-item"
-      onclick="${blocked ? 'void 0' : `selectStudent('${esc(s.email)}','${prefix}')`}"
+      onclick="${blocked ? 'void 0' : `selectStudent('${escJs(s.email)}','${prefix}')`}"
       style="${blocked ? 'opacity:.4;cursor:not-allowed' : ''}">
       <div>
         <div class="student-name">${esc(s.name)}</div>
@@ -1667,7 +1667,7 @@ function renderGrpTags() {
   document.getElementById('grp-students-tags').innerHTML = grpSelectedStudents.map(s =>
     `<div class="group-student-tag">
       ${esc(s.name)}
-      <button onclick="removeGrpStudent('${esc(s.email)}')">✕</button>
+      <button onclick="removeGrpStudent('${escJs(s.email)}')">✕</button>
     </div>`).join('');
 }
 
@@ -2474,7 +2474,7 @@ async function loadTrainerAssignments(trainersSnap) {
         ? '<span class="tag tag-indiv-buyer" style="padding:1px 5px">инд.</span>'
         : (s?.purchasedGroup||0)>0 ? '<span class="tag tag-group-buyer" style="padding:1px 5px">гр.</span>' : '';
       return `<div class="group-student-tag">${esc(name)} ${typeTag}
-        <button onclick="removeStudentAssignment('${esc(t.id)}','${esc(email)}')">✕</button>
+        <button onclick="removeStudentAssignment('${escJs(t.id)}','${escJs(email)}')">✕</button>
       </div>`;
     }).join('');
     return `<div style="padding:14px 0;border-bottom:1px solid var(--border)">
@@ -2507,7 +2507,7 @@ function searchStudentsForAssign(q, trainerId) {
     const takenByName = takenBy ? (takenBy.name || '').split(' ').slice(0,2).join(' ') : null;
     return `
     <div class="student-result-item"
-      onclick="${takenBy ? 'void 0' : `assignStudent('${esc(trainerId)}','${esc(s.email)}')`}"
+      onclick="${takenBy ? 'void 0' : `assignStudent('${escJs(trainerId)}','${escJs(s.email)}')`}"
       style="${takenBy ? 'opacity:.45;cursor:not-allowed' : ''}">
       <div>
         <div class="student-name">${esc(s.name)}</div>
@@ -2845,6 +2845,8 @@ function splitLine(line){
 //  UTILS
 // ══════════════════════════════════════════════
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Экранирование для JS-строки внутри HTML-атрибута (onclick="fn('...')") — esc() НЕ экранирует одинарную кавычку
+function escJs(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 let _toastTimer=null;
 function toast(msg, type='ok'){
@@ -3130,12 +3132,12 @@ async function loadFinance() {
         c.groupOff * r.groupOff +
         c.groupOn  * r.groupOn;
       totalPayout += payout;
-      const safeName = (t.name || t.email).replace(/'/g,"\\'");
+      const safeName = esc(t.name || t.email);
       const hasRates = Object.values(r).some(v => v > 0);
 
       const cell = (count, label, rate, drillType) => `
         <div class="${count>0&&isAdmin?'fin-cell-btn':''}" style="background:var(--surface2);border-radius:10px;padding:8px 10px;text-align:center"
-          ${count>0&&isAdmin?`onclick="openFinDrill('${t.id}','${drillType}','${t.name||''}')"`:''}>
+          ${count>0&&isAdmin?`onclick="openFinDrill('${escJs(t.id)}','${escJs(drillType)}','${escJs(t.name||'')}')"`:''}>
           <div style="font-size:1.2rem;font-weight:800">${count}</div>
           <div style="font-size:.68rem;color:var(--text2);line-height:1.3">${label}</div>
           <div style="font-size:.68rem;color:var(--accent);margin-top:2px">${rate > 0 ? rate+'₽' : '—'}</div>
@@ -3144,7 +3146,7 @@ async function loadFinance() {
       html += `
       <div class="card" style="margin-bottom:14px">
         <div class="card-head" style="display:flex;align-items:center;justify-content:space-between">
-          <span class="card-title">👤 ${t.name || t.email}</span>
+          <span class="card-title">👤 ${esc(t.name || t.email)}</span>
           ${isAdmin ? `<button class="btn-sm rate-btn" data-tid="${t.id}" data-name="${safeName}" data-ioff="${r.indivOff}" data-ion="${r.indivOn}" data-goff="${r.groupOff}" data-gon="${r.groupOn}" style="font-size:.75rem;background:var(--accent);color:#fff;border:none;padding:5px 10px;border-radius:7px">✏️ Ставки</button>` : ''}
         </div>
         <div class="card-body">
@@ -3328,7 +3330,7 @@ async function openStudentInfoModal(email) {
       ${expiryStr ? `<div style="font-size:.82rem;margin-bottom:6px">${expiryStr}</div>` : ''}
       ${s.phone ? `<div style="margin-top:10px;display:flex;gap:8px;align-items:center">
         <span style="font-size:.82rem;color:var(--text2)">📞 ${esc(s.phone)}</span>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('${esc(s.phone)}').then(()=>toast('Скопировано','ok'))">Копировать</button>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('${escJs(s.phone)}').then(()=>toast('Скопировано','ok'))">Копировать</button>
       </div>` : ''}`;
   } catch(e) {
     document.getElementById('si-body').innerHTML = `<div style="color:var(--red);font-size:.85rem">Ошибка: ${e.message}</div>`;
@@ -3702,7 +3704,7 @@ function searchAttendExpected(q) {
 
   if (!matches.length) { resultsEl.style.display = 'none'; return; }
   resultsEl.innerHTML = matches.map(s => `
-    <div class="student-result-item" onclick="addAttendExpected('${esc(s.email)}')">
+    <div class="student-result-item" onclick="addAttendExpected('${escJs(s.email)}')">
       <div>
         <div class="student-name">${esc(s.name)}</div>
         <div class="student-meta">${s.id} · ${esc(s.email)}</div>
@@ -3742,7 +3744,7 @@ function addAttendExpected(email) {
       <div style="font-weight:600;font-size:.88rem">${esc(s.name)}</div>
       ${isAdmin && s.phone ? `<span style="font-size:.7rem;color:var(--text2)">${esc(s.phone)}</span>` : ''}
     </div>
-    <button onclick="this.closest('[data-attend-email]').remove();_attendNewExpected=_attendNewExpected.filter(x=>x.email!=='${esc(email)}')"
+    <button onclick="this.closest('[data-attend-email]').remove();_attendNewExpected=_attendNewExpected.filter(x=>x.email!=='${escJs(email)}')"
       style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.85rem;padding:2px 4px" title="Убрать">✕</button>`;
   listEl.appendChild(div);
 }
@@ -4031,7 +4033,7 @@ function renderStudentDB(q) {
       : `<span style="color:var(--text2);font-size:.72rem">не закреплён</span>`;
     const bal = s.remaining ?? s.purchased ?? 0;
     const balClass = bal <= 0 ? 'balance-empty' : bal <= 2 ? 'balance-low' : 'balance-ok';
-    return `<div class="sdb-item" data-si-email="${esc(s.email)}" onclick="openStudentInfoModal('${esc(s.email)}')">
+    return `<div class="sdb-item" data-si-email="${esc(s.email)}" onclick="openStudentInfoModal('${escJs(s.email)}')">
       <div style="min-width:0">
         <div style="font-weight:600;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.name)}</div>
         <div style="font-size:.72rem;color:var(--text2);margin-top:2px">${s.id} · ${esc(s.email)}</div>
@@ -4160,7 +4162,7 @@ async function loadHomeReminders() {
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span class="balance-badge" style="background:rgba(239,68,68,.12);color:${color}">${label}</span>
-        ${s.phone ? `<button class="copy-btn" onclick="navigator.clipboard.writeText('${esc(s.phone)}').then(()=>toast('Номер скопирован','ok'))">📋</button>` : ''}
+        ${s.phone ? `<button class="copy-btn" onclick="navigator.clipboard.writeText('${escJs(s.phone)}').then(()=>toast('Номер скопирован','ok'))">📋</button>` : ''}
       </div>
     </div>`;
   }).join('');

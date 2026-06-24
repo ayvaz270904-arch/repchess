@@ -859,7 +859,7 @@ function renderActive(){
   document.getElementById('active-cnt').textContent=`(${list.length})`;
   const tb=document.getElementById('active-tbody');
   if(!list.length){tb.innerHTML=`<tr><td colspan="7" class="empty">Нет активных учеников</td></tr>`;return;}
-  tb.innerHTML=list.map(s=>`<tr onclick="openModal('${esc(s.key)}')" style="cursor:pointer">
+  tb.innerHTML=list.map(s=>`<tr onclick="openModal('${escJs(s.key)}')" style="cursor:pointer">
     <td><b>${esc(s.name)}</b></td>
     <td>${s.telegram?`<a class="tg-link" href="https://t.me/${esc(s.telegram)}" target="_blank" onclick="event.stopPropagation()">@${esc(s.telegram)}</a>`:'<span class="dim">—</span>'}</td>
     <td class="dim">${esc(s.phone)||'—'}</td>
@@ -918,7 +918,7 @@ function renderStudents(){
     const pm=periodMap[s.key];
     const payCnt  = hasPeriod?(pm?.cnt||0):s.payCount;
     const paySum  = hasPeriod?(pm?.sum||0):s.totalSpent;
-    return`<tr onclick="openModal('${esc(s.key)}')" style="cursor:pointer">
+    return`<tr onclick="openModal('${escJs(s.key)}')" style="cursor:pointer">
       <td><b>${esc(s.name)}</b></td>
       <td class="dim" style="font-size:.76rem">${esc(s.email)}</td>
       <td>${s.telegram?`<a class="tg-link" href="https://t.me/${esc(s.telegram)}" target="_blank" onclick="event.stopPropagation()">@${esc(s.telegram)}</a>`:'<span class="dim">—</span>'}</td>
@@ -1033,6 +1033,8 @@ function fmtM(n){if(!n)return'0 ₽';return n.toLocaleString('ru-RU')+' ₽';}
 function fmtD(d){if(!d)return'<span class="dim">—</span>';return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short',year:'numeric'});}
 function fmt(d){return d.toISOString().slice(0,10);}
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Экранирование для JS-строки внутри HTML-атрибута (onclick="fn('...')") — esc() НЕ экранирует одинарную кавычку
+function escJs(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function show(id){document.getElementById(id).style.display='';}
 function hide(id){document.getElementById(id).style.display='none';}
 function setPill(t,cls){const el=document.getElementById('status-pill');el.textContent=t;el.className='status-pill '+(cls||'');}
