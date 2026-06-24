@@ -1888,7 +1888,7 @@ async function openEditGroupModal(groupId) {
     document.getElementById('grp-submit').parentNode.insertBefore(delBtn, document.getElementById('grp-submit').nextSibling.nextSibling);
   }
   delBtn.style.display = '';
-  delBtn.dataset.confirm = '';
+  delBtn.dataset.confirm = ''; delBtn.disabled = false; delBtn.textContent = '🗑 Удалить занятие';
   _openModal('group-modal');
 }
 
