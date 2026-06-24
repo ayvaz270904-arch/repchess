@@ -2844,7 +2844,7 @@ function splitLine(line){
 // ══════════════════════════════════════════════
 //  UTILS
 // ══════════════════════════════════════════════
-function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 // Экранирование для JS-строки внутри HTML-атрибута (onclick="fn('...')") — esc() НЕ экранирует одинарную кавычку
 function escJs(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
