@@ -1250,8 +1250,11 @@ async function loadStudents() {
     for (const row of rows) {
       const email = (row['Email']||'').toLowerCase().trim();
       if (!email || email === 'test@mail.ru') continue;
-      if (!map[email]) map[email] = { name: row['Name']||'', email, phone: row['Phone']||'', purchased: 0, purchasedGroup: 0, purchasedIndiv: 0, firstDate: null, nextExpiry: null };
-      const m = map[email];
+      // Составной ключ email+имя — как в CRM, чтобы подарочные покупки (один email, разные люди) не схлопывались
+      const nameLower = (row['Name']||'').toLowerCase().trim();
+      const key = email + '||' + nameLower;
+      if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', purchased: 0, purchasedGroup: 0, purchasedIndiv: 0, firstDate: null, nextExpiry: null };
+      const m = map[key];
       if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
 
       // Check if paid
@@ -1609,7 +1612,7 @@ function searchStudents(q, prefix) {
     }
     return `
     <div class="student-result-item"
-      onclick="${blocked ? 'void 0' : `selectStudent('${escJs(s.email)}','${prefix}')`}"
+      onclick="${blocked ? 'void 0' : `selectStudent('${escJs(s.id)}','${prefix}')`}"
       style="${blocked ? 'opacity:.4;cursor:not-allowed' : ''}">
       <div>
         <div class="student-name">${esc(s.name)}</div>
@@ -1636,14 +1639,16 @@ function refreshGrpStudentSearch() {
   }
 }
 
-async function selectStudent(email, prefix) {
-  const s = students.find(x => x.email === email);
+async function selectStudent(sid, prefix) {
+  const s = students.find(x => x.id === sid);
   if (!s) return;
+  const email = s.email;
   document.getElementById(`${prefix}-student-results`).style.display='none';
 
   if (prefix === 'rec') {
     document.getElementById('rec-student-inp').value = s.name;
     document.getElementById('rec-student-inp').dataset.email = email;
+    document.getElementById('rec-student-inp').dataset.studentId = s.id;
     document.getElementById('rec-chosen-name').textContent = s.name;
     document.getElementById('rec-chosen-id').textContent = s.id + ' · ' + email;
     document.getElementById('rec-student-chosen').style.display = '';
@@ -1655,7 +1660,7 @@ async function selectStudent(email, prefix) {
     checkRecTrainerAssignment();
 
   } else if (prefix === 'grp') {
-    if (grpSelectedStudents.find(x => x.email === email)) return;
+    if (grpSelectedStudents.find(x => x.id === s.id)) return;
     // Групповые занятия: назначение тренер→ученик не требуется
     grpSelectedStudents.push(s);
     renderGrpTags();
@@ -1664,21 +1669,22 @@ async function selectStudent(email, prefix) {
 }
 
 function renderGrpTags() {
-  document.getElementById('grp-students-tags').innerHTML = grpSelectedStudents.map(s =>
+  document.getElementById('grp-students-tags').innerHTML = grpSelectedStudents.map((s,i) =>
     `<div class="group-student-tag">
       ${esc(s.name)}
-      <button onclick="removeGrpStudent('${escJs(s.email)}')">✕</button>
+      <button onclick="removeGrpStudent(${i})">✕</button>
     </div>`).join('');
 }
 
-function removeGrpStudent(email) {
-  grpSelectedStudents = grpSelectedStudents.filter(s => s.email !== email);
+function removeGrpStudent(i) {
+  grpSelectedStudents.splice(i, 1);
   renderGrpTags();
 }
 
 function clearStudent(prefix) {
   document.getElementById(`${prefix}-student-inp`).value = '';
   document.getElementById(`${prefix}-student-inp`).dataset.email = '';
+  document.getElementById(`${prefix}-student-inp`).dataset.studentId = '';
   if (document.getElementById(`${prefix}-student-chosen`)) {
     document.getElementById(`${prefix}-student-chosen`).style.display='none';
   }
@@ -1760,7 +1766,8 @@ async function submitLesson() {
     }
   }
 
-  const s = students.find(x => x.email === email);
+  const sid = document.getElementById('rec-student-inp').dataset.studentId;
+  const s = students.find(x => x.id === sid) || students.find(x => x.email === email);
   const btn = document.getElementById('rec-submit');
   btn.disabled = true; btn.textContent = 'Сохранение...';
 
