@@ -1041,7 +1041,7 @@ function setPill(t,cls){const el=document.getElementById('status-pill');el.textC
 
 // PWA — Service Worker
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(e=>console.log('SW:',e)));
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(e=>console.log('SW:',e)));
 }
 </script>
 

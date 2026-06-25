@@ -3243,7 +3243,7 @@ async function saveRate() {
 
 // PWA — Service Worker
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(e=>console.log('SW:',e)));
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(e=>console.log('SW:',e)));
 }
 
 // Закрытие поиска при клике вне — capture фаза обходит stopPropagation внутри модалов
