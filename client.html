@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Rep Chess — Личный кабинет</title>
+<title>Rep Chess Education — Личный кабинет</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
   :root {
@@ -23,90 +23,75 @@
   .header { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
   .header .logo { font-size: 1.5rem; }
   .header h1 { font-size: 1.15rem; font-weight: 800; }
-  .card {
-    background: var(--card); border-radius: 14px; padding: 16px 18px; margin-bottom: 12px;
-  }
-  .card h2 { font-size: .95rem; font-weight: 700; margin-bottom: 8px; }
+  .card { background: var(--card); border-radius: 14px; padding: 16px 18px; margin-bottom: 12px; }
+  .card h2 { font-size: .95rem; font-weight: 700; margin-bottom: 10px; }
   .muted { color: var(--hint); font-size: .85rem; }
-  .big { font-size: 1.6rem; font-weight: 800; color: var(--accent); }
+  .balance { text-align: center; }
+  .big { font-size: 2.6rem; font-weight: 800; color: var(--accent); line-height: 1.1; margin: 4px 0; }
+  .rows { margin-top: 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-top: 1px solid rgba(127,127,127,.15); font-size: .9rem; }
+  .row:first-child { border-top: none; }
+  .row .exp { opacity: .5; }
   .center { text-align: center; padding: 40px 16px; }
-  .spinner {
-    width: 28px; height: 28px; border: 3px solid var(--card);
-    border-top-color: var(--accent); border-radius: 50%;
-    animation: spin 0.8s linear infinite; margin: 0 auto 14px;
-  }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--card); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 14px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .err { color: #ef4444; }
-  .btn {
-    display: inline-block; background: var(--accent); color: var(--accent-text);
-    padding: 10px 18px; border-radius: 10px; font-weight: 700; border: none;
-    cursor: pointer; font-size: .9rem; text-decoration: none; margin-top: 10px;
-  }
 </style>
 </head>
 <body>
   <div id="app">
-    <div class="center">
-      <div class="spinner"></div>
-      <div class="muted">Загружаю ваш кабинет…</div>
-    </div>
+    <div class="center"><div class="spinner"></div><div class="muted">Загружаю ваш кабинет…</div></div>
   </div>
 
 <script>
-// Бэкенд = тот же проект Apps Script, что и бот (doGet)
 const BACKEND = 'https://script.google.com/macros/s/AKfycbymBB1BkAnqLi_uLt9M1rVJ-rFGa0fK225hw-HvlhxgxsbVO4K5gka44FTFzYLss-tVZg/exec';
-
 const tg = window.Telegram ? window.Telegram.WebApp : null;
 const app = document.getElementById('app');
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
+function fmtRub(n){return String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,' ')+' ₽';}
 function render(html){ app.innerHTML = html; }
-
 function showError(msg, hint){
   render(`<div class="center"><div class="err" style="font-size:1.4rem;margin-bottom:8px">⚠️</div>
-    <div style="margin-bottom:6px">${esc(msg)}</div>
-    ${hint ? `<div class="muted">${esc(hint)}</div>` : ''}</div>`);
+    <div style="margin-bottom:6px">${esc(msg)}</div>${hint?`<div class="muted">${esc(hint)}</div>`:''}</div>`);
 }
 
 async function load(){
-  if (!tg || !tg.initData) {
-    showError('Откройте кабинет через бота', 'Эта страница работает только внутри Telegram.');
-    return;
-  }
-  tg.ready();
-  tg.expand();
+  if (!tg || !tg.initData) { showError('Откройте кабинет через бота', 'Эта страница работает только внутри Telegram.'); return; }
+  tg.ready(); tg.expand();
   try {
     const res = await fetch(BACKEND + '?initData=' + encodeURIComponent(tg.initData) + '&t=' + Date.now());
     const data = await res.json();
-
     if (!data.ok) {
-      if (data.error === 'not_linked') {
-        showError('Вы ещё не привязаны', 'Вернитесь в бота и поделитесь номером телефона.');
-      } else if (data.error === 'auth') {
-        showError('Не удалось подтвердить вход', 'Попробуйте открыть кабинет заново через бота.');
-      } else {
-        showError('Ошибка', data.error || 'неизвестно');
-      }
+      if (data.error === 'not_linked') showError('Вы ещё не привязаны', 'Вернитесь в бота и поделитесь номером телефона.');
+      else if (data.error === 'auth') showError('Не удалось подтвердить вход', 'Откройте кабинет заново через бота.');
+      else showError('Ошибка', data.error || 'неизвестно');
       return;
     }
 
+    const cats = Object.keys(data.byCat || {}).map(k =>
+      `<div class="row"><span>${esc(k)}</span><b>${data.byCat[k]}</b></div>`).join('')
+      || '<div class="muted">нет активных пакетов</div>';
+
+    const hist = (data.history || []).map(h =>
+      `<div class="row"><span class="${h.expired?'exp':''}">${esc(h.date)} · ${esc(h.label)}${h.expired?' · истёк':''}</span>
+       <span class="muted">${fmtRub(h.price)}</span></div>`).join('')
+      || '<div class="muted">покупок пока нет</div>';
+
     render(`
       <div class="header"><span class="logo">♟</span><h1>Rep Chess Education</h1></div>
-      <div class="card">
-        <h2>Привет, ${esc(data.name)}!</h2>
-        <div class="muted">📧 ${esc(data.email)}</div>
+      <div class="card"><h2>Привет, ${esc(data.name)}!</h2><div class="muted">📧 ${esc(data.email)}</div></div>
+      <div class="card balance">
+        <div class="muted">Активных занятий</div>
+        <div class="big">${data.totalActive || 0}</div>
+        ${data.nextExpiry ? `<div class="muted">действуют до ${esc(data.nextExpiry)}</div>` : ''}
+        <div class="rows">${cats}</div>
       </div>
-      <div class="card">
-        <h2>Баланс занятий</h2>
-        <div class="muted">Скоро здесь появятся ваши занятия: сколько осталось, история и расписание.</div>
-      </div>
+      <div class="card"><h2>История покупок</h2><div class="rows">${hist}</div></div>
+      <div class="card"><h2>Занятия</h2><div class="muted">История проведённых и ближайшие занятия добавим следующим шагом.</div></div>
     `);
-  } catch (e) {
-    showError('Ошибка сети', e.message);
-  }
+  } catch (e) { showError('Ошибка сети', e.message); }
 }
-
 load();
 </script>
 </body>
