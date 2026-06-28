@@ -395,52 +395,44 @@ const PRICES_NEW = {
 // 10000 после 18.03 — конфликт: Групп.онлайн×10 и Индив.офлайн×4
 // разруливаем по строке продукта
 
+// ЕДИНАЯ логика для CRM, кабинета тренера и бота.
+// Определяет тариф по СТРОКЕ товара (а не только по цене) — работает и для промо (цена 0), и для скидок.
 function identifyProduct(productStr, price, date) {
   const p = (productStr || '').toLowerCase();
-  const isNew = date && date >= PRICE_CHANGE;
+  const isNew = date ? date >= PRICE_CHANGE : true;
 
-  // Попытка извлечь кол-во занятий из строки "Nx<price>"
-  let lessons = 1;
-  const qMatch = p.match(/(\d+)x\d/);
-  if (qMatch) lessons = parseInt(qMatch[1]);
-  else if (p.includes('10 зан') || p.match(/×10|x10|\b10\b.*абон/)) lessons = 10;
-  else if (p.includes('4 зан')  || p.match(/×4|x4|\b4\b.*абон/))    lessons = 4;
+  // Кол-во пакетов и цена тарифа из строки "Nx<цена>" (напр. "1x1200")
+  let qty = 1, catPrice = 0;
+  const xm = p.match(/(\d+)\s*x\s*(\d+)/);
+  if (xm) { qty = parseInt(xm[1]) || 1; catPrice = parseInt(xm[2]) || 0; }
+  if (!catPrice) catPrice = Math.round(price) || 0;
 
-  // Тип по ключевым словам
-  const isGM      = p.includes('гросс');
-  const isIndiv   = p.includes('индив');
-  const isOnline  = p.includes('онлайн');
-  const isOffline = p.includes('офлайн');
-  const isGroup   = p.includes('групп') || (!isIndiv && !isGM);
+  // Занятий в пакете: из названия ("N занят") или из каталога по цене тарифа
+  let perPack = 0;
+  const lm = p.match(/(\d+)\s*занят/);
+  if (lm) perPack = parseInt(lm[1]);
 
+  const isGM = p.includes('гросс'), isIndiv = p.includes('индив'),
+        isOnline = p.includes('онлайн'), isOffline = p.includes('офлайн'), isGroup = p.includes('групп');
   let cat = '';
-  if (isGM)                          cat = 'Гроссмейстер';
-  else if (isIndiv && isOffline)     cat = 'Индив. офлайн';
-  else if (isIndiv && isOnline)      cat = 'Индив. онлайн';
-  else if (isIndiv)                  cat = 'Индив. онлайн';
-  else if (isGroup && isOffline)     cat = 'Групп. офлайн';
-  else if (isGroup && isOnline)      cat = 'Групп. онлайн';
-  else if (isOffline)                cat = 'Групп. офлайн';
-  else if (isOnline)                 cat = 'Групп. онлайн';
+  if (isGM)                      cat = 'Гроссмейстер';
+  else if (isIndiv && isOffline) cat = 'Индив. офлайн';
+  else if (isIndiv)              cat = 'Индив. онлайн';
+  else if (isGroup && isOffline) cat = 'Групп. офлайн';
+  else if (isGroup && isOnline)  cat = 'Групп. онлайн';
+  else if (isOffline)            cat = 'Групп. офлайн';
+  else if (isOnline)             cat = 'Групп. онлайн';
 
-  // Если не определили по строке — используем прайс
-  if (!cat && price) {
-    const catalog = isNew ? PRICES_NEW : PRICES_OLD;
-    const entry = catalog[price];
-    if (entry) { cat = entry.cat; if (lessons === 1) lessons = entry.lessons; }
-  }
+  const c0 = catPrice ? (isNew ? PRICES_NEW : PRICES_OLD)[catPrice] : null;
+  if (!cat && c0) cat = c0.cat;
+  if (!perPack && c0) perPack = c0.lessons;
 
-  // Особый случай: цена 10000 после 18.03 — различаем по строке
-  if (price === 10000 && isNew) {
-    if (isIndiv && isOffline) { cat = 'Индив. офлайн'; lessons = 4; }
-    else                       { cat = 'Групп. онлайн'; lessons = 10; }
-  }
+  // Цена 10000 = конфликт: Групп.онлайн×10 или Индив.офлайн×4 — различаем по названию
+  if (catPrice === 10000 && isNew && !cat) { cat = (isIndiv && isOffline) ? 'Индив. офлайн' : 'Групп. онлайн'; if (!perPack) perPack = (isIndiv && isOffline) ? 4 : 10; }
+  if (!perPack) perPack = 1;
 
-  return {
-    cat:     cat || 'Другое',
-    lessons: lessons || 1,
-    label:   cat ? `${cat} ×${lessons}` : 'Другое',
-  };
+  const lessons = perPack * qty;
+  return { cat: cat || 'Другое', lessons: lessons, label: cat ? `${cat} ×${lessons}` : 'Другое' };
 }
 
 // ══════════════════════════════════════════
@@ -768,11 +760,12 @@ function processCSV(txt) {
 
     if(isPaid(row)){
       const price=parsePrice(row['price']);
-      if(price>0){
+      const _prodStr=row['products']||'';
+      if(price>0 || _prodStr){   // промо (цена 0) тоже учитываем, если есть товар
         const date=parseDate(row['sent']);
-        const prod=identifyProduct(row['products'],price,date);
+        const prod=identifyProduct(_prodStr,price,date);
         allPaidRows.push({...row, _date:date, _price:price, _prod:prod});
-        s.payments.push({date,product:row['products']||'',price,prod});
+        s.payments.push({date,product:_prodStr,price,prod});
       }
     }else{s.freeCnt++;}
   }
