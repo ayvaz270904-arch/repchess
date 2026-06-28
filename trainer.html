@@ -1063,37 +1063,44 @@ let _unknownPayments = [];  // [{price, date, email, name}] — неизвест
 //  PRICE HISTORY (same as )
 // ══════════════════════════════════════════════
 const PRICE_CHANGE = new Date('2026-03-18');
-// g:true = групповые занятия (самый дешёвый тариф за занятие)
-const PRICES_OLD = {
-  1500:{l:1},5500:{l:4},12000:{l:10},
-  1000:{l:1,g:true},3600:{l:4,g:true},8000:{l:10,g:true},
-  2500:{l:1},9000:{l:4},21000:{l:10},
-  1700:{l:1},6400:{l:4},15000:{l:10}
-};
-const PRICES_NEW = {
-  1800:{l:1},6500:{l:4},15500:{l:10},
-  1200:{l:1,g:true},4400:{l:4,g:true},10000:{l:10,g:true},
-  2800:{l:1},23500:{l:10},
-  2000:{l:1},7200:{l:4},17000:{l:10},6000:{l:1,g:true}
-};
+const PRICES_OLD = {1500:{cat:'Групп. офлайн',lessons:1},5500:{cat:'Групп. офлайн',lessons:4},12000:{cat:'Групп. офлайн',lessons:10},1000:{cat:'Групп. онлайн',lessons:1},3600:{cat:'Групп. онлайн',lessons:4},8000:{cat:'Групп. онлайн',lessons:10},2500:{cat:'Индив. офлайн',lessons:1},9000:{cat:'Индив. офлайн',lessons:4},21000:{cat:'Индив. офлайн',lessons:10},1700:{cat:'Индив. онлайн',lessons:1},6400:{cat:'Индив. онлайн',lessons:4},15000:{cat:'Индив. онлайн',lessons:10}};
+const PRICES_NEW = {1800:{cat:'Групп. офлайн',lessons:1},6500:{cat:'Групп. офлайн',lessons:4},15500:{cat:'Групп. офлайн',lessons:10},1200:{cat:'Групп. онлайн',lessons:1},4400:{cat:'Групп. онлайн',lessons:4},10000:{cat:'Групп. онлайн',lessons:10},2800:{cat:'Индив. офлайн',lessons:1},23500:{cat:'Индив. офлайн',lessons:10},2000:{cat:'Индив. онлайн',lessons:1},7200:{cat:'Индив. онлайн',lessons:4},17000:{cat:'Индив. онлайн',lessons:10},6000:{cat:'Гроссмейстер',lessons:1}};
 
-function getLessonsFromPayment(price, date) {
-  const key = String(Math.round(price));
-  if (_priceOverrides[key]) return _priceOverrides[key].lessons;
-  const catalog = (date && date >= PRICE_CHANGE) ? PRICES_NEW : PRICES_OLD;
-  return (catalog[Math.round(price)] || {l:1}).l;
+// ЕДИНАЯ логика (как в CRM и боте) — определяет тариф по СТРОКЕ товара, поддерживает промо/скидки
+function identifyProduct(productStr, price, date) {
+  const p = (productStr || '').toLowerCase();
+  const isNew = date ? date >= PRICE_CHANGE : true;
+  let qty = 1, catPrice = 0;
+  const xm = p.match(/(\d+)\s*x\s*(\d+)/);
+  if (xm) { qty = parseInt(xm[1]) || 1; catPrice = parseInt(xm[2]) || 0; }
+  if (!catPrice) catPrice = Math.round(price) || 0;
+  let perPack = 0;
+  const lm = p.match(/(\d+)\s*занят/);
+  if (lm) perPack = parseInt(lm[1]);
+  const isGM = p.includes('гросс'), isIndiv = p.includes('индив'), isOnline = p.includes('онлайн'), isOffline = p.includes('офлайн'), isGroup = p.includes('групп');
+  let cat = '';
+  if (isGM)                      cat = 'Гроссмейстер';
+  else if (isIndiv && isOffline) cat = 'Индив. офлайн';
+  else if (isIndiv)              cat = 'Индив. онлайн';
+  else if (isGroup && isOffline) cat = 'Групп. офлайн';
+  else if (isGroup && isOnline)  cat = 'Групп. онлайн';
+  else if (isOffline)            cat = 'Групп. офлайн';
+  else if (isOnline)             cat = 'Групп. онлайн';
+  const c0 = catPrice ? (isNew ? PRICES_NEW : PRICES_OLD)[catPrice] : null;
+  if (!cat && c0) cat = c0.cat;
+  if (!perPack && c0) perPack = c0.lessons;
+  if (catPrice === 10000 && isNew && !cat) { cat = (isIndiv && isOffline) ? 'Индив. офлайн' : 'Групп. онлайн'; if (!perPack) perPack = (isIndiv && isOffline) ? 4 : 10; }
+  if (!perPack) perPack = 1;
+  const lessons = perPack * qty;
+  return { cat: cat || 'Другое', lessons: lessons, label: cat ? `${cat} ×${lessons}` : 'Другое' };
 }
-function isGroupPayment(price, date) {
+
+// Классификация платежа с учётом ручных переопределений (_priceOverrides по цене)
+function classifyPayment(productStr, price, date) {
   const key = String(Math.round(price));
-  if (_priceOverrides[key]) return !!_priceOverrides[key].group;
-  const catalog = (date && date >= PRICE_CHANGE) ? PRICES_NEW : PRICES_OLD;
-  return !!(catalog[Math.round(price)] || {}).g;
-}
-function isUnknownPrice(price, date) {
-  const key = String(Math.round(price));
-  if (_priceOverrides[key]) return false;
-  const catalog = (date && date >= PRICE_CHANGE) ? PRICES_NEW : PRICES_OLD;
-  return !catalog[Math.round(price)];
+  if (_priceOverrides[key]) return { lessons: _priceOverrides[key].lessons, group: !!_priceOverrides[key].group, unknown: false };
+  const prod = identifyProduct(productStr, price, date);
+  return { lessons: prod.lessons, group: prod.cat.indexOf('Групп') === 0, unknown: prod.cat === 'Другое' };
 }
 
 async function loadPriceOverrides() {
@@ -1259,13 +1266,15 @@ async function loadStudents() {
 
       // Check if paid
       if (row['Payment status']==='Paid' || row['Статус оплаты']==='Оплачено' || (row['paymentid']&&/tinkoff|sber/.test(row['paymentid']))) {
-        const price = parseFloat((row['price']||'').replace(/[\s ]/g,'').replace(',','.')) || 0;
+        const price = parseFloat((row['price']||'').replace(/[\s "]/g,'').replace(',','.')) || 0;
         const date  = parseSentDate(row['sent']);
-        if (price > 0) {
-          const cnt = getLessonsFromPayment(price, date);
-          const isGrp = isGroupPayment(price, date);
-          // Фиксируем неизвестные тарифы для ручной классификации
-          if (isUnknownPrice(price, date)) {
+        const prodStr = row['products'] || '';
+        if (price > 0 || prodStr) {   // промо (цена 0) тоже учитываем, если есть товар
+          const cls = classifyPayment(prodStr, price, date);
+          const cnt = cls.lessons;
+          const isGrp = cls.group;
+          // Фиксируем неизвестные тарифы для ручной классификации (только платные)
+          if (cls.unknown && price > 0) {
             const key = String(Math.round(price));
             if (!_unknownPayments.find(p => p.key === key)) {
               _unknownPayments.push({ key, price: Math.round(price), date, email, name: m.name });
