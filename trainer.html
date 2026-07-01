@@ -2332,6 +2332,47 @@ function resetHistoryFilter() {
 // ══════════════════════════════════════════════
 //  ADMIN PANEL
 // ══════════════════════════════════════════════
+let _admLessonsCache = [];
+let _admCollapsed = true;   // по умолчанию свёрнуто до 5
+const ADM_LIMIT = 5;
+function toggleAdmCollapse(){ _admCollapsed = !_admCollapsed; renderAdmLessons(); }
+
+function admLessonRowHTML(item){
+  const dt = item._date ? new Date(item._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
+  if (item._rowType === 'group') {
+    const attendCount = item.attendanceMarked
+      ? (item.attendedEmails||[]).length + (item.extraAttendees||[]).length
+      : (item.count || 0);
+    const mismatchTag = _groupHasMismatch(item) ? `<span class="tag tag-mismatch" style="padding:1px 5px;font-size:.68rem">⚠️</span>` : '';
+    const attendTag = item.attendanceMarked ? `<span class="tag tag-attendance-ok" style="padding:1px 5px;font-size:.68rem">✅</span>` : '';
+    return `<tr>
+      <td>${dt}</td>
+      <td><b>👥 ${esc(item.venue||'Группа')}</b><div style="font-size:.7rem;color:var(--text2)">${attendCount} чел. ${attendTag}${mismatchTag}</div></td>
+      <td class="dim">${esc(item.trainerName||'—')}</td>
+      <td><span class="tag ${item.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${item.format==='online'?'Онлайн':'Офлайн'}</span></td>
+      <td><span class="tag tag-group" style="padding:1px 6px">Группа</span></td>
+    </tr>`;
+  }
+  return `<tr>
+    <td>${dt}</td>
+    <td><b>${esc(item.studentName||'—')}</b><div style="font-size:.7rem;color:var(--text2)">${item.studentId||''}</div></td>
+    <td class="dim">${esc(item.trainerName||'—')}</td>
+    <td><span class="tag ${item.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${item.format==='online'?'Онлайн':'Офлайн'}</span></td>
+    <td><span class="tag tag-indiv" style="padding:1px 6px">Индив.</span></td>
+  </tr>`;
+}
+
+function renderAdmLessons(){
+  const all = _admLessonsCache;
+  document.getElementById('adm-lessons-count').textContent = all.length + ' занятий';
+  const shown = _admCollapsed ? all.slice(0, ADM_LIMIT) : all;
+  let html = shown.map(admLessonRowHTML).join('') || '<tr><td colspan="5" class="empty">Нет занятий</td></tr>';
+  if (all.length > ADM_LIMIT) {
+    html += `<tr><td colspan="5" style="padding:8px 0"><button onclick="toggleAdmCollapse()" style="width:100%;padding:10px;background:var(--surface2);color:var(--accent);border:1px solid var(--border);border-radius:10px;font-weight:700;font-size:.85rem;cursor:pointer">${_admCollapsed?`▾ Показать все (${all.length})`:'▴ Свернуть до 5'}</button></td></tr>`;
+  }
+  document.getElementById('adm-lessons-body').innerHTML = html;
+}
+
 async function loadAdminData() {
   if (currentTrainer.role !== 'admin') return;
   const from = document.getElementById('adm-from').value;
@@ -2389,38 +2430,12 @@ async function loadAdminData() {
     </tr>`;
   }).join('') || '<tr><td colspan="6" class="empty">Нет данных</td></tr>';
 
-  // Объединяем инд. и групповые занятия, сортируем по дате
-  const combined = [
+  // Объединяем инд. и групповые занятия, сортируем по дате (сворачивание — в renderAdmLessons)
+  _admLessonsCache = [
     ...lessons.map(l => ({...l, _rowType:'indiv'})),
     ...groupLessons.map(g => ({...g, _rowType:'group'}))
-  ].sort((a,b)=>(b._date||'')>(a._date||'')?1:-1).slice(0,60);
-
-  document.getElementById('adm-lessons-count').textContent = (lessons.length + groupLessons.length) + ' занятий';
-  document.getElementById('adm-lessons-body').innerHTML = combined.map(item => {
-    const dt = item._date ? new Date(item._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
-    if (item._rowType === 'group') {
-      const attendCount = item.attendanceMarked
-        ? (item.attendedEmails||[]).length + (item.extraAttendees||[]).length
-        : (item.count || 0);
-      const mismatchTag = _groupHasMismatch(item) ? `<span class="tag tag-mismatch" style="padding:1px 5px;font-size:.68rem">⚠️</span>` : '';
-      const attendTag = item.attendanceMarked ? `<span class="tag tag-attendance-ok" style="padding:1px 5px;font-size:.68rem">✅</span>` : '';
-      return `<tr>
-        <td>${dt}</td>
-        <td><b>👥 ${esc(item.venue||'Группа')}</b><div style="font-size:.7rem;color:var(--text2)">${attendCount} чел. ${attendTag}${mismatchTag}</div></td>
-        <td class="dim">${esc(item.trainerName||'—')}</td>
-        <td><span class="tag ${item.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${item.format==='online'?'Онлайн':'Офлайн'}</span></td>
-        <td><span class="tag tag-group" style="padding:1px 6px">Группа</span></td>
-      </tr>`;
-    } else {
-      return `<tr>
-        <td>${dt}</td>
-        <td><b>${esc(item.studentName||'—')}</b><div style="font-size:.7rem;color:var(--text2)">${item.studentId||''}</div></td>
-        <td class="dim">${esc(item.trainerName||'—')}</td>
-        <td><span class="tag ${item.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${item.format==='online'?'Онлайн':'Офлайн'}</span></td>
-        <td><span class="tag tag-indiv" style="padding:1px 6px">Индив.</span></td>
-      </tr>`;
-    }
-  }).join('') || '<tr><td colspan="5" class="empty">Нет занятий</td></tr>';
+  ].sort((a,b)=>(b._date||'')>(a._date||'')?1:-1);
+  renderAdmLessons();
 
   // Trainer list
   const trainersSnap = await db.collection('trainers').get();
@@ -4038,17 +4053,23 @@ function renderStudentDB(q) {
   const countEl = document.getElementById('sdb-count');
   if (!listEl) return;
 
+  const searching = q && q.length > 0;
   let pool = students.slice();
-  if (q && q.length > 0) {
+  if (searching) {
     const lq = q.toLowerCase();
     pool = pool.filter(s => s.name.toLowerCase().includes(lq) || s.email.includes(lq));
+    pool.sort((a,b) => a.name.localeCompare(b.name, 'ru'));
+  } else {
+    // По умолчанию — последние 10 добавившихся с активными занятиями
+    pool = pool.filter(s => (s.remaining ?? s.purchased ?? 0) > 0);
+    pool.sort((a,b) => (b.firstDate||0) - (a.firstDate||0));
+    pool = pool.slice(0, 10);
   }
-  pool.sort((a,b) => a.name.localeCompare(b.name, 'ru'));
 
-  countEl.textContent = pool.length + ' учеников';
+  countEl.textContent = searching ? (pool.length + ' найдено') : ('последние ' + pool.length + ' с активными занятиями');
 
   if (!pool.length) {
-    listEl.innerHTML = '<div class="empty">Ученики не найдены</div>';
+    listEl.innerHTML = searching ? '<div class="empty">Ученики не найдены</div>' : '<div class="empty">Нет учеников с активными занятиями</div>';
     return;
   }
 
