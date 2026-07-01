@@ -1265,7 +1265,7 @@ async function loadStudents() {
       if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
 
       // Check if paid
-      if (row['Payment status']==='Paid' || row['Статус оплаты']==='Оплачено' || (row['paymentid']&&/tinkoff|sber/.test(row['paymentid']))) {
+      if (/tinkoff|sber|pay/i.test(row['paymentid']||'')) {   // оплата = есть транзакция (paymentid); "Оплачено" без него не считаем
         const price = parseFloat((row['price']||'').replace(/[\s "]/g,'').replace(',','.')) || 0;
         const date  = parseSentDate(row['sent']);
         const prodStr = row['products'] || '';
@@ -2220,9 +2220,14 @@ async function loadHistory() {
   renderHistoryList();
 }
 
+let _histCollapsed = true;   // по умолчанию свёрнуто до 5 последних
+const HIST_LIMIT = 5;
+function toggleHistCollapse() { _histCollapsed = !_histCollapsed; renderHistoryList(); }
+
 function renderHistoryList() {
   const lessons = _histLessonsCache;
   const groups  = _histGroupsCache;
+  const collapsed = _histCollapsed;
   let html = '';
   let count = 0;
 
@@ -2230,7 +2235,7 @@ function renderHistoryList() {
     // Показываем индивидуальные занятия (групповые идут отдельным блоком)
     if (lessons.length) {
       if (_histTab === 'all') html += `<div style="font-size:.75rem;font-weight:700;color:var(--text2);padding:10px 0 6px;text-transform:uppercase;letter-spacing:.04em">Индивидуальные (${lessons.length})</div>`;
-      html += lessons.map(l => histLessonItemHTML(l)).join('');
+      html += (collapsed ? lessons.slice(0, HIST_LIMIT) : lessons).map(l => histLessonItemHTML(l)).join('');
       count += lessons.length;
     } else if (_histTab === 'indiv') {
       html += '<div class="empty">Нет занятий</div>';
@@ -2240,11 +2245,16 @@ function renderHistoryList() {
   if (_histTab === 'all' || _histTab === 'group') {
     if (groups.length) {
       if (_histTab === 'all') html += `<div style="font-size:.75rem;font-weight:700;color:var(--text2);padding:14px 0 6px;text-transform:uppercase;letter-spacing:.04em">Групповые (${groups.length})</div>`;
-      html += groups.map(g => histGroupItemHTML(g)).join('');
+      html += (collapsed ? groups.slice(0, HIST_LIMIT) : groups).map(g => histGroupItemHTML(g)).join('');
       count += groups.length;
     } else if (_histTab === 'group') {
       html += '<div class="empty">Нет групповых занятий</div>';
     }
+  }
+
+  // Кнопка «Показать все / Свернуть» — если записей больше лимита
+  if (count && (lessons.length > HIST_LIMIT || groups.length > HIST_LIMIT)) {
+    html += `<button onclick="toggleHistCollapse()" style="width:100%;margin-top:12px;padding:11px;background:var(--surface2);color:var(--accent);border:1px solid var(--border);border-radius:10px;font-weight:700;font-size:.85rem;cursor:pointer">${collapsed ? `▾ Показать все (${count})` : '▴ Свернуть до 5'}</button>`;
   }
 
   const titles = {all:'Все занятия', indiv:'Индивидуальные', group:'Групповые'};

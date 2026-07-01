@@ -732,7 +732,8 @@ function parseDate(s){
   if(m){d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}${m[4]?'T'+m[4]:''}`);if(!isNaN(d.getTime()))return d;}
   return null;
 }
-function isPaid(r){return r['Payment status']==='Paid'||r['Статус оплаты']==='Оплачено'||(r['paymentid']&&/tinkoff|sber|pay/.test(r['paymentid']));}
+// Оплата = есть транзакция (paymentid tinkoff/sber). «Оплачено» без paymentid (напр. заявка без оплаты) НЕ считаем приходом.
+function isPaid(r){return /tinkoff|sber|pay/i.test(r['paymentid']||'');}
 function getTg(r){
   let s=(r['Ваш_ник_в_Telegram']||r['Input']||'').trim();
   s=s.replace(/^@/,'').replace(/^https?:\/\/t\.me\//,'');
