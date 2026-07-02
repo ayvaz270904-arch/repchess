@@ -13,6 +13,7 @@
     --hint: var(--tg-theme-hint-color, #8a8f9c);
     --accent: var(--tg-theme-button-color, #C94A42);
     --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --green: #22c55e; --orange: #f97316;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -27,11 +28,15 @@
   .card h2 { font-size: .95rem; font-weight: 700; margin-bottom: 10px; }
   .muted { color: var(--hint); font-size: .85rem; }
   .balance { text-align: center; }
-  .big { font-size: 2.6rem; font-weight: 800; color: var(--accent); line-height: 1.1; margin: 4px 0; }
+  .big { font-size: 2.8rem; font-weight: 800; color: var(--accent); line-height: 1.1; margin: 2px 0; }
+  .sub2 { display:flex; justify-content:center; gap:16px; margin-top:6px; font-size:.82rem; color:var(--hint); }
   .rows { margin-top: 10px; }
-  .row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-top: 1px solid rgba(127,127,127,.15); font-size: .9rem; }
+  .row { display: flex; justify-content: space-between; align-items: flex-start; gap:10px; padding: 8px 0; border-top: 1px solid rgba(127,127,127,.15); font-size: .88rem; }
   .row:first-child { border-top: none; }
   .row .exp { opacity: .5; }
+  .badge { font-size:.75rem; white-space:nowrap; }
+  .b-done { color: var(--green); }
+  .b-absent { color: var(--orange); }
   .center { text-align: center; padding: 40px 16px; }
   .spinner { width: 28px; height: 28px; border: 3px solid var(--card); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 14px; }
   @keyframes spin { to { transform: rotate(360deg); } }
@@ -69,11 +74,23 @@ async function load(){
       return;
     }
 
+    const remaining = data.remaining ?? data.purchased ?? 0;
+
     const cats = Object.keys(data.byCat || {}).map(k =>
       `<div class="row"><span>${esc(k)}</span><b>${data.byCat[k]}</b></div>`).join('')
       || '<div class="muted">нет активных пакетов</div>';
 
-    const hist = (data.history || []).map(h =>
+    const upcoming = (data.upcoming || []).map(u =>
+      `<div class="row"><span>📅 ${esc(u.date)} · ${esc(u.type)}</span></div>`).join('')
+      || '<div class="muted">нет запланированных занятий</div>';
+
+    const lessonHist = (data.lessonHistory || []).map(h => {
+      const st = h.status === 'absent' ? `<span class="badge b-absent">пропуск</span>`
+               : `<span class="badge b-done">проведено</span>`;
+      return `<div class="row"><span>${esc(h.date)} · ${esc(h.type)}${h.notes?`<div class="muted">${esc(h.notes)}</div>`:''}</span>${st}</div>`;
+    }).join('') || '<div class="muted">занятий пока не было</div>';
+
+    const purch = (data.purchaseHistory || []).map(h =>
       `<div class="row"><span class="${h.expired?'exp':''}">${esc(h.date)} · ${esc(h.label)}${h.expired?' · истёк':''}</span>
        <span class="muted">${fmtRub(h.price)}</span></div>`).join('')
       || '<div class="muted">покупок пока нет</div>';
@@ -82,13 +99,15 @@ async function load(){
       <div class="header"><span class="logo">♟</span><h1>Rep Chess Education</h1></div>
       <div class="card"><h2>Привет, ${esc(data.name)}!</h2><div class="muted">📧 ${esc(data.email)}</div></div>
       <div class="card balance">
-        <div class="muted">Активных занятий</div>
-        <div class="big">${data.totalActive || 0}</div>
-        ${data.nextExpiry ? `<div class="muted">действуют до ${esc(data.nextExpiry)}</div>` : ''}
+        <div class="muted">Осталось занятий</div>
+        <div class="big">${remaining}</div>
+        <div class="sub2"><span>куплено: ${data.purchased ?? 0}</span><span>проведено: ${data.used ?? 0}</span></div>
+        ${data.nextExpiry ? `<div class="muted" style="margin-top:6px">действуют до ${esc(data.nextExpiry)}</div>` : ''}
         <div class="rows">${cats}</div>
       </div>
-      <div class="card"><h2>История покупок</h2><div class="rows">${hist}</div></div>
-      <div class="card"><h2>Занятия</h2><div class="muted">История проведённых и ближайшие занятия добавим следующим шагом.</div></div>
+      <div class="card"><h2>Ближайшие занятия</h2><div class="rows">${upcoming}</div></div>
+      <div class="card"><h2>История занятий</h2><div class="rows">${lessonHist}</div></div>
+      <div class="card"><h2>История покупок</h2><div class="rows">${purch}</div></div>
     `);
   } catch (e) { showError('Ошибка сети', e.message); }
 }
