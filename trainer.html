@@ -1262,7 +1262,7 @@ async function showApp() {
 // ══════════════════════════════════════════════
 //  LOAD STUDENTS FROM 
 // ══════════════════════════════════════════════
-const _CACHE_KEY = 'repchess__v2';
+const _CACHE_KEY = 'repchess__v3';   // v3: byCat + восстановление дат из кэша
 const _CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
 async function loadStudents() {
@@ -1271,7 +1271,15 @@ async function loadStudents() {
     const raw = sessionStorage.getItem(_CACHE_KEY);
     if (raw) {
       const { data, ts } = JSON.parse(raw);
-      if (Date.now() - ts < _CACHE_TTL) { students = data; return; }
+      if (Date.now() - ts < _CACHE_TTL) {
+        students = data;
+        // JSON превращает Date в строки — восстанавливаем, иначе "истекает через N дн." считается как NaN → «Пакет истёк»
+        students.forEach(s => {
+          if (s.firstDate)  s.firstDate  = new Date(s.firstDate);
+          if (s.nextExpiry) s.nextExpiry = new Date(s.nextExpiry);
+        });
+        return;
+      }
     }
   } catch(e) {}
 
