@@ -1063,13 +1063,43 @@ let _unknownPayments = [];  // [{price, date, email, name}] — неизвест
 //  PRICE HISTORY (same as )
 // ══════════════════════════════════════════════
 const PRICE_CHANGE = new Date('2026-03-18');
-const PRICES_OLD = {1500:{cat:'Групп. офлайн',lessons:1},5500:{cat:'Групп. офлайн',lessons:4},12000:{cat:'Групп. офлайн',lessons:10},1000:{cat:'Групп. онлайн',lessons:1},3600:{cat:'Групп. онлайн',lessons:4},8000:{cat:'Групп. онлайн',lessons:10},2500:{cat:'Индив. офлайн',lessons:1},9000:{cat:'Индив. офлайн',lessons:4},21000:{cat:'Индив. офлайн',lessons:10},1700:{cat:'Индив. онлайн',lessons:1},6400:{cat:'Индив. онлайн',lessons:4},15000:{cat:'Индив. онлайн',lessons:10}};
-const PRICES_NEW = {1800:{cat:'Групп. офлайн',lessons:1},6500:{cat:'Групп. офлайн',lessons:4},15500:{cat:'Групп. офлайн',lessons:10},1200:{cat:'Групп. онлайн',lessons:1},4400:{cat:'Групп. онлайн',lessons:4},10000:{cat:'Групп. онлайн',lessons:10},2800:{cat:'Индив. офлайн',lessons:1},23500:{cat:'Индив. офлайн',lessons:10},2000:{cat:'Индив. онлайн',lessons:1},7200:{cat:'Индив. онлайн',lessons:4},17000:{cat:'Индив. онлайн',lessons:10},6000:{cat:'Гроссмейстер',lessons:1}};
+// Тарифы списком: одна цена может принадлежать ДВУМ тарифам (10000 = Групп.онлайн×10 и Индив.офлайн×4),
+// поэтому подбор идёт по паре цена+размер пакета из названия товара ("4 занятия - 1x10000")
+const TARIFFS_OLD = [
+  {cat:'Групп. офлайн', lessons:1,  price:1500},
+  {cat:'Групп. офлайн', lessons:4,  price:5500},
+  {cat:'Групп. офлайн', lessons:10, price:12000},
+  {cat:'Групп. онлайн', lessons:1,  price:1000},
+  {cat:'Групп. онлайн', lessons:4,  price:3600},
+  {cat:'Групп. онлайн', lessons:10, price:8000},
+  {cat:'Индив. офлайн', lessons:1,  price:2500},
+  {cat:'Индив. офлайн', lessons:4,  price:9000},
+  {cat:'Индив. офлайн', lessons:10, price:21000},
+  {cat:'Индив. онлайн', lessons:1,  price:1700},
+  {cat:'Индив. онлайн', lessons:4,  price:6400},
+  {cat:'Индив. онлайн', lessons:10, price:15000},
+];
+const TARIFFS_NEW = [
+  {cat:'Групп. офлайн', lessons:1,  price:1800},
+  {cat:'Групп. офлайн', lessons:4,  price:6500},
+  {cat:'Групп. офлайн', lessons:10, price:15500},
+  {cat:'Групп. онлайн', lessons:1,  price:1200},
+  {cat:'Групп. онлайн', lessons:4,  price:4400},
+  {cat:'Групп. онлайн', lessons:10, price:10000},  // при цене без размера пакета — этот вариант (выше в списке)
+  {cat:'Индив. офлайн', lessons:1,  price:2800},
+  {cat:'Индив. офлайн', lessons:4,  price:10000},  // различается по "4 занятия" в названии
+  {cat:'Индив. офлайн', lessons:10, price:23500},
+  {cat:'Индив. онлайн', lessons:1,  price:2000},
+  {cat:'Индив. онлайн', lessons:4,  price:7200},
+  {cat:'Индив. онлайн', lessons:10, price:17000},
+  {cat:'Гроссмейстер',  lessons:1,  price:6000},
+];
 
 // ЕДИНАЯ логика (как в CRM и боте) — определяет тариф по СТРОКЕ товара, поддерживает промо/скидки
 function identifyProduct(productStr, price, date) {
   const p = (productStr || '').toLowerCase();
   const isNew = date ? date >= PRICE_CHANGE : true;
+  const tariffs = isNew ? TARIFFS_NEW : TARIFFS_OLD;
   let qty = 1, catPrice = 0;
   const xm = p.match(/(\d+)\s*x\s*(\d+)/);
   if (xm) { qty = parseInt(xm[1]) || 1; catPrice = parseInt(xm[2]) || 0; }
@@ -1086,10 +1116,14 @@ function identifyProduct(productStr, price, date) {
   else if (isGroup && isOnline)  cat = 'Групп. онлайн';
   else if (isOffline)            cat = 'Групп. офлайн';
   else if (isOnline)             cat = 'Групп. онлайн';
-  const c0 = catPrice ? (isNew ? PRICES_NEW : PRICES_OLD)[catPrice] : null;
-  if (!cat && c0) cat = c0.cat;
-  if (!perPack && c0) perPack = c0.lessons;
-  if (catPrice === 10000 && isNew && !cat) { cat = (isIndiv && isOffline) ? 'Индив. офлайн' : 'Групп. онлайн'; if (!perPack) perPack = (isIndiv && isOffline) ? 4 : 10; }
+  // Подбор тарифа: сначала точное совпадение цена+размер пакета, потом только цена
+  let t = null;
+  if (catPrice) {
+    if (perPack) t = tariffs.find(x => x.price === catPrice && x.lessons === perPack) || null;
+    if (!t) t = tariffs.find(x => x.price === catPrice) || null;
+  }
+  if (!cat && t) cat = t.cat;
+  if (!perPack && t) perPack = t.lessons;
   if (!perPack) perPack = 1;
   const lessons = perPack * qty;
   return { cat: cat || 'Другое', lessons: lessons, label: cat ? `${cat} ×${lessons}` : 'Другое' };
