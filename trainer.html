@@ -1132,9 +1132,9 @@ function identifyProduct(productStr, price, date) {
 // Классификация платежа с учётом ручных переопределений (_priceOverrides по цене)
 function classifyPayment(productStr, price, date) {
   const key = String(Math.round(price));
-  if (_priceOverrides[key]) return { lessons: _priceOverrides[key].lessons, group: !!_priceOverrides[key].group, unknown: false };
+  if (_priceOverrides[key]) return { lessons: _priceOverrides[key].lessons, group: !!_priceOverrides[key].group, cat: _priceOverrides[key].group ? 'Групп. (вручную)' : 'Индив. (вручную)', unknown: false };
   const prod = identifyProduct(productStr, price, date);
-  return { lessons: prod.lessons, group: prod.cat.indexOf('Групп') === 0, unknown: prod.cat === 'Другое' };
+  return { lessons: prod.lessons, group: prod.cat.indexOf('Групп') === 0, cat: prod.cat, unknown: prod.cat === 'Другое' };
 }
 
 async function loadPriceOverrides() {
@@ -1294,7 +1294,7 @@ async function loadStudents() {
       // Составной ключ email+имя — как в CRM, чтобы подарочные покупки (один email, разные люди) не схлопывались
       const nameLower = (row['Name']||'').toLowerCase().trim();
       const key = email + '||' + nameLower;
-      if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', purchased: 0, purchasedExpired: 0, purchasedGroup: 0, purchasedIndiv: 0, firstDate: null, nextExpiry: null };
+      if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', purchased: 0, purchasedExpired: 0, purchasedGroup: 0, purchasedIndiv: 0, byCat: {}, firstDate: null, nextExpiry: null };
       const m = map[key];
       if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
 
@@ -1322,6 +1322,7 @@ async function loadStudents() {
           if (!isExpired) {
             m.purchased += cnt;
             if (isGrp) m.purchasedGroup += cnt; else m.purchasedIndiv += cnt;
+            m.byCat[cls.cat] = (m.byCat[cls.cat] || 0) + cnt;   // разбивка по тарифам для карточки ученика
             if (!m.firstDate || (date && date < m.firstDate)) m.firstDate = date;
           } else {
             m.purchasedExpired += cnt;   // для FIFO-списания в _enrichStudentsWithRemaining
@@ -3405,6 +3406,7 @@ async function openStudentInfoModal(email) {
       <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📅 Последнее занятие: <span style="color:var(--text)">${lastDate}</span></div>
       <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">🎯 Тренер: ${trainerStr}</div>
       <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📦 Куплено: <span style="color:var(--text)">${s.purchased} занятий</span></div>
+      ${Object.keys(s.byCat||{}).length ? `<div style="font-size:.78rem;color:var(--text2);margin:-2px 0 6px 22px">${Object.keys(s.byCat).map(k=>`${esc(k)} — <b style="color:var(--text)">${s.byCat[k]}</b>`).join('<br>')}</div>` : ''}
       ${expiryStr ? `<div style="font-size:.82rem;margin-bottom:6px">${expiryStr}</div>` : ''}
       ${s.phone ? `<div style="margin-top:10px;display:flex;gap:8px;align-items:center">
         <span style="font-size:.82rem;color:var(--text2)">📞 ${esc(s.phone)}</span>
