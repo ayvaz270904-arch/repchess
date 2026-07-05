@@ -1260,7 +1260,7 @@ async function loadStudents() {
       // Составной ключ email+имя — как в CRM, чтобы подарочные покупки (один email, разные люди) не схлопывались
       const nameLower = (row['Name']||'').toLowerCase().trim();
       const key = email + '||' + nameLower;
-      if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', purchased: 0, purchasedGroup: 0, purchasedIndiv: 0, firstDate: null, nextExpiry: null };
+      if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', purchased: 0, purchasedExpired: 0, purchasedGroup: 0, purchasedIndiv: 0, firstDate: null, nextExpiry: null };
       const m = map[key];
       if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
 
@@ -1289,6 +1289,8 @@ async function loadStudents() {
             m.purchased += cnt;
             if (isGrp) m.purchasedGroup += cnt; else m.purchasedIndiv += cnt;
             if (!m.firstDate || (date && date < m.firstDate)) m.firstDate = date;
+          } else {
+            m.purchasedExpired += cnt;   // для FIFO-списания в _enrichStudentsWithRemaining
           }
           // Ближайшая дата истечения (для предупреждений)
           if (expiryDate && !isExpired) {
@@ -1353,20 +1355,25 @@ function populateTrainerSelect(selId) {
 // Результат: s.used и s.remaining = s.purchased - used (не меньше 0).
 async function _enrichStudentsWithRemaining() {
   try {
-    const snap = await db.collection('lessons')
-      .where('trainerId', '==', currentUser.uid)
-      .get();
+    // Админ читает занятия ВСЕХ тренеров; тренер — только свои (ограничение Firestore-правил)
+    const isAdmin = currentTrainer?.role === 'admin';
+    const base = db.collection('lessons');
+    const snap = await (isAdmin ? base : base.where('trainerId', '==', currentUser.uid)).get();
     const usedMap = {};
     snap.docs.forEach(d => {
       const data = d.data();
-      if (data.status === 'cancelled') return;
+      // Списывают баланс только ПРОВЕДЁННЫЕ: done или старые записи без статуса.
+      // pending/rescheduled/cancelled/absent НЕ списывают (единое правило CRM/тренер/бот)
+      if (data.status && data.status !== 'done') return;
       if (data.studentEmail) {
         usedMap[data.studentEmail] = (usedMap[data.studentEmail] || 0) + 1;
       }
     });
     students.forEach(s => {
       s.used = usedMap[s.email] || 0;
-      s.remaining = Math.max(0, (s.purchased || 0) - s.used);
+      // FIFO: проведённые сначала гасят истёкшие пакеты, и только остаток — активные
+      const usedActive = Math.max(0, s.used - (s.purchasedExpired || 0));
+      s.remaining = Math.max(0, (s.purchased || 0) - usedActive);
     });
   } catch(e) {
     console.warn('Could not enrich student remaining:', e);
@@ -1389,17 +1396,13 @@ function _remBadgeText(s) {
 // ══════════════════════════════════════════════
 //  STUDENT BALANCE
 // ══════════════════════════════════════════════
-async function getUsedLessons(email) {
-  const snap = await db.collection('lessons')
-    .where('studentEmail','==',email).get();
-  return snap.size;
-}
-
 async function getStudentBalance(email) {
+  // Единый расчёт: берём used/remaining из _enrichStudentsWithRemaining (FIFO + фильтр статусов),
+  // а не отдельным запросом — иначе цифры расходились со значками в списках
   const s = students.find(x => x.email === email);
   if (!s) return { purchased: 0, used: 0, remaining: 0 };
-  const used = await getUsedLessons(email);
-  return { purchased: s.purchased, used, remaining: s.purchased - used };
+  if (s.remaining == null) await _enrichStudentsWithRemaining();
+  return { purchased: s.purchased || 0, used: s.used || 0, remaining: s.remaining ?? s.purchased ?? 0 };
 }
 
 function balanceBadge(remaining, purchased) {

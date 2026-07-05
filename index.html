@@ -524,6 +524,9 @@ async function loadUsedLessons() {
     usedLessonsMap = {};
     snap.forEach(doc => {
       const d = doc.data();
+      // Списывают баланс только ПРОВЕДЁННЫЕ: done или старые записи без статуса.
+      // pending/rescheduled/cancelled/absent НЕ списывают (единое правило CRM/тренер/бот)
+      if (d.status && d.status !== 'done') return;
       const email = (d.studentEmail||'').toLowerCase().trim();
       if (!email) return;
       const nameLower = (d.studentName||'').toLowerCase().trim();
@@ -533,15 +536,8 @@ async function loadUsedLessons() {
       // Запасной ключ только по email — для обратной совместимости
       usedLessonsMap[email] = (usedLessonsMap[email]||0) + 1;
     });
-    // учитываем групповые занятия
-    const gsnap = await db.collection('groupLessons').get();
-    gsnap.forEach(doc => {
-      const d = doc.data();
-      (d.students||[]).forEach(st => {
-        const email = (st.email||'').toLowerCase().trim();
-        if (email) usedLessonsMap[email] = (usedLessonsMap[email]||0) + 1;
-      });
-    });
+    // Групповые занятия отдельно НЕ считаем: у каждого участника группы и так
+    // создаётся индивидуальная запись в lessons — иначе был бы двойной счёт
   } catch(e) { console.warn('Firestore read:', e); }
 }
 
@@ -549,7 +545,7 @@ function getBalance(key) {
   const s = students[key];
   if (!s) return null;
   const now = new Date();
-  let purchased = 0;
+  let purchased = 0, expiredPurchased = 0;
   let nextExpiry = null;
   for (const p of s.payments) {
     const cnt = p.prod?.lessons || 1;
@@ -557,14 +553,18 @@ function getBalance(key) {
     let expiry = null;
     if (p.date) { expiry = new Date(p.date); expiry.setMonth(expiry.getMonth() + expiryMonths); }
     const isExpired = expiry && expiry < now;
-    if (!isExpired) {
+    if (isExpired) {
+      expiredPurchased += cnt;
+    } else {
       purchased += cnt;
       if (expiry && (!nextExpiry || expiry < nextExpiry)) nextExpiry = expiry;
     }
   }
   // Сначала ищем точное совпадение email+имя, потом только по email
   const used = usedLessonsMap[key] ?? usedLessonsMap[s.email.toLowerCase()] ?? 0;
-  return { purchased, used, remaining: purchased - used, nextExpiry };
+  // FIFO: проведённые сначала гасят истёкшие пакеты, и только остаток — активные
+  const usedActive = Math.max(0, used - expiredPurchased);
+  return { purchased, used, remaining: Math.max(0, purchased - usedActive), nextExpiry };
 }
 
 function balanceBadge(email) {
