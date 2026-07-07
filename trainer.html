@@ -239,6 +239,12 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .sdb-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4);cursor:pointer;}
 .sdb-item:last-child{border-bottom:none;}
 .sdb-item:hover{background:var(--surface2);margin:0 -18px;padding:10px 18px;border-radius:8px;}
+/* SCHEDULE (график доступности) */
+.day-chip{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:.85rem;font-weight:700;cursor:pointer;user-select:none;position:relative;}
+.day-chip.on{background:rgba(201,74,66,.15);border-color:var(--accent);color:var(--accent);}
+.day-chip .dot{position:absolute;top:4px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--green);}
+.slot-chip{padding:9px 4px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:.8rem;text-align:center;cursor:pointer;user-select:none;}
+.slot-chip.on{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.55);color:var(--green);font-weight:700;}
 </style>
 </head>
 <body>
@@ -286,6 +292,9 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </button>
     <button class="nav-item" onclick="showPage('history')" data-page="history">
       <div class="nav-icon">📋</div><div class="nav-label">История</div>
+    </button>
+    <button class="nav-item" onclick="showPage('schedule')" data-page="schedule">
+      <div class="nav-icon">📅</div><div class="nav-label">График</div>
     </button>
     <button class="nav-item" onclick="showPage('finance')" data-page="finance" id="finance-nav">
       <div class="nav-icon">💰</div><div class="nav-label">Финансы</div>
@@ -403,6 +412,48 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </div>
 
     <!-- ADMIN -->
+    <!-- SCHEDULE (график доступности) -->
+    <div class="page" id="page-schedule">
+      <div style="font-weight:700;font-size:1rem;margin-bottom:12px">📅 График доступности</div>
+
+      <!-- админ: выбор тренера -->
+      <div class="card" id="sched-trainer-card" style="margin-bottom:14px;display:none">
+        <div class="card-body">
+          <div class="form-label">Тренер</div>
+          <select class="form-inp" id="sched-trainer-sel" onchange="schedOnTrainerChange()"></select>
+        </div>
+      </div>
+
+      <!-- недельный шаблон -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <span class="card-title">Недельный шаблон</span>
+          <span class="dim" id="sched-status" style="font-size:.75rem"></span>
+        </div>
+        <div class="card-body">
+          <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">Выбери день и отметь слоты, когда ты можешь проводить занятия. Шаблон повторяется каждую неделю.</div>
+          <div id="sched-day-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
+          <div id="sched-slot-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px"></div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button class="btn-full btn-ghost" style="flex:1" onclick="schedClearDay()">Очистить день</button>
+            <button class="btn-full btn-gold" style="flex:1" onclick="saveSchedule()" id="sched-save-btn">Сохранить</button>
+          </div>
+          <div id="sched-summary" style="margin-top:16px"></div>
+        </div>
+      </div>
+
+      <!-- исключения по датам -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><span class="card-title">Исключения (отпуск, изменения на дату)</span></div>
+        <div class="card-body">
+          <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">Выбери дату, чтобы закрыть её целиком или изменить слоты только на этот день.</div>
+          <input class="form-inp" type="date" id="sched-exc-date" onchange="schedRenderException()">
+          <div id="sched-exc-editor" style="margin-top:12px"></div>
+          <div id="sched-exc-list" style="margin-top:14px"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="page" id="page-admin">
       <div style="font-weight:700;font-size:1.1rem;margin-bottom:16px">⚙️ Панель администратора</div>
 
@@ -2860,6 +2911,184 @@ function refreshCurrentPage() {
   }
 }
 
+// ══════════════════════════════════════════════
+//  SCHEDULE — график доступности тренера
+//  Хранение: trainerSchedules/{trainerId} = { template: {0..6: ["16:00",...]}, exceptions: {"2026-07-15": {closed:true} | {slots:[...]}} }
+// ══════════════════════════════════════════════
+const SCHED_DAYS = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const SCHED_SLOTS = (() => { const a=[]; for (let h=8; h<23; h++){ a.push(String(h).padStart(2,'0')+':00'); a.push(String(h).padStart(2,'0')+':30'); } return a; })(); // 08:00–22:30, шаг 30 мин
+let _sched = { template:{}, exceptions:{} };
+let _schedTrainerId = null;
+let _schedDay = 0;
+let _schedDirty = false;
+
+async function loadSchedulePage() {
+  const isAdmin = currentTrainer?.role === 'admin';
+  const card = document.getElementById('sched-trainer-card');
+  if (isAdmin) {
+    card.style.display = '';
+    if (!_trainersCache.length) await loadTrainers();
+    const sel = document.getElementById('sched-trainer-sel');
+    if (!sel.options.length) {
+      sel.innerHTML = _trainersCache.map(t => `<option value="${esc(t.id)}">${esc(t.name || t.email || t.id)}</option>`).join('');
+      sel.value = currentUser.uid;
+    }
+    _schedTrainerId = sel.value || currentUser.uid;
+  } else {
+    card.style.display = 'none';
+    _schedTrainerId = currentUser.uid;
+  }
+  await schedLoad();
+}
+
+async function schedLoad() {
+  const st = document.getElementById('sched-status');
+  if (st) st.textContent = 'загрузка...';
+  try {
+    const doc = await db.collection('trainerSchedules').doc(_schedTrainerId).get();
+    _sched = doc.exists ? doc.data() : { template:{}, exceptions:{} };
+    _sched.template = _sched.template || {};
+    _sched.exceptions = _sched.exceptions || {};
+  } catch(e) {
+    toast('Ошибка загрузки графика: ' + e.message, 'err');
+    _sched = { template:{}, exceptions:{} };
+  }
+  _schedDirty = false;
+  renderSchedule();
+  schedRenderException();
+}
+
+function renderSchedule() {
+  const st = document.getElementById('sched-status');
+  if (st) st.textContent = _schedDirty ? '● не сохранено' : '';
+  document.getElementById('sched-day-chips').innerHTML = SCHED_DAYS.map((d,i) => {
+    const has = (_sched.template[i] || []).length > 0;
+    return `<button class="day-chip ${i===_schedDay?'on':''}" onclick="schedSelectDay(${i})">${d}${has?'<span class="dot"></span>':''}</button>`;
+  }).join('');
+  const daySlots = new Set(_sched.template[_schedDay] || []);
+  document.getElementById('sched-slot-grid').innerHTML = SCHED_SLOTS.map(s =>
+    `<div class="slot-chip ${daySlots.has(s)?'on':''}" onclick="schedToggleSlot('${s}')">${s}</div>`).join('');
+  document.getElementById('sched-summary').innerHTML =
+    '<div class="form-label" style="margin-bottom:6px">Сводка недели</div>' +
+    SCHED_DAYS.map((d,i) => {
+      const r = slotsToRanges(_sched.template[i] || []);
+      return `<div style="display:flex;justify-content:space-between;gap:10px;font-size:.82rem;padding:5px 0;border-top:1px solid rgba(45,49,66,.4)">
+        <span style="color:var(--text2);flex-shrink:0">${d}</span><span style="text-align:right">${r || '—'}</span></div>`;
+    }).join('');
+  schedRenderExceptionList();
+}
+
+function schedSelectDay(i) { _schedDay = i; renderSchedule(); }
+
+function schedToggleSlot(s) {
+  const arr = _sched.template[_schedDay] || (_sched.template[_schedDay] = []);
+  const ix = arr.indexOf(s);
+  if (ix >= 0) arr.splice(ix, 1); else { arr.push(s); arr.sort(); }
+  _schedDirty = true;
+  renderSchedule();
+}
+
+function schedClearDay() { _sched.template[_schedDay] = []; _schedDirty = true; renderSchedule(); }
+
+// Склейка 30-мин слотов в диапазоны: ["16:00","16:30","17:00"] → "16:00–17:30"
+function slotsToRanges(slots) {
+  if (!slots || !slots.length) return '';
+  const toMin = t => { const p = t.split(':'); return (+p[0])*60 + (+p[1]); };
+  const toStr = m => String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+  const sorted = [...slots].sort();
+  const ranges = [];
+  let start = toMin(sorted[0]), prev = start;
+  for (let i = 1; i < sorted.length; i++) {
+    const m = toMin(sorted[i]);
+    if (m !== prev + 30) { ranges.push([start, prev + 30]); start = m; }
+    prev = m;
+  }
+  ranges.push([start, prev + 30]);
+  return ranges.map(r => toStr(r[0]) + '–' + toStr(r[1])).join(', ');
+}
+
+async function saveSchedule() {
+  const btn = document.getElementById('sched-save-btn');
+  btn.disabled = true; btn.textContent = 'Сохранение...';
+  try {
+    await db.collection('trainerSchedules').doc(_schedTrainerId).set({
+      template: _sched.template,
+      exceptions: _sched.exceptions,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    _schedDirty = false;
+    toast('График сохранён ✓', 'ok');
+    renderSchedule();
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
+  btn.disabled = false; btn.textContent = 'Сохранить';
+}
+
+function schedOnTrainerChange() {
+  const sel = document.getElementById('sched-trainer-sel');
+  if (_schedDirty && !confirm('Есть несохранённые изменения — переключить тренера без сохранения?')) {
+    sel.value = _schedTrainerId;
+    return;
+  }
+  _schedTrainerId = sel.value;
+  schedLoad();
+}
+
+// ── Исключения по датам ──
+function schedRenderException() {
+  const d = document.getElementById('sched-exc-date')?.value;
+  const ed = document.getElementById('sched-exc-editor');
+  if (!ed) return;
+  if (!d) { ed.innerHTML = ''; return; }
+  const exc = _sched.exceptions[d];
+  const dow = (new Date(d + 'T12:00:00').getDay() + 6) % 7;
+  const effective = exc ? (exc.closed ? [] : (exc.slots || [])) : (_sched.template[dow] || []);
+  const set = new Set(effective);
+  ed.innerHTML = `
+    <div style="font-size:.8rem;color:var(--text2);margin-bottom:8px">${SCHED_DAYS[dow]} · ${exc ? (exc.closed ? '🚫 день закрыт исключением' : '✏️ слоты переопределены на эту дату') : 'сейчас — по недельному шаблону'}</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${SCHED_SLOTS.map(s =>
+      `<div class="slot-chip ${set.has(s)?'on':''}" onclick="schedToggleExcSlot('${d}','${s}')">${s}</div>`).join('')}</div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-full btn-ghost" style="flex:1" onclick="schedCloseDay('${d}')">🚫 Закрыть день</button>
+      ${exc ? `<button class="btn-full btn-ghost" style="flex:1" onclick="schedResetExc('${d}')">↩ Вернуть по шаблону</button>` : ''}
+    </div>`;
+}
+
+function schedToggleExcSlot(d, s) {
+  let exc = _sched.exceptions[d];
+  if (!exc) {
+    const dow = (new Date(d + 'T12:00:00').getDay() + 6) % 7;
+    exc = _sched.exceptions[d] = { slots: [...(_sched.template[dow] || [])] };  // стартуем от шаблона
+  } else if (exc.closed) {
+    exc = _sched.exceptions[d] = { slots: [] };  // день был закрыт — открываем слоты с нуля
+  }
+  const arr = exc.slots || (exc.slots = []);
+  const ix = arr.indexOf(s);
+  if (ix >= 0) arr.splice(ix, 1); else { arr.push(s); arr.sort(); }
+  _schedDirty = true;
+  renderSchedule();
+  schedRenderException();
+}
+
+function schedCloseDay(d) { _sched.exceptions[d] = { closed: true }; _schedDirty = true; renderSchedule(); schedRenderException(); }
+function schedResetExc(d) { delete _sched.exceptions[d]; _schedDirty = true; renderSchedule(); schedRenderException(); }
+
+function schedRenderExceptionList() {
+  const el = document.getElementById('sched-exc-list');
+  if (!el) return;
+  const keys = Object.keys(_sched.exceptions || {}).sort();
+  el.innerHTML = keys.length
+    ? '<div class="form-label" style="margin-bottom:6px">Активные исключения</div>' + keys.map(d => {
+        const e = _sched.exceptions[d];
+        const txt = e.closed ? '🚫 закрыт' : (slotsToRanges(e.slots || []) || '—');
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.82rem;padding:6px 0;border-top:1px solid rgba(45,49,66,.4)">
+          <span>${d.split('-').reverse().join('.')}</span>
+          <span style="color:var(--text2);flex:1;text-align:right">${txt}</span>
+          <button onclick="schedResetExc('${d}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:2px 6px">✕</button>
+        </div>`;
+      }).join('')
+    : '';
+}
+
 function showPage(name) {
   if (name === 'admin' && currentTrainer?.role !== 'admin') return;
   const prev = sessionStorage.getItem('_activePage');
@@ -2875,6 +3104,7 @@ function showPage(name) {
   if (name==='group')   loadGroupLessons();
   if (name==='admin')   loadAdminData();
   if (name==='finance') { finCheckAccess(); }
+  if (name==='schedule') loadSchedulePage();
   const savedScroll = parseInt(sessionStorage.getItem(`_scroll_${name}`) || '0');
   if (savedScroll > 0) requestAnimationFrame(() => window.scrollTo(0, savedScroll));
 }
