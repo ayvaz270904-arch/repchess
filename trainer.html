@@ -1671,7 +1671,7 @@ function searchStudents(q, prefix) {
   if (!isAdmin) {
     // Тренер видит ТОЛЬКО учеников, назначенных ему администратором
     const myAssigned = currentTrainer.assignedStudents || [];
-    pool = students.filter(s => myAssigned.includes(s.email));
+    pool = students.filter(s => assignedHas(myAssigned, s.email));
   }
 
   let matches = q.length > 0
@@ -1705,12 +1705,12 @@ function searchStudents(q, prefix) {
     if (prefix === 'rec' && isAdmin && selectedTrainerId) {
       const selTrainer = _trainersCache.find(t => t.id === selectedTrainerId);
       const selAssigned = selTrainer?.assignedStudents || [];
-      const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(s.email));
+      const assignedTo = _trainersCache.find(t => assignedHas(t.assignedStudents, s.email));
       if (assignedTo && assignedTo.id !== selectedTrainerId) {
         blocked = true;
         blockLabel = ` · 🔒 у ${esc((assignedTo.name||'').split(' ').slice(0,2).join(' '))}`;
         blockReason = 'занят';
-      } else if (!selAssigned.includes(s.email)) {
+      } else if (!assignedHas(selAssigned, s.email)) {
         blocked = true;
         blockLabel = ' · не закреплён';
         blockReason = 'не назначен';
@@ -1811,7 +1811,7 @@ function checkRecTrainerAssignment() {
   if (!trainerId || !email) { warnEl.style.display = 'none'; return; }
 
   // Кому реально назначен этот ученик?
-  const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(email));
+  const assignedTo = _trainersCache.find(t => assignedHas(t.assignedStudents, email));
   if (assignedTo && assignedTo.id !== trainerId) {
     const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
     warnEl.textContent = `⚠️ Ученик закреплён за ${tName} — сохранение заблокировано`;
@@ -1851,8 +1851,8 @@ async function submitLesson() {
     // Жёсткая проверка: ученик должен быть закреплён за выбранным тренером
     const selTrainer = _trainersCache.find(t => t.id === selId);
     const selAssigned = selTrainer?.assignedStudents || [];
-    if (!selAssigned.includes(email)) {
-      const assignedTo = _trainersCache.find(t => (t.assignedStudents || []).includes(email));
+    if (!assignedHas(selAssigned, email)) {
+      const assignedTo = _trainersCache.find(t => assignedHas(t.assignedStudents, email));
       if (assignedTo) {
         const tName = (assignedTo.name || '').split(' ').slice(0, 2).join(' ');
         toast(`Ученик закреплён за ${tName} — сохранение невозможно`, 'err');
@@ -1866,7 +1866,7 @@ async function submitLesson() {
   } else {
     // Тренер: жёсткая проверка — ученик должен быть в списке назначенных
     const myAssigned = currentTrainer.assignedStudents || [];
-    if (!myAssigned.includes(email)) {
+    if (!assignedHas(myAssigned, email)) {
       toast('Этот ученик не закреплён за вами — обратитесь к администратору', 'err');
       return;
     }
@@ -2606,7 +2606,7 @@ async function loadTrainerAssignments(trainersSnap) {
   el.innerHTML = nonAdmin.map(t => {
     const assigned = t.assignedStudents || [];
     const tags = assigned.map(email => {
-      const s = students.find(x => x.email === email);
+      const s = students.find(x => x.email === _normEmail(email));
       const name = s ? s.name : email;
       const typeTag = (s?.purchasedIndiv||0)>0
         ? '<span class="tag tag-indiv-buyer" style="padding:1px 5px">инд.</span>'
@@ -2640,7 +2640,7 @@ function searchStudentsForAssign(q, trainerId) {
   resultsEl.innerHTML = matches.map(s => {
     // Проверяем, закреплён ли ученик за другим тренером
     const takenBy = _trainersCache.find(t =>
-      t.id !== trainerId && (t.assignedStudents || []).includes(s.email)
+      t.id !== trainerId && assignedHas(t.assignedStudents, s.email)
     );
     const takenByName = takenBy ? (takenBy.name || '').split(' ').slice(0,2).join(' ') : null;
     return `
@@ -2663,7 +2663,7 @@ async function assignStudent(trainerId, email) {
 
   // Повторная проверка — ученик не должен быть у другого тренера
   const takenBy = _trainersCache.find(t =>
-    t.id !== trainerId && (t.assignedStudents || []).includes(email)
+    t.id !== trainerId && assignedHas(t.assignedStudents, email)
   );
   if (takenBy) {
     const sName = students.find(s => s.email === email)?.name || email;
@@ -2673,7 +2673,7 @@ async function assignStudent(trainerId, email) {
 
   try {
     await db.collection('trainers').doc(trainerId).update({
-      assignedStudents: firebase.firestore.FieldValue.arrayUnion(email)
+      assignedStudents: firebase.firestore.FieldValue.arrayUnion(_normEmail(email))
     });
     toast('Ученик назначен ✓', 'ok');
     const snap = await db.collection('trainers').get();
@@ -3162,6 +3162,9 @@ function splitLine(line){
 //  UTILS
 // ══════════════════════════════════════════════
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Сравнение email с закреплениями — без учёта регистра и пробелов (в старых закреплениях бывают заглавные буквы)
+function _normEmail(e){ return String(e==null?'':e).trim().toLowerCase(); }
+function assignedHas(list, email){ const t=_normEmail(email); return (list||[]).some(e=>_normEmail(e)===t); }
 // Экранирование для JS-строки внутри HTML-атрибута (onclick="fn('...')") — esc() НЕ экранирует одинарную кавычку
 function escJs(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
@@ -3625,7 +3628,7 @@ async function openStudentInfoModal(email) {
     }
 
     // Тренер
-    const assignedTrainer = _trainersCache.find(t => (t.assignedStudents||[]).includes(email));
+    const assignedTrainer = _trainersCache.find(t => assignedHas(t.assignedStudents, email));
     const trainerStr = assignedTrainer
       ? `<span style="color:var(--accent2)">${esc(assignedTrainer.name)}</span>`
       : '<span style="color:var(--text2)">не закреплён</span>';
@@ -4351,7 +4354,7 @@ function renderStudentDB(q) {
   }
 
   listEl.innerHTML = pool.slice(0, 50).map(s => {
-    const assignedTrainer = _trainersCache.find(t => (t.assignedStudents||[]).includes(s.email));
+    const assignedTrainer = _trainersCache.find(t => assignedHas(t.assignedStudents, s.email));
     const trainerLabel = assignedTrainer
       ? `<span style="color:var(--accent2);font-size:.72rem">👤 ${esc(assignedTrainer.name.split(' ').slice(0,2).join(' '))}</span>`
       : `<span style="color:var(--text2);font-size:.72rem">не закреплён</span>`;
@@ -4461,7 +4464,7 @@ async function loadHomeReminders() {
 
   // Фильтруем: нужные ученики
   let pool = isAdmin ? students.filter(s => s.purchased > 0) :
-    myAssigned.length ? students.filter(s => myAssigned.includes(s.email) && s.purchased > 0) : [];
+    myAssigned.length ? students.filter(s => assignedHas(myAssigned, s.email) && s.purchased > 0) : [];
 
   const remind = [];
   for (const s of pool) {
