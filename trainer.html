@@ -738,6 +738,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       </div>
       <textarea class="form-ta" id="grp-notes" placeholder="Тема занятия, замечания..."></textarea>
     </div>
+    <div id="grp-attend-wrap" style="display:none"></div>
     <button class="btn-full btn-gold" onclick="submitGroupLesson()" id="grp-submit">Создать занятие</button>
     <div style="height:10px"></div>
     <button class="btn-full btn-ghost" onclick="closeGroupModal()">Отмена</button>
@@ -1639,9 +1640,9 @@ function groupFeedItemHTML(g) {
         <span class="lesson-date">${d}</span>
         ${!submitted && (pastDate || currentTrainer.role==='admin')
           ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--green);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Отметить посещаемость">📋</button>`
-          : submitted
-            ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="${needsApproval?'Подтвердить':'Просмотр'}">${needsApproval?'✅':'👁'}</button>`
-            : `<button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>`}
+          : needsApproval
+            ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--accent2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Подтвердить">✅</button>`
+            : ''}
       </div>
     </div>
     <div class="lesson-row2">
@@ -1662,7 +1663,10 @@ function lessonItemHTML(l) {
   const d = l._date ? new Date(l._date + 'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
   const { isPending, isDone, isCancelled, isRescheduled, needsConfirm, isScheduled, isLocked, isAdmin } = getLessonFlags(l);
 
-  const editBtnHTML = isLocked ? '' :
+  // Главная = действия: подтверждённые (done/cancelled/легаси) — просто строки-статусы,
+  // смотреть/редактировать их — через Историю
+  const confirmed = !l.status || l.status === 'done' || l.status === 'cancelled';
+  const editBtnHTML = confirmed ? '' :
     `<button data-edit-id="${l.id}" class="${needsConfirm?'edit-btn-confirm':''}"
       style="background:none;border:none;cursor:pointer;color:${needsConfirm?'var(--orange)':'var(--text2)'};font-size:.85rem;padding:2px 4px;line-height:1;min-width:28px;min-height:28px" title="${needsConfirm?'Подтвердить занятие':'Редактировать'}">${needsConfirm?'❓':'✏️'}</button>`;
 
@@ -1970,7 +1974,41 @@ function _setGroupModalReadOnly(ro) {
   const tags = document.getElementById('grp-students-tags');
   if (tags) tags.querySelectorAll('button').forEach(b => b.style.display = ro ? 'none' : '');
   const srch = document.getElementById('grp-student-inp');
-  if (srch) srch.placeholder = ro ? 'Просмотр — изменения на вкладке «Главная»' : 'Нажми для выбора ученика...';
+  if (srch) srch.placeholder = ro ? 'Просмотр — изменять может администратор' : 'Нажми для выбора ученика...';
+}
+
+// Блок посещаемости внутри окна группы (одно окно: данные + посещаемость)
+function _renderGrpAttendBlock(g) {
+  const wrap = document.getElementById('grp-attend-wrap');
+  if (!wrap) return;
+  if (!g || !g.attendanceMarked) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  const attended = g.attendedEmails || [];
+  const expected = g.studentEmails || [];
+  const names    = g.studentNames || [];
+  const extras   = g.extraRaw || g.extraAttendees || [];
+  const isAdmin  = currentTrainer?.role === 'admin';
+  const rows = expected.map((email, i) => {
+    const came = attended.includes(email);
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;font-size:.85rem">
+      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(names[i] || email)}</span>
+      <span style="flex-shrink:0;color:${came?'var(--green)':'var(--red)'};font-size:.78rem">${came?'✅ был(а)':'❌ не был(а)'}</span>
+    </div>`;
+  }).join('');
+  const extraRows = extras.map(n => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;font-size:.85rem">
+      <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n)}</span>
+      <span style="flex-shrink:0;color:var(--accent2);font-size:.78rem">➕ вне списка</span>
+    </div>`).join('');
+  wrap.style.display = '';
+  wrap.innerHTML = `
+    <div class="form-row">
+      <div class="form-label">📋 Посещаемость ${g.adminApproved
+        ? '<span class="tag tag-attendance-ok" style="padding:1px 6px;font-size:.68rem">✅ подтверждена</span>'
+        : '<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2);padding:1px 6px;font-size:.68rem">⏳ на проверке</span>'}</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 14px">
+        ${rows || '<div class="dim" style="font-size:.8rem;padding:4px 0">Список пуст</div>'}${extraRows}
+      </div>
+      ${isAdmin ? `<button type="button" onclick="closeGroupModal();openAttendModal('${g.id}')" style="margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--accent);padding:9px 12px;font-size:.8rem;font-weight:700;cursor:pointer;width:100%">📋 Изменить посещаемость</button>` : ''}
+    </div>`;
 }
 
 function openGroupModal() {
@@ -1989,6 +2027,7 @@ function openGroupModal() {
   document.getElementById('grp-public-btn-off').classList.add('on');
   document.getElementById('grp-submit').textContent = 'Создать занятие';
   document.getElementById('group-modal-title').textContent = 'Новое групповое занятие';
+  _renderGrpAttendBlock(null); // скрываем блок посещаемости
   const delBtn = document.getElementById('grp-delete-btn');
   if (delBtn) delBtn.style.display = 'none';
   // Выбор тренера — только для администратора
@@ -2012,8 +2051,8 @@ async function openEditGroupModal(groupId, viewMode) {
     } catch(e) { toast('Ошибка: ' + e.message, 'err'); return; }
   }
 
-  // Тренер не может редактировать после отправки посещаемости
-  if (g.attendanceMarked && currentTrainer.role !== 'admin') {
+  // Тренер не может редактировать после отправки посещаемости (просмотр — можно)
+  if (!viewMode && g.attendanceMarked && currentTrainer.role !== 'admin') {
     toast('Редактирование недоступно — посещаемость уже отправлена', 'err');
     return;
   }
@@ -2054,6 +2093,7 @@ async function openEditGroupModal(groupId, viewMode) {
   delBtn.style.display = (currentTrainer?.role === 'admin') ? '' : 'none';   // удаление групповых — только админ
   delBtn.dataset.confirm = ''; delBtn.disabled = false; delBtn.textContent = '🗑 Удалить занятие';
   _setGroupModalReadOnly(!!viewMode);
+  _renderGrpAttendBlock(g); // данные группы + посещаемость в одном окне
   _openModal('group-modal');
 }
 
@@ -2419,9 +2459,10 @@ function histLessonItemHTML(l) {
   const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
   const { isPending, isDone, isCancelled, isRescheduled, needsConfirm, isScheduled, isLocked, isAdmin } = getLessonFlags(l);
 
-  // История = архив: карандаш открывает карточку в режиме ПРОСМОТРА (+удаление по правам)
+  // История: тренеру карандаш открывает ПРОСМОТР (+удаление по правам),
+  // админу — полноценное редактирование
   const editBtnHTML =
-    `<button data-edit-id="${esc(l.id)}" data-view="1" title="Просмотр"
+    `<button data-edit-id="${esc(l.id)}" ${isAdmin?'':'data-view="1"'} title="${isAdmin?'Редактировать':'Просмотр'}"
       style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>`;
 
   return `<div class="lesson-item${isCancelled?' is-cancelled':''}${needsConfirm?' lesson-needs-confirm':''}">
@@ -2456,8 +2497,7 @@ function histGroupItemHTML(g) {
       <span class="lesson-student">👥 ${esc(g.venue||'Группа')}</span>
       <div style="display:flex;align-items:center;gap:6px">
         <span class="lesson-date">${d}</span>
-        ${submitted ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Просмотр посещаемости">👁</button>` : ''}
-        <button data-edit-group-id="${g.id}" data-view="1" title="Просмотр" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
+        <button data-edit-group-id="${g.id}" ${isAdmin?'':'data-view="1"'} title="${isAdmin?'Редактировать':'Просмотр'}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
       </div>
     </div>
     <div class="lesson-row2">
@@ -2819,7 +2859,7 @@ async function openEditModal(lessonId, viewMode) {
             ${lesson.trainerName ? `<div><span class="dim">Тренер:</span> ${esc(lesson.trainerName)}</div>` : ''}
             ${lesson.notes ? `<div><span class="dim">Заметки:</span> ${esc(lesson.notes)}</div>` : ''}
           </div>
-          <div class="dim" style="font-size:.75rem;margin-top:8px">Редактирование — на вкладке «Главная». История — просмотр${canDelete?' и удаление':''}.</div>`;
+          <div class="dim" style="font-size:.75rem;margin-top:8px">История — просмотр${canDelete?' и удаление':''}.${confirmed ? ' Изменить подтверждённое занятие может только администратор.' : ' Редактировать можно с «Главной», пока занятие не подтверждено.'}</div>`;
       }
     } else {
       document.getElementById('edit-lesson-title').textContent = 'Редактировать занятие';
