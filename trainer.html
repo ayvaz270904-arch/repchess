@@ -1467,7 +1467,11 @@ function populateTrainerSelect(selId) {
 // ══════════════════════════════════════════════
 // Одним запросом к Firestore считает использованные занятия для всех учеников.
 // Результат: s.used и s.remaining = s.purchased - used (не меньше 0).
+let _enrichedAt = 0;
 async function _enrichStudentsWithRemaining() {
+  // Полное чтение коллекции lessons — дорого по квоте. Пропускаем, если считали
+  // менее 5 минут назад и все ученики уже обогащены (свежая загрузка сбрасывает remaining)
+  if (Date.now() - _enrichedAt < 300000 && students.length && students.every(s => s.remaining != null)) return;
   try {
     // Админ читает занятия ВСЕХ тренеров; тренер — только свои (ограничение Firestore-правил)
     const isAdmin = currentTrainer?.role === 'admin';
@@ -1489,6 +1493,7 @@ async function _enrichStudentsWithRemaining() {
       const usedActive = Math.max(0, s.used - (s.purchasedExpired || 0));
       s.remaining = Math.max(0, (s.purchased || 0) - usedActive);
     });
+    _enrichedAt = Date.now();
   } catch(e) {
     console.warn('Could not enrich student remaining:', e);
     students.forEach(s => { s.remaining = s.remaining ?? s.purchased ?? 0; });
@@ -1529,30 +1534,41 @@ function balanceBadge(remaining, purchased) {
 // ══════════════════════════════════════════════
 //  HOME PAGE
 // ══════════════════════════════════════════════
-async function loadHomePage() {
+// Кэш данных Главной: fromCache=true — перерисовка БЕЗ чтений Firestore (экономия квоты)
+let _homeIndivCache = null, _homeGrpCache = null, _homeLoadedAt = 0;
+async function loadHomePage(fromCache) {
   const isAdmin = currentTrainer.role === 'admin';
   const uid = currentUser.uid;
 
-  // Загружаем индивидуальные занятия
-  let indivSnap;
-  try {
-    indivSnap = isAdmin
-      ? await db.collection('lessons').limit(200).get()
-      : await db.collection('lessons').where('trainerId','==',uid).get();
-  } catch(e) { indivSnap = {docs:[]}; }
-  let indivAll = indivSnap.docs.map(d=>({id:d.id,...d.data()}))
-    .filter(l => !_deletedLessonIds.has(l.id));
-  indivAll.forEach(l => { _editLessonCache[l.id] = l; });
+  let indivAll, grpAll;
+  if (fromCache && _homeIndivCache) {
+    indivAll = _homeIndivCache.filter(l => !_deletedLessonIds.has(l.id));
+    grpAll   = _homeGrpCache.filter(g => !_deletedGroupIds.has(g.id));
+  } else {
+    // Загружаем индивидуальные занятия
+    let indivSnap;
+    try {
+      indivSnap = isAdmin
+        ? await db.collection('lessons').limit(200).get()
+        : await db.collection('lessons').where('trainerId','==',uid).get();
+    } catch(e) { indivSnap = {docs:[]}; }
+    indivAll = indivSnap.docs.map(d=>({id:d.id,...d.data()}))
+      .filter(l => !_deletedLessonIds.has(l.id));
+    indivAll.forEach(l => { _editLessonCache[l.id] = l; });
 
-  // Загружаем групповые занятия
-  let grpSnap;
-  try {
-    grpSnap = isAdmin
-      ? await db.collection('groupLessons').limit(100).get()
-      : await db.collection('groupLessons').where('trainerId','==',uid).get();
-  } catch(e) { grpSnap = {docs:[]}; }
-  let grpAll = grpSnap.docs.map(d=>({id:d.id,...d.data(),_isGroup:true}))
-    .filter(g => !_deletedGroupIds.has(g.id));
+    // Загружаем групповые занятия
+    let grpSnap;
+    try {
+      grpSnap = isAdmin
+        ? await db.collection('groupLessons').limit(100).get()
+        : await db.collection('groupLessons').where('trainerId','==',uid).get();
+    } catch(e) { grpSnap = {docs:[]}; }
+    grpAll = grpSnap.docs.map(d=>({id:d.id,...d.data(),_isGroup:true}))
+      .filter(g => !_deletedGroupIds.has(g.id));
+    _homeLoadedAt = Date.now();
+  }
+  _homeIndivCache = indivAll;
+  _homeGrpCache = grpAll;
 
   // Строим карту использованных занятий по ученикам (для напоминаний)
   const usedMap = {};
@@ -2920,9 +2936,19 @@ async function saveEditLesson() {
     const locked = status === 'done' || status === 'cancelled';
     toast(locked ? 'Занятие подтверждено и заблокировано ✓' : 'Изменения сохранены ✓', 'ok');
     closeEditModal();
-    loadHomePage();
-    if (document.getElementById('page-history').classList.contains('on')) loadHistory();
-    if (currentTrainer.role === 'admin') loadAdminData();
+    // Точечно обновляем кэши и перерисовываем без перезагрузки из Firestore
+    const _lPatch = { _date: date, format, notes, ...(status ? { status } : {}) };
+    if (_homeIndivCache) {
+      const i = _homeIndivCache.findIndex(l => l.id === id);
+      if (i >= 0) _homeIndivCache[i] = { ..._homeIndivCache[i], ..._lPatch };
+    }
+    const hi = _histLessonsCache.findIndex(l => l.id === id);
+    if (hi >= 0) _histLessonsCache[hi] = { ..._histLessonsCache[hi], ..._lPatch };
+    const ai = _admLessonsCache.findIndex(l => l._rowType !== 'group' && l.id === id);
+    if (ai >= 0) _admLessonsCache[ai] = { ..._admLessonsCache[ai], ..._lPatch };
+    loadHomePage(true);
+    if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
+    if (document.getElementById('page-admin').classList.contains('on')) renderAdmLessons();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
   }
@@ -2958,10 +2984,12 @@ async function confirmDeleteLesson() {
     closeEditModal();
     toast('Занятие удалено', 'ok');
 
-    // Обновляем кэш без Firestore-запроса
+    // Обновляем кэши без Firestore-запроса
     _histLessonsCache = _histLessonsCache.filter(l => l.id !== id);
+    _admLessonsCache  = _admLessonsCache.filter(l => l._rowType === 'group' || l.id !== id);
     if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
-    if (currentTrainer.role === 'admin') loadAdminData();
+    loadHomePage(true);   // _deletedLessonIds отфильтрует удалённое из кэша Главной
+    if (document.getElementById('page-admin').classList.contains('on')) renderAdmLessons();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false;
@@ -3233,8 +3261,8 @@ function showPage(name) {
   document.getElementById(`page-${name}`).classList.add('on');
   document.querySelector(`[data-page="${name}"]`)?.classList.add('on');
   sessionStorage.setItem('_activePage', name);
-  // Lazy load
-  if (name==='record')  loadHomePage();
+  // Lazy load (Главная/Запись — из кэша, если данные свежее минуты: экономия квоты)
+  if (name==='record')  loadHomePage(Date.now() - _homeLoadedAt < 60000);
   if (name==='history') loadHistory();
   if (name==='group')   loadGroupLessons();
   if (name==='admin')   loadAdminData();
@@ -3927,6 +3955,30 @@ function _groupHasMismatch(g) {
   return expected.some(e => !attended.includes(e));
 }
 
+// Точечно обновляем группу и её balance-записи во всех локальных кэшах —
+// вместо полной перезагрузки из Firestore (та сжигала квоту чтений)
+function _patchGroupCaches(groupId, updatedG, attendedEmails) {
+  const patch = { ...updatedG, id: groupId };
+  if (_homeGrpCache) {
+    const i = _homeGrpCache.findIndex(x => x.id === groupId);
+    if (i >= 0) _homeGrpCache[i] = { ..._homeGrpCache[i], ...patch, _isGroup: true };
+  }
+  const hi = _histGroupsCache.findIndex(x => x.id === groupId);
+  if (hi >= 0) _histGroupsCache[hi] = { ..._histGroupsCache[hi], ...patch };
+  const ai = _admLessonsCache.findIndex(x => x._rowType === 'group' && x.id === groupId);
+  if (ai >= 0) _admLessonsCache[ai] = { ..._admLessonsCache[ai], ...patch, _rowType: 'group' };
+  // Статусы связанных индивидуальных записей (done/absent) в кэше Главной
+  if (_homeIndivCache && attendedEmails) {
+    _homeIndivCache.forEach(l => {
+      if (l.groupLessonId === groupId) {
+        const att = attendedEmails.includes(l.studentEmail);
+        l.status = att ? 'done' : 'absent';
+        l.attended = att;
+      }
+    });
+  }
+}
+
 async function openAttendModal(groupId) {
   let g = _editGroupCache[groupId];
   if (!g) {
@@ -4358,9 +4410,12 @@ async function submitAttendance() {
     } else {
       toast('Отметки отправлены администратору ✓', 'ok');
     }
-    loadGroupLessons();
-    loadHomePage();
-    if (isAdmin) loadAdminData();
+    // Точечное обновление вместо полной перезагрузки (экономия квоты чтений Firestore)
+    _patchGroupCaches(groupId, updatedG, attendedEmails);
+    loadHomePage(true);
+    if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
+    if (document.getElementById('page-group').classList.contains('on')) loadGroupLessons();
+    if (isAdmin && document.getElementById('page-admin').classList.contains('on')) loadAdminData();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false;
@@ -4453,9 +4508,13 @@ async function approveAttendance() {
     btn.disabled = false; btn.textContent = '✅ Подтверждено (изменить)';
     _closeModal('attend-modal');
     toast('Занятие подтверждено ✓ Тренеру засчитано', 'ok');
-    loadGroupLessons();
-    loadHomePage();
-    loadAdminData();
+    // Точечное обновление вместо 3 полных перезагрузок (~1000+ чтений Firestore на каждое
+    // подтверждение — при серии подтверждений выгорала дневная квота)
+    _patchGroupCaches(groupId, updatedG, attendedEmails);
+    loadHomePage(true);
+    if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
+    if (document.getElementById('page-group').classList.contains('on')) loadGroupLessons();
+    if (document.getElementById('page-admin').classList.contains('on')) loadAdminData();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false;
