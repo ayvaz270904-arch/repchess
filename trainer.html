@@ -340,6 +340,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
         <div class="card-body" id="home-remind-body"></div>
       </div>
+      <div id="home-actions"></div>
       <div class="card">
         <div class="card-head"><span class="card-title">Последние занятия</span></div>
         <div class="card-body" id="home-recent"></div>
@@ -869,6 +870,8 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         🔒 Занятие подтверждено — редактирование заблокировано. Обратитесь к администратору при необходимости изменений.
       </div>
     </div>
+    <!-- Просмотр (История): данные занятия только для чтения -->
+    <div id="edit-view-wrap" style="display:none;margin-bottom:14px"></div>
     <!-- Редактируемые поля -->
     <div id="edit-editable-wrap">
       <div class="form-row">
@@ -1583,6 +1586,18 @@ async function loadHomePage() {
   grpAll.sort((a,b) => (b._date||'') > (a._date||'') ? 1 : -1);
 
   // Объединяем и сортируем по дате
+  // «Требуют действия»: неподтверждённые индив. занятия + группы без посещаемости (+ аппрувы у админа) — любой давности
+  const needAction = [
+    ...indivOnly.filter(l => getLessonFlags(l).needsConfirm),
+    ...grpAll.filter(g => { const f = getGroupFlags(g); return f.needsAttend || f.needsApproval; })
+  ].sort((a,b) => (a._date||'') > (b._date||'') ? 1 : -1);
+  const actEl = document.getElementById('home-actions');
+  if (actEl) actEl.innerHTML = needAction.length ? `
+    <div class="card" style="margin-bottom:14px;border-color:rgba(249,115,22,.4)">
+      <div class="card-head"><span class="card-title">❗ Требуют действия</span><span class="dim" style="font-size:.78rem">${needAction.length}</span></div>
+      <div class="card-body">${needAction.slice(0, 15).map(item => item._isGroup ? groupFeedItemHTML(item) : lessonItemHTML(item)).join('')}${needAction.length > 15 ? `<div class="dim" style="text-align:center;padding:8px;font-size:.78rem">и ещё ${needAction.length - 15}…</div>` : ''}</div>
+    </div>` : '';
+
   const feed = [
     ...indivOnly.map(l => ({...l, _feedDate: l._date||''})),
     ...grpAll.map(g => ({...g, _feedDate: g._date||''}))
@@ -1931,8 +1946,25 @@ function closeIndivModal() {
   _closeModal('indiv-modal');
 }
 
+// Режим «только просмотр» для модалки группового занятия (История = архив)
+let _grpViewMode = false;
+function _setGroupModalReadOnly(ro) {
+  _grpViewMode = ro;
+  const m = document.getElementById('group-modal');
+  if (!m) return;
+  m.querySelectorAll('input, textarea, select').forEach(el => { if (el.type !== 'hidden') el.disabled = ro; });
+  m.querySelectorAll('.toggle-btn, .note-chip').forEach(b => b.disabled = ro);
+  const sub = document.getElementById('grp-submit');
+  if (sub) sub.style.display = ro ? 'none' : '';
+  const tags = document.getElementById('grp-students-tags');
+  if (tags) tags.querySelectorAll('button').forEach(b => b.style.display = ro ? 'none' : '');
+  const srch = document.getElementById('grp-student-inp');
+  if (srch) srch.placeholder = ro ? 'Просмотр — изменения на вкладке «Главная»' : 'Нажми для выбора ученика...';
+}
+
 function openGroupModal() {
   if (currentTrainer?.role !== 'admin') { toast('Групповые занятия создаёт администратор', 'err'); return; }
+  _setGroupModalReadOnly(false);
   editingGroupId = null;
   grpSelectedStudents = [];
   renderGrpTags();
@@ -1956,8 +1988,9 @@ function openGroupModal() {
   _openModal('group-modal');
 }
 
-async function openEditGroupModal(groupId) {
-  if (currentTrainer?.role !== 'admin') { toast('Редактировать групповые может только администратор', 'err'); return; }
+async function openEditGroupModal(groupId, viewMode) {
+  // Редактирование — только админ; ПРОСМОТР (из Истории) доступен всем
+  if (!viewMode && currentTrainer?.role !== 'admin') { toast('Редактировать групповые может только администратор', 'err'); return; }
   let g = _editGroupCache[groupId];
   if (!g) {
     try {
@@ -2007,8 +2040,9 @@ async function openEditGroupModal(groupId) {
     delBtn.addEventListener('click', confirmDeleteGroup);
     document.getElementById('grp-submit').parentNode.insertBefore(delBtn, document.getElementById('grp-submit').nextSibling.nextSibling);
   }
-  delBtn.style.display = '';
+  delBtn.style.display = (currentTrainer?.role === 'admin') ? '' : 'none';   // удаление групповых — только админ
   delBtn.dataset.confirm = ''; delBtn.disabled = false; delBtn.textContent = '🗑 Удалить занятие';
+  _setGroupModalReadOnly(!!viewMode);
   _openModal('group-modal');
 }
 
@@ -2067,6 +2101,7 @@ function closeGroupModal() {
 
 async function submitGroupLesson() {
   if (currentTrainer?.role !== 'admin') { toast('Групповые занятия создаёт администратор', 'err'); return; }
+  if (_grpViewMode) return;   // режим просмотра — сохранять нечего
   const date       = document.getElementById('grp-date').value;
   const time       = document.getElementById('grp-time').value;
   const venue      = document.getElementById('grp-venue').value.trim();
@@ -2373,9 +2408,10 @@ function histLessonItemHTML(l) {
   const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
   const { isPending, isDone, isCancelled, isRescheduled, needsConfirm, isScheduled, isLocked, isAdmin } = getLessonFlags(l);
 
-  const editBtnHTML = isLocked ? '' :
-    `<button data-edit-id="${esc(l.id)}" class="${needsConfirm?'edit-btn-confirm':''}"
-      style="background:none;border:none;cursor:pointer;color:${needsConfirm?'var(--orange)':'var(--text2)'};font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">${needsConfirm?'❓':'✏️'}</button>`;
+  // История = архив: карандаш открывает карточку в режиме ПРОСМОТРА (+удаление по правам)
+  const editBtnHTML =
+    `<button data-edit-id="${esc(l.id)}" data-view="1" title="Просмотр"
+      style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>`;
 
   return `<div class="lesson-item${isCancelled?' is-cancelled':''}${needsConfirm?' lesson-needs-confirm':''}">
     <div class="lesson-row1">
@@ -2409,8 +2445,8 @@ function histGroupItemHTML(g) {
       <span class="lesson-student">👥 ${esc(g.venue||'Группа')}</span>
       <div style="display:flex;align-items:center;gap:6px">
         <span class="lesson-date">${d}</span>
-        ${submitted ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="${needsApproval?'Подтвердить':'Просмотр'}">${needsApproval?'✅':'👁'}</button>` : ''}
-        ${canEdit ? `<button data-edit-group-id="${g.id}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>` : ''}
+        ${submitted ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Просмотр посещаемости">👁</button>` : ''}
+        <button data-edit-group-id="${g.id}" data-view="1" title="Просмотр" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
       </div>
     </div>
     <div class="lesson-row2">
@@ -2711,7 +2747,7 @@ let _editLessonCache = {};  // id → lesson data cache
 const _deletedLessonIds = new Set();   // удалённые individual
 const _deletedGroupIds  = new Set();   // удалённые group
 
-async function openEditModal(lessonId) {
+async function openEditModal(lessonId, viewMode) {
   try {
     let lesson = _editLessonCache[lessonId];
     if (!lesson) {
@@ -2750,15 +2786,48 @@ async function openEditModal(lessonId) {
       if (btn) btn.classList.toggle('on', status === s);
     });
 
-    // Показываем/скрываем форму редактирования
-    document.getElementById('edit-locked-msg').style.display = isLocked ? '' : 'none';
-    document.getElementById('edit-editable-wrap').style.display = isLocked ? 'none' : '';
+    // Подтверждённое занятие (done/cancelled/легаси без статуса) тренер удалять НЕ может — только админ
+    const confirmed = !lesson.status || lesson.status === 'done' || lesson.status === 'cancelled';
+    const canDelete = isAdmin || !confirmed;
+
+    const viewWrap = document.getElementById('edit-view-wrap');
+    if (viewMode) {
+      // ИСТОРИЯ = архив: только просмотр (+удаление по правам)
+      document.getElementById('edit-lesson-title').textContent = 'Занятие (просмотр)';
+      document.getElementById('edit-locked-msg').style.display = 'none';
+      document.getElementById('edit-editable-wrap').style.display = 'none';
+      const stLabel = { pending:'📅 Запланировано', done:'✅ Проведено', cancelled:'❌ Отменено', rescheduled:'🔄 Перенесено' }[lesson.status] || '✅ Проведено (архив)';
+      const dStr = lesson._date ? new Date(lesson._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'long',year:'numeric'}) : '—';
+      if (viewWrap) {
+        viewWrap.style.display = '';
+        viewWrap.innerHTML = `
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:.88rem;display:flex;flex-direction:column;gap:8px">
+            <div><span class="dim">Дата:</span> ${esc(dStr)}</div>
+            <div><span class="dim">Формат:</span> ${lesson.format==='online'?'💻 Онлайн':'📍 Офлайн'}</div>
+            <div><span class="dim">Статус:</span> ${stLabel}</div>
+            ${lesson.trainerName ? `<div><span class="dim">Тренер:</span> ${esc(lesson.trainerName)}</div>` : ''}
+            ${lesson.notes ? `<div><span class="dim">Заметки:</span> ${esc(lesson.notes)}</div>` : ''}
+          </div>
+          <div class="dim" style="font-size:.75rem;margin-top:8px">Редактирование — на вкладке «Главная». История — просмотр${canDelete?' и удаление':''}.</div>`;
+      }
+    } else {
+      document.getElementById('edit-lesson-title').textContent = 'Редактировать занятие';
+      if (viewWrap) { viewWrap.style.display = 'none'; viewWrap.innerHTML = ''; }
+      document.getElementById('edit-locked-msg').style.display = isLocked ? '' : 'none';
+      document.getElementById('edit-editable-wrap').style.display = isLocked ? 'none' : '';
+    }
 
     // Сбрасываем кнопки
     const delBtn = document.getElementById('edit-delete-btn');
-    if (delBtn) { delBtn.dataset.confirm = ''; delBtn.disabled = false; delBtn.textContent = '🗑 Удалить занятие'; }
+    if (delBtn) {
+      delBtn.dataset.confirm = ''; delBtn.disabled = false; delBtn.textContent = '🗑 Удалить занятие';
+      delBtn.style.display = canDelete ? '' : 'none';
+    }
     const saveBtn = document.getElementById('edit-save-btn');
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Сохранить'; }
+    if (saveBtn) {
+      saveBtn.disabled = false; saveBtn.textContent = 'Сохранить';
+      saveBtn.style.display = (viewMode || isLocked) ? 'none' : '';
+    }
 
     _openModal('edit-lesson-modal');
   } catch(e) {
@@ -2811,6 +2880,10 @@ async function saveEditLesson() {
 
 async function confirmDeleteLesson() {
   const id = document.getElementById('edit-lesson-id').value;
+  // Подтверждённые занятия (done/cancelled/легаси) удаляет только админ
+  const _l = _editLessonCache[id];
+  const _confirmed = !_l || !_l.status || _l.status === 'done' || _l.status === 'cancelled';
+  if (_confirmed && currentTrainer?.role !== 'admin') { toast('Подтверждённые занятия может удалять только администратор', 'err'); return; }
   const btn = document.getElementById('edit-delete-btn');
 
   if (btn.dataset.confirm !== '1') {
@@ -3583,13 +3656,13 @@ document.addEventListener('click', e => {
   const editBtn = e.target.closest('[data-edit-id]');
   if (editBtn) {
     e.stopPropagation();
-    openEditModal(editBtn.dataset.editId);
+    openEditModal(editBtn.dataset.editId, editBtn.dataset.view === '1');
   }
-  // Кнопка редактирования группового занятия
+  // Кнопка редактирования/просмотра группового занятия
   const editGrpBtn = e.target.closest('[data-edit-group-id]');
   if (editGrpBtn) {
     e.stopPropagation();
-    openEditGroupModal(editGrpBtn.dataset.editGroupId);
+    openEditGroupModal(editGrpBtn.dataset.editGroupId, editGrpBtn.dataset.view === '1');
   }
   // Кнопка ставок тренера
   const rateBtn = e.target.closest('.rate-btn');
