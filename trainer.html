@@ -4100,9 +4100,11 @@ async function openAttendModal(groupId) {
       mismatchEl.style.display = 'none';
     }
 
-    // Кнопка подтверждения
+    // Кнопка подтверждения (сбрасываем disabled — иначе после первого
+    // подтверждения кнопка остаётся мёртвой для следующих занятий)
     const approveBtn = document.getElementById('attend-approve-btn');
     approveBtn.style.display = submitted ? '' : 'none';
+    approveBtn.disabled = false;
     approveBtn.textContent = approved ? '✅ Подтверждено (изменить)' : '✅ Подтвердить занятие';
     approveBtn.style.background = approved ? 'var(--accent2)' : 'var(--green)';
 
@@ -4448,6 +4450,7 @@ async function approveAttendance() {
     _editGroupCache[groupId] = updatedG;
     _attendNewExpected = [];
 
+    btn.disabled = false; btn.textContent = '✅ Подтверждено (изменить)';
     _closeModal('attend-modal');
     toast('Занятие подтверждено ✓ Тренеру засчитано', 'ok');
     loadGroupLessons();
