@@ -307,7 +307,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
   <!-- FLOATING ACTION BUTTON -->
   <div id="fab-wrap">
     <div id="fab-options">
-      <div class="fab-row">
+      <div class="fab-row" id="fab-group-row">
         <span class="fab-label">Групповое</span>
         <button class="fab-btn fab-btn-group" onclick="openGroupModal();closeFab()">👥</button>
       </div>
@@ -359,7 +359,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div class="page" id="page-group">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div style="font-weight:700;font-size:1rem">Групповые занятия</div>
-        <button class="btn-sm btn-gold" style="color:#fff;background:var(--accent);border:none;font-weight:700" onclick="openGroupModal()">+ Новое</button>
+        <button class="btn-sm btn-gold" id="grp-new-btn" style="color:#fff;background:var(--accent);border:none;font-weight:700" onclick="openGroupModal()">+ Новое</button>
       </div>
       <div id="group-list"></div>
     </div>
@@ -1225,7 +1225,7 @@ function getGroupFlags(g) {
   const hasMismatch  = submitted && _groupHasMismatch(g);
   const needsAttend  = !submitted && pastDate && (g.studentEmails||[]).length > 0;
   const needsApproval = isAdmin && submitted && !approved;
-  const canEdit      = !submitted || isAdmin;
+  const canEdit      = isAdmin;   // групповые создаёт/правит только админ; тренер отмечает посещаемость
   return { submitted, approved, pastDate, hasMismatch, needsAttend, needsApproval, canEdit, isAdmin };
 }
 
@@ -1282,6 +1282,11 @@ async function showApp() {
   document.getElementById('user-badge').className = 'trainer-badge' + (isAdmin ? ' admin-badge' : '');
   // Явно задаём видимость — не оставляем на CSS
   document.getElementById('admin-nav').style.display = isAdmin ? 'flex' : 'none';
+  // Групповые занятия создаёт только админ — тренерам кнопки не показываем
+  const _fabGrp = document.getElementById('fab-group-row');
+  if (_fabGrp) _fabGrp.style.display = isAdmin ? '' : 'none';
+  const _grpNew = document.getElementById('grp-new-btn');
+  if (_grpNew) _grpNew.style.display = isAdmin ? '' : 'none';
 
   // Set today's date as default
   const today = localDateStr(new Date());
@@ -1927,6 +1932,7 @@ function closeIndivModal() {
 }
 
 function openGroupModal() {
+  if (currentTrainer?.role !== 'admin') { toast('Групповые занятия создаёт администратор', 'err'); return; }
   editingGroupId = null;
   grpSelectedStudents = [];
   renderGrpTags();
@@ -1951,6 +1957,7 @@ function openGroupModal() {
 }
 
 async function openEditGroupModal(groupId) {
+  if (currentTrainer?.role !== 'admin') { toast('Редактировать групповые может только администратор', 'err'); return; }
   let g = _editGroupCache[groupId];
   if (!g) {
     try {
@@ -2006,6 +2013,7 @@ async function openEditGroupModal(groupId) {
 }
 
 async function confirmDeleteGroup() {
+  if (currentTrainer?.role !== 'admin') { toast('Удалять групповые может только администратор', 'err'); return; }
   const btn = document.getElementById('grp-delete-btn');
   if (btn.dataset.confirm !== '1') {
     btn.dataset.confirm = '1';
@@ -2058,6 +2066,7 @@ function closeGroupModal() {
 }
 
 async function submitGroupLesson() {
+  if (currentTrainer?.role !== 'admin') { toast('Групповые занятия создаёт администратор', 'err'); return; }
   const date       = document.getElementById('grp-date').value;
   const time       = document.getElementById('grp-time').value;
   const venue      = document.getElementById('grp-venue').value.trim();
