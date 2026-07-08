@@ -1,0 +1,6 @@
+name = "repchess"
+compatibility_date = "2026-07-01"
+
+# Статический сайт: раздаём файлы из корня репозитория (index.html, trainer.html, client.html и т.д.)
+[assets]
+directory = "."
