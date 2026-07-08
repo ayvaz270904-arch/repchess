@@ -2878,7 +2878,9 @@ async function addTrainer() {
     _closeModal('add-trainer-modal');
     loadAdminData();
   } catch(e) {
-    errEl.textContent = e.code==='auth/email-already-in-use'?'Email уже используется':'Ошибка: '+e.message;
+    if (e.code === 'auth/email-already-in-use') errEl.textContent = 'Email уже используется';
+    else if (e.code === 'auth/admin-restricted-operation') errEl.textContent = 'В Firebase выключена регистрация. Включи на время: Firebase Console → Authentication → Settings → User actions → Enable create (sign-up), создай тренера и выключи обратно.';
+    else errEl.textContent = 'Ошибка: ' + e.message;
     try { await secondaryApp.delete(); } catch(_) {}
   }
 }
