@@ -1086,18 +1086,29 @@ setTimeout(() => {
 // ══════════════════════════════════════════════
 //  MODAL HELPERS
 // ══════════════════════════════════════════════
+let _savedScrollY = 0;
 function _openModal(id) {
-  document.getElementById(id).style.display = 'flex';
-  document.body.classList.add('modal-open');
-  // сохраняем позицию скролла чтобы не прыгало
-  document.body.style.top = `-${window.scrollY}px`;
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'flex';
+  // Фиксируем фон только если он ещё НЕ зафиксирован (иначе вложенная модалка
+  // сохранит scrollY=0, т.к. body уже position:fixed, и при закрытии кинет наверх)
+  if (!document.body.classList.contains('modal-open')) {
+    _savedScrollY = window.scrollY || window.pageYOffset || 0;
+    document.body.style.top = `-${_savedScrollY}px`;
+    document.body.classList.add('modal-open');
+  }
 }
 function _closeModal(id) {
-  document.getElementById(id).style.display = 'none';
-  const scrollY = parseInt(document.body.style.top || '0') * -1;
-  document.body.classList.remove('modal-open');
-  document.body.style.top = '';
-  window.scrollTo(0, scrollY);
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+  // Снимаем блокировку и возвращаем позицию только когда закрыт ПОСЛЕДНИЙ оверлей
+  const anyOpen = Array.from(document.querySelectorAll('.overlay'))
+    .some(o => o.style.display === 'flex');
+  if (!anyOpen && document.body.classList.contains('modal-open')) {
+    document.body.classList.remove('modal-open');
+    document.body.style.top = '';
+    window.scrollTo(0, _savedScrollY);
+  }
 }
 
 // ══════════════════════════════════════════════
