@@ -4,3 +4,5 @@ compatibility_date = "2026-07-01"
 # Статический сайт: раздаём файлы из корня репозитория (index.html, trainer.html, client.html и т.д.)
 [assets]
 directory = "."
+# Отдаём файлы по их точным путям без редиректов (/trainer.html так и остаётся /trainer.html)
+html_handling = "none"
