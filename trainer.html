@@ -287,20 +287,20 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 
   <!-- BOTTOM NAV -->
   <div class="bottom-nav" id="bottom-nav">
-    <button class="nav-item on" onclick="showPage('home')" data-page="home">
-      <div class="nav-icon">🏠</div><div class="nav-label">Главная</div>
+    <button class="nav-item" onclick="showPage('admin')" data-page="admin" id="admin-nav" style="display:none">
+      <div class="nav-icon">⚙️</div><div class="nav-label">Админ</div>
     </button>
     <button class="nav-item" onclick="showPage('history')" data-page="history">
       <div class="nav-icon">📋</div><div class="nav-label">История</div>
+    </button>
+    <button class="nav-item on" onclick="showPage('home')" data-page="home">
+      <div class="nav-icon">🏠</div><div class="nav-label">Главная</div>
     </button>
     <button class="nav-item" onclick="showPage('schedule')" data-page="schedule">
       <div class="nav-icon">📅</div><div class="nav-label">График</div>
     </button>
     <button class="nav-item" onclick="showPage('finance')" data-page="finance" id="finance-nav">
       <div class="nav-icon">💰</div><div class="nav-label">Финансы</div>
-    </button>
-    <button class="nav-item" onclick="showPage('admin')" data-page="admin" id="admin-nav" style="display:none">
-      <div class="nav-icon">⚙️</div><div class="nav-label">Админ</div>
     </button>
   </div>
 
