@@ -543,6 +543,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
           <span class="dim" id="sdb-count" style="font-size:.78rem"></span>
         </div>
         <div class="card-body">
+          <button onclick="openAddStudentModal()" style="background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:11px;font-weight:700;font-size:.88rem;cursor:pointer;width:100%;margin-bottom:12px">➕ Добавить ученика (сертификат / пробное)</button>
           <input class="form-inp" id="sdb-search" type="text" placeholder="Поиск по имени или email..."
             oninput="renderStudentDB(this.value)" style="margin-bottom:12px">
           <div id="sdb-list"><div class="empty">Загрузка...</div></div>
@@ -749,6 +750,61 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <button class="btn-full btn-gold" onclick="submitGroupLesson()" id="grp-submit">Создать занятие</button>
     <div style="height:10px"></div>
     <button class="btn-full btn-ghost" onclick="closeGroupModal()">Отмена</button>
+  </div>
+</div>
+
+<!-- ADD STUDENT MODAL (сертификаты / пробные) -->
+<div class="overlay" id="add-student-modal" style="display:none" onclick="if(event.target===this)_closeModal('add-student-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">➕ Добавить ученика</div>
+    <div class="form-row">
+      <div class="form-label">Имя и фамилия *</div>
+      <input class="form-inp" id="add-stud-name" type="text" placeholder="Иванов Пётр">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Телефон</div>
+      <input class="form-inp" id="add-stud-phone" type="tel" placeholder="+7 900 000-00-00">
+      <div style="font-size:.72rem;color:var(--text2);margin-top:4px">По номеру ученик сможет привязать Telegram-кабинет</div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Email</div>
+      <input class="form-inp" id="add-stud-email" type="email" placeholder="можно оставить пустым">
+      <div style="font-size:.72rem;color:var(--text2);margin-top:4px">Если пусто — создам служебный из телефона</div>
+    </div>
+    <div class="form-row">
+      <div class="form-label">Тип</div>
+      <div class="toggle-group">
+        <button class="toggle-btn on" onclick="addStudSetType('cert',this)">🎁 Сертификат</button>
+        <button class="toggle-btn" onclick="addStudSetType('free',this)">🆓 Без пакета</button>
+      </div>
+      <input type="hidden" id="add-stud-type" value="cert">
+    </div>
+    <div id="add-stud-cert-block">
+      <div class="form-row">
+        <div class="form-label">Занятий по сертификату</div>
+        <input class="form-inp" id="add-stud-lessons" type="number" min="1" max="50" value="4">
+      </div>
+      <div class="form-row">
+        <div class="form-label">Вид занятий</div>
+        <div class="toggle-group">
+          <button class="toggle-btn on" onclick="toggle('add-stud-kind',this,'Индив.')">👤 Индивидуальные</button>
+          <button class="toggle-btn" onclick="toggle('add-stud-kind',this,'Групп.')">👥 Групповые</button>
+        </div>
+        <input type="hidden" id="add-stud-kind" value="Индив.">
+      </div>
+      <div class="form-row">
+        <div class="form-label">Формат</div>
+        <div class="toggle-group">
+          <button class="toggle-btn on" onclick="toggle('add-stud-fmt',this,'офлайн')">📍 Офлайн</button>
+          <button class="toggle-btn" onclick="toggle('add-stud-fmt',this,'онлайн')">💻 Онлайн</button>
+        </div>
+        <input type="hidden" id="add-stud-fmt" value="офлайн">
+      </div>
+    </div>
+    <button class="btn-full btn-gold" onclick="submitAddStudent()" id="add-stud-submit">Добавить в базу</button>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('add-student-modal')">Отмена</button>
   </div>
 </div>
 
@@ -4580,6 +4636,64 @@ async function approveAttendance() {
 // ══════════════════════════════════════════════
 //  STUDENT DATABASE (admin)
 // ══════════════════════════════════════════════
+// ── Добавление ученика вручную (сертификаты / пробные) — пишет строку в Table 2 через GAS ──
+function openAddStudentModal() {
+  if (currentTrainer?.role !== 'admin') { toast('Добавлять учеников может только администратор', 'err'); return; }
+  ['add-stud-name','add-stud-phone','add-stud-email'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('add-stud-lessons').value = 4;
+  const btn = document.getElementById('add-stud-submit');
+  btn.disabled = false; btn.textContent = 'Добавить в базу';
+  _openModal('add-student-modal');
+}
+
+function addStudSetType(val, btn) {
+  toggle('add-stud-type', btn, val);
+  document.getElementById('add-stud-cert-block').style.display = val === 'cert' ? '' : 'none';
+}
+
+async function submitAddStudent() {
+  const name  = document.getElementById('add-stud-name').value.trim();
+  const phone = document.getElementById('add-stud-phone').value.trim();
+  const email = document.getElementById('add-stud-email').value.trim().toLowerCase();
+  if (!name) { toast('Укажи имя и фамилию', 'err'); return; }
+  if (!phone && !email) { toast('Нужен телефон или email — иначе ученика не с чем связать', 'err'); return; }
+
+  // Строка товара в формате, который понимает identifyProduct (категория по словам, кол-во по «N занятий»)
+  let products = '';
+  if (document.getElementById('add-stud-type').value === 'cert') {
+    const n = parseInt(document.getElementById('add-stud-lessons').value) || 0;
+    if (n < 1) { toast('Укажи количество занятий', 'err'); return; }
+    const kind = document.getElementById('add-stud-kind').value;  // Индив. | Групп.
+    const fmt  = document.getElementById('add-stud-fmt').value;   // офлайн | онлайн
+    products = `Сертификат — ${kind} ${fmt}, ${n} занятий`;
+  }
+
+  const btn = document.getElementById('add-stud-submit');
+  btn.disabled = true; btn.textContent = 'Добавление...';
+  try {
+    const token = await firebase.auth().currentUser.getIdToken();
+    // Content-Type не задаём (text/plain) — иначе браузер шлёт preflight, который GAS не умеет
+    const res = await fetch(_CSV, { method: 'POST', body: JSON.stringify({ action: 'addStudent', token, name, phone, email, products }) });
+    const txt = await res.text();
+    let ok = false;
+    try { ok = !!JSON.parse(txt).ok; } catch(e) {}
+    if (!ok) throw new Error(txt.slice(0, 150) || 'пустой ответ сервера');
+
+    toast(products ? 'Сертификат добавлен ✓' : 'Ученик добавлен ✓', 'ok');
+    _closeModal('add-student-modal');
+
+    // Перезагружаем базу учеников с сервера (сбрасываем sessionStorage-кэш)
+    try { sessionStorage.removeItem(_CACHE_KEY); } catch(e) {}
+    await loadStudents();
+    await _enrichStudentsWithRemaining();
+    renderStudentDB(document.getElementById('sdb-search')?.value || '');
+    loadHomePage(true);
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+    btn.disabled = false; btn.textContent = 'Добавить в базу';
+  }
+}
+
 function renderStudentDB(q) {
   const listEl = document.getElementById('sdb-list');
   const countEl = document.getElementById('sdb-count');
