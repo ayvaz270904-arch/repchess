@@ -550,6 +550,39 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
       </div>
 
+      <!-- Certificates (promo codes) -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head">
+          <span class="card-title">🎟 Сертификаты (промокоды)</span>
+          <span class="dim" id="cert-count" style="font-size:.78rem"></span>
+        </div>
+        <div class="card-body">
+          <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">Создай коды, напечатай их на сертификатах. Человек вводит код в Telegram-кабинете — и сам появляется в базе с пакетом занятий.</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <div style="flex:1"><div class="form-label">Кодов</div><input class="form-inp" id="cert-qty" type="number" min="1" max="50" value="5"></div>
+            <div style="flex:1"><div class="form-label">Занятий</div><input class="form-inp" id="cert-lessons" type="number" min="1" max="50" value="4"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-label">Вид</div>
+            <div class="toggle-group">
+              <button class="toggle-btn on" onclick="toggle('cert-kind',this,'Индив.')">👤 Индив.</button>
+              <button class="toggle-btn" onclick="toggle('cert-kind',this,'Групп.')">👥 Групп.</button>
+            </div>
+            <input type="hidden" id="cert-kind" value="Индив.">
+          </div>
+          <div class="form-row">
+            <div class="form-label">Формат</div>
+            <div class="toggle-group">
+              <button class="toggle-btn on" onclick="toggle('cert-fmt',this,'офлайн')">📍 Офлайн</button>
+              <button class="toggle-btn" onclick="toggle('cert-fmt',this,'онлайн')">💻 Онлайн</button>
+            </div>
+            <input type="hidden" id="cert-fmt" value="офлайн">
+          </div>
+          <button class="btn-full btn-gold" id="cert-gen-btn" onclick="generateCertCodes()">Создать коды</button>
+          <div id="cert-list" style="margin-top:12px"></div>
+        </div>
+      </div>
+
       <!-- Quick links -->
       <div class="card">
         <div class="card-head"><span class="card-title">🔗 Быстрые ссылки</span></div>
@@ -2657,6 +2690,7 @@ function renderAdmLessons(){
 
 async function loadAdminData() {
   if (currentTrainer.role !== 'admin') return;
+  loadCertCodes(); // асинхронно, не блокирует
   const from = document.getElementById('adm-from').value;
   const to   = document.getElementById('adm-to').value;
 
@@ -4568,8 +4602,23 @@ async function approveAttendance() {
     }
   });
 
+  // «Дополнительные», найденные в базе, становятся полноценными участниками группы —
+  // не нужно вписывать их второй раз (на следующем занятии они уже в списке)
+  const extraMatchedAll = g.extraMatched || [];
+  const extraRawAll = g.extraRaw || g.extraAttendees || [];
+  const promoted = [];
+  extraMatchedAll.forEach(m => {
+    if (m && m.found && m.email && !expectedEmails.includes(m.email)) {
+      expectedEmails.push(m.email); expectedNames.push(m.name || m.email);
+      attendedEmails.push(m.email); attendedNames.push(m.name || m.email);
+      promoted.push(m.name || m.email);
+    }
+  });
+  // В «лишних» остаются только не найденные в базе
+  const extraRaw = extraRawAll.filter((name, i) => !(extraMatchedAll[i] && extraMatchedAll[i].found && extraMatchedAll[i].email));
+  const extraMatchedLeft = extraMatchedAll.filter(m => !(m && m.found && m.email));
+
   const absent = expectedEmails.filter(e => !attendedEmails.includes(e));
-  const extraRaw = g.extraRaw || g.extraAttendees || [];
   const hasMismatch = absent.length > 0 || extraRaw.length > 0;
   const mismatchNote = [];
   if (absent.length) {
@@ -4587,10 +4636,15 @@ async function approveAttendance() {
       mismatch: hasMismatch,
       mismatchNote: mismatchNote.join('; '),
     };
-    if (_attendNewExpected.length > 0) {
+    if (_attendNewExpected.length > 0 || promoted.length > 0) {
       updateData.studentEmails = expectedEmails;
       updateData.studentNames  = expectedNames;
       updateData.count = expectedEmails.length;
+    }
+    if (promoted.length > 0) {
+      updateData.extraRaw = extraRaw;
+      updateData.extraAttendees = extraRaw;
+      updateData.extraMatched = extraMatchedLeft;
     }
     batch.update(db.collection('groupLessons').doc(groupId), updateData);
 
@@ -4618,18 +4672,23 @@ async function approveAttendance() {
     await batch.commit();
 
     const updatedG = { ...g, adminApproved: true, attendanceMarked: true,
-      attendedEmails, attendedNames, mismatch: hasMismatch };
-    if (_attendNewExpected.length > 0) {
+      attendedEmails, attendedNames, mismatch: hasMismatch, mismatchNote: mismatchNote.join('; ') };
+    if (_attendNewExpected.length > 0 || promoted.length > 0) {
       updatedG.studentEmails = expectedEmails;
       updatedG.studentNames  = expectedNames;
       updatedG.count = expectedEmails.length;
+    }
+    if (promoted.length > 0) {
+      updatedG.extraRaw = extraRaw;
+      updatedG.extraAttendees = extraRaw;
+      updatedG.extraMatched = extraMatchedLeft;
     }
     _editGroupCache[groupId] = updatedG;
     _attendNewExpected = [];
 
     btn.disabled = false; btn.textContent = '✅ Подтверждено (изменить)';
     _closeModal('attend-modal');
-    toast('Занятие подтверждено ✓ Тренеру засчитано', 'ok');
+    toast('Занятие подтверждено ✓ Тренеру засчитано' + (promoted.length ? ` · В группу добавлены: ${promoted.join(', ')}` : ''), 'ok');
     // Точечное обновление вместо 3 полных перезагрузок (~1000+ чтений Firestore на каждое
     // подтверждение — при серии подтверждений выгорала дневная квота)
     _patchGroupCaches(groupId, updatedG, attendedEmails);
@@ -4647,6 +4706,67 @@ async function approveAttendance() {
 // ══════════════════════════════════════════════
 //  STUDENT DATABASE (admin)
 // ══════════════════════════════════════════════
+// ── Сертификаты-промокоды: генерация и список (Firestore certCodes/{code}) ──
+// Алфавит без 0/O/1/I/L/X — читаемо с бумаги и не ломает парсер тарифов (X участвует в «NxЦЕНА»)
+const _CERT_ALPH = 'ABCDEFGHJKMNPQRSTUVWZ23456789';
+function _certNewCode() {
+  const a = new Uint32Array(6); crypto.getRandomValues(a);
+  let s = ''; for (let i = 0; i < 6; i++) s += _CERT_ALPH[a[i] % _CERT_ALPH.length];
+  return 'REP-' + s.slice(0, 4) + '-' + s.slice(4);
+}
+
+async function generateCertCodes() {
+  if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
+  const qty = Math.min(50, Math.max(1, parseInt(document.getElementById('cert-qty').value) || 1));
+  const lessons = parseInt(document.getElementById('cert-lessons').value) || 0;
+  if (lessons < 1) { toast('Укажи количество занятий', 'err'); return; }
+  const kind = document.getElementById('cert-kind').value;   // Индив. | Групп.
+  const fmt  = document.getElementById('cert-fmt').value;    // офлайн | онлайн
+  const btn = document.getElementById('cert-gen-btn');
+  btn.disabled = true; btn.textContent = 'Создание...';
+  try {
+    const batch = db.batch();
+    const codes = [];
+    for (let i = 0; i < qty; i++) {
+      const c = _certNewCode();
+      codes.push(c);
+      batch.set(db.collection('certCodes').doc(c), {
+        lessons, kind, format: fmt, usedBy: '', usedByName: '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
+    await batch.commit();
+    toast(`Создано кодов: ${qty} ✓`, 'ok');
+    try { await navigator.clipboard.writeText(codes.join('\n')); toast('Новые коды скопированы в буфер', 'ok'); } catch(e) {}
+    loadCertCodes();
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
+  btn.disabled = false; btn.textContent = 'Создать коды';
+}
+
+async function loadCertCodes() {
+  if (currentTrainer?.role !== 'admin') return;
+  const el = document.getElementById('cert-list');
+  if (!el) return;
+  try {
+    const snap = await db.collection('certCodes').orderBy('createdAt', 'desc').limit(60).get();
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const cnt = document.getElementById('cert-count');
+    if (cnt) cnt.textContent = docs.filter(c => !c.usedBy).length + ' свободных';
+    el.innerHTML = docs.map(c => {
+      const used = !!c.usedBy;
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-top:1px solid rgba(45,49,66,.4);font-size:.82rem">
+        <span style="font-family:monospace;font-weight:700;${used ? 'opacity:.45;text-decoration:line-through' : ''}">${esc(c.id)}</span>
+        <span class="dim" style="font-size:.72rem;flex:1;text-align:center">${esc(c.kind||'')} ${esc(c.format||'')} ×${c.lessons||0}</span>
+        ${used
+          ? `<span style="font-size:.72rem;color:var(--green)">✅ ${esc(c.usedByName || c.usedBy)}</span>`
+          : `<button class="copy-btn" onclick="navigator.clipboard.writeText('${esc(c.id)}').then(()=>toast('Код скопирован','ok'))">📋</button>`}
+      </div>`;
+    }).join('') || '<div class="empty">Кодов пока нет</div>';
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Ошибка загрузки кодов: ${esc(e.message)}</div>`;
+  }
+}
+
 // ── Добавление ученика вручную (сертификаты / пробные) — пишет строку в Table 2 через GAS ──
 function openAddStudentModal() {
   if (currentTrainer?.role !== 'admin') { toast('Добавлять учеников может только администратор', 'err'); return; }

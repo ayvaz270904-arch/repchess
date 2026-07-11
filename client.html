@@ -108,8 +108,53 @@ async function load(){
       <div class="card"><h2>Ближайшие занятия</h2><div class="rows">${upcoming}</div></div>
       <div class="card"><h2>История занятий</h2><div class="rows">${lessonHist}</div></div>
       <div class="card"><h2>История покупок</h2><div class="rows">${purch}</div></div>
+      <div class="card"><h2>🎁 Есть сертификат?</h2>
+        <div class="muted" style="margin-bottom:8px">Введите код с сертификата — занятия сразу появятся в кабинете.</div>
+        <div style="display:flex;gap:8px">
+          <input id="cert-inp" placeholder="REP-XXXX-XX" autocapitalize="characters" autocomplete="off"
+            style="flex:1;min-width:0;background:var(--bg);border:1px solid rgba(127,127,127,.3);border-radius:10px;padding:10px 12px;color:var(--text);font-size:.95rem;text-transform:uppercase">
+          <button id="cert-btn" onclick="redeemCert()"
+            style="background:var(--accent);color:var(--accent-text);border:none;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">OK</button>
+        </div>
+        <div id="cert-msg" class="muted" style="margin-top:8px"></div>
+      </div>
     `);
   } catch (e) { showError('Ошибка сети', e.message); }
+}
+
+// Активация сертификата по промокоду
+async function redeemCert(){
+  const inp = document.getElementById('cert-inp');
+  const msg = document.getElementById('cert-msg');
+  const btn = document.getElementById('cert-btn');
+  const code = (inp.value || '').toUpperCase().replace(/[^A-Z0-9-]/g, '');
+  if (!code) { msg.textContent = 'Введите код с сертификата'; return; }
+  btn.disabled = true;
+  msg.style.color = '';
+  msg.textContent = 'Проверяю код…';
+  try {
+    const res = await fetch(BACKEND + '?action=redeemCert&code=' + encodeURIComponent(code)
+      + '&initData=' + encodeURIComponent(tg.initData) + '&t=' + Date.now());
+    const d = await res.json();
+    if (d.ok) {
+      msg.style.color = 'var(--green)';
+      msg.textContent = '✅ Сертификат активирован: ' + (d.label || '') + '. Обновляю кабинет…';
+      setTimeout(load, 1500);
+      return;
+    }
+    const errs = {
+      not_found: 'Код не найден — проверьте написание',
+      used: 'Этот код уже был активирован',
+      bad_code: 'Некорректный код',
+      not_linked: 'Сначала поделитесь номером телефона в боте',
+      auth: 'Откройте кабинет заново через бота',
+      server: 'Ошибка сервера, попробуйте позже'
+    };
+    msg.textContent = '⚠️ ' + (errs[d.error] || d.error || 'ошибка');
+  } catch(e) {
+    msg.textContent = '⚠️ Ошибка сети, попробуйте ещё раз';
+  }
+  btn.disabled = false;
 }
 load();
 </script>
