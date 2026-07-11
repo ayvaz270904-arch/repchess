@@ -543,7 +543,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
           <span class="dim" id="sdb-count" style="font-size:.78rem"></span>
         </div>
         <div class="card-body">
-          <button onclick="openAddStudentModal()" style="background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:11px;font-weight:700;font-size:.88rem;cursor:pointer;width:100%;margin-bottom:12px">➕ Добавить ученика (сертификат / пробное)</button>
+          <button onclick="openAddStudentModal()" style="background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:11px;font-weight:700;font-size:.88rem;cursor:pointer;width:100%;margin-bottom:12px">🎁 Добавить сертификат вручную</button>
           <input class="form-inp" id="sdb-search" type="text" placeholder="Поиск по имени или email..."
             oninput="renderStudentDB(this.value)" style="margin-bottom:12px">
           <div id="sdb-list"><div class="empty">Загрузка...</div></div>
@@ -757,7 +757,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 <div class="overlay" id="add-student-modal" style="display:none" onclick="if(event.target===this)_closeModal('add-student-modal')">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-handle"></div>
-    <div class="modal-title">➕ Добавить ученика</div>
+    <div class="modal-title">🎁 Добавить ученика по сертификату</div>
     <div class="form-row">
       <div class="form-label">Имя и фамилия *</div>
       <input class="form-inp" id="add-stud-name" type="text" placeholder="Иванов Пётр">
@@ -771,14 +771,6 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <div class="form-label">Email</div>
       <input class="form-inp" id="add-stud-email" type="email" placeholder="можно оставить пустым">
       <div style="font-size:.72rem;color:var(--text2);margin-top:4px">Если пусто — создам служебный из телефона</div>
-    </div>
-    <div class="form-row">
-      <div class="form-label">Тип</div>
-      <div class="toggle-group">
-        <button class="toggle-btn on" onclick="addStudSetType('cert',this)">🎁 Сертификат</button>
-        <button class="toggle-btn" onclick="addStudSetType('free',this)">🆓 Без пакета</button>
-      </div>
-      <input type="hidden" id="add-stud-type" value="cert">
     </div>
     <div id="add-stud-cert-block">
       <div class="form-row">
@@ -1531,10 +1523,32 @@ function populateTrainerSelect(selId) {
 // Одним запросом к Firestore считает использованные занятия для всех учеников.
 // Результат: s.used и s.remaining = s.purchased - used (не меньше 0).
 let _enrichedAt = 0;
+const _USED_CACHE_KEY = 'repchess_used_v1';   // кэш usedMap — переживает перезагрузки страницы
+
+function _applyUsedMap(usedMap) {
+  students.forEach(s => {
+    s.used = usedMap[s.email] || 0;
+    // FIFO: проведённые сначала гасят истёкшие пакеты, и только остаток — активные
+    const usedActive = Math.max(0, s.used - (s.purchasedExpired || 0));
+    s.remaining = Math.max(0, (s.purchased || 0) - usedActive);
+  });
+}
+
 async function _enrichStudentsWithRemaining() {
-  // Полное чтение коллекции lessons — дорого по квоте. Пропускаем, если считали
-  // менее 5 минут назад и все ученики уже обогащены (свежая загрузка сбрасывает remaining)
+  // Полное чтение коллекции lessons — самый дорогой запрос приложения (вся история списаний).
+  // Двойная защита: в памяти (5 мин) и в sessionStorage (10 мин, переживает перезагрузку)
   if (Date.now() - _enrichedAt < 300000 && students.length && students.every(s => s.remaining != null)) return;
+  try {
+    const raw = sessionStorage.getItem(_USED_CACHE_KEY);
+    if (raw) {
+      const { usedMap, ts } = JSON.parse(raw);
+      if (Date.now() - ts < 600000) {
+        _applyUsedMap(usedMap);
+        _enrichedAt = ts;
+        return;
+      }
+    }
+  } catch(e) {}
   try {
     // Админ читает занятия ВСЕХ тренеров; тренер — только свои (ограничение Firestore-правил)
     const isAdmin = currentTrainer?.role === 'admin';
@@ -1550,13 +1564,9 @@ async function _enrichStudentsWithRemaining() {
         usedMap[data.studentEmail] = (usedMap[data.studentEmail] || 0) + 1;
       }
     });
-    students.forEach(s => {
-      s.used = usedMap[s.email] || 0;
-      // FIFO: проведённые сначала гасят истёкшие пакеты, и только остаток — активные
-      const usedActive = Math.max(0, s.used - (s.purchasedExpired || 0));
-      s.remaining = Math.max(0, (s.purchased || 0) - usedActive);
-    });
+    _applyUsedMap(usedMap);
     _enrichedAt = Date.now();
+    try { sessionStorage.setItem(_USED_CACHE_KEY, JSON.stringify({ usedMap, ts: _enrichedAt })); } catch(e) {}
   } catch(e) {
     console.warn('Could not enrich student remaining:', e);
     students.forEach(s => { s.remaining = s.remaining ?? s.purchased ?? 0; });
@@ -3122,8 +3132,9 @@ function refreshCurrentPage() {
   if (!active) return;
   const name = active.id.replace('page-', '');
   if (name === 'home' || name === 'record') {
-    // Сбрасываем кэш студентов и перезагружаем всё
-    try { sessionStorage.removeItem(_CACHE_KEY); } catch(e) {}
+    // Сбрасываем кэши студентов/остатков и перезагружаем всё
+    try { sessionStorage.removeItem(_CACHE_KEY); sessionStorage.removeItem(_USED_CACHE_KEY); } catch(e) {}
+    _enrichedAt = 0;
     loadStudents().then(() => _enrichStudentsWithRemaining()).then(() => loadHomePage());
   } else if (name === 'history') {
     loadHistory();
@@ -4646,11 +4657,6 @@ function openAddStudentModal() {
   _openModal('add-student-modal');
 }
 
-function addStudSetType(val, btn) {
-  toggle('add-stud-type', btn, val);
-  document.getElementById('add-stud-cert-block').style.display = val === 'cert' ? '' : 'none';
-}
-
 async function submitAddStudent() {
   const name  = document.getElementById('add-stud-name').value.trim();
   const phone = document.getElementById('add-stud-phone').value.trim();
@@ -4659,14 +4665,11 @@ async function submitAddStudent() {
   if (!phone && !email) { toast('Нужен телефон или email — иначе ученика не с чем связать', 'err'); return; }
 
   // Строка товара в формате, который понимает identifyProduct (категория по словам, кол-во по «N занятий»)
-  let products = '';
-  if (document.getElementById('add-stud-type').value === 'cert') {
-    const n = parseInt(document.getElementById('add-stud-lessons').value) || 0;
-    if (n < 1) { toast('Укажи количество занятий', 'err'); return; }
-    const kind = document.getElementById('add-stud-kind').value;  // Индив. | Групп.
-    const fmt  = document.getElementById('add-stud-fmt').value;   // офлайн | онлайн
-    products = `Сертификат — ${kind} ${fmt}, ${n} занятий`;
-  }
+  const n = parseInt(document.getElementById('add-stud-lessons').value) || 0;
+  if (n < 1) { toast('Укажи количество занятий', 'err'); return; }
+  const kind = document.getElementById('add-stud-kind').value;  // Индив. | Групп.
+  const fmt  = document.getElementById('add-stud-fmt').value;   // офлайн | онлайн
+  const products = `Сертификат — ${kind} ${fmt}, ${n} занятий`;
 
   const btn = document.getElementById('add-stud-submit');
   btn.disabled = true; btn.textContent = 'Добавление...';
@@ -4679,7 +4682,7 @@ async function submitAddStudent() {
     try { ok = !!JSON.parse(txt).ok; } catch(e) {}
     if (!ok) throw new Error(txt.slice(0, 150) || 'пустой ответ сервера');
 
-    toast(products ? 'Сертификат добавлен ✓' : 'Ученик добавлен ✓', 'ok');
+    toast('Сертификат добавлен ✓', 'ok');
     _closeModal('add-student-modal');
 
     // Перезагружаем базу учеников с сервера (сбрасываем sessionStorage-кэш)
@@ -4809,8 +4812,9 @@ async function saveUnknownPayments() {
     });
     await batch.commit();
 
-    // Сбрасываем кэш студентов и перезагружаем с новыми тарифами
-    try { sessionStorage.removeItem(_CACHE_KEY); } catch(e) {}
+    // Сбрасываем кэши студентов/остатков и перезагружаем с новыми тарифами
+    try { sessionStorage.removeItem(_CACHE_KEY); sessionStorage.removeItem(_USED_CACHE_KEY); } catch(e) {}
+    _enrichedAt = 0;
     _unknownPayments = [];
     _closeModal('unknown-pay-modal');
     toast('Тарифы сохранены, данные обновляются...', 'ok');
