@@ -3,3 +3,9 @@
 wrangler.toml
 .assetsignore
 .DS_Store
+gas
+CLAUDE.md
+check.sh
+.gitignore
+*.pptx
+*.docx
