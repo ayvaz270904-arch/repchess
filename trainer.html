@@ -1799,7 +1799,7 @@ function lessonItemHTML(l) {
         <span class="lesson-student" style="cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span class="lesson-date">${d}</span>
+        <span class="lesson-date">${d}${l.time ? ' · ' + esc(l.time) : ''}</span>
         ${editBtnHTML}
       </div>
     </div>
@@ -2594,7 +2594,7 @@ function histLessonItemHTML(l) {
         <span class="lesson-student" style="cursor:pointer" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span class="lesson-date">${d}</span>
+        <span class="lesson-date">${d}${l.time ? ' · ' + esc(l.time) : ''}</span>
         ${editBtnHTML}
       </div>
     </div>
@@ -2976,7 +2976,7 @@ async function openEditModal(lessonId, viewMode) {
         viewWrap.style.display = '';
         viewWrap.innerHTML = `
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;font-size:.88rem;display:flex;flex-direction:column;gap:8px">
-            <div><span class="dim">Дата:</span> ${esc(dStr)}</div>
+            <div><span class="dim">Дата:</span> ${esc(dStr)}${lesson.time ? ' · ' + esc(lesson.time) : ''}</div>
             <div><span class="dim">Формат:</span> ${lesson.format==='online'?'💻 Онлайн':'📍 Офлайн'}</div>
             <div><span class="dim">Статус:</span> ${stLabel}</div>
             ${lesson.trainerName ? `<div><span class="dim">Тренер:</span> ${esc(lesson.trainerName)}</div>` : ''}
