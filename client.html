@@ -177,7 +177,11 @@ function renderTab(){
   const el = document.getElementById('tab-content');
   if (!el) return;
   if (activeTab === 'home') el.innerHTML = viewHome();
-  else if (activeTab === 'book') { el.innerHTML = viewBook(); if (!slotsData) loadSlots(); }
+  else if (activeTab === 'book') {
+    el.innerHTML = viewBook();
+    // слоты кэшируются: повторное открытие вкладки рисует из кэша без запроса
+    if (slotsData) renderIndivBook(); else loadSlots();
+  }
   else el.innerHTML = viewHistory();
 }
 
