@@ -95,6 +95,22 @@ async function load(){
        <span class="muted">${fmtRub(h.price)}</span></div>`).join('')
       || '<div class="muted">покупок пока нет</div>';
 
+    // Открытые групповые занятия — самозапись
+    const canGroup = f => ((data.byCat || {})['Групп. ' + (f === 'online' ? 'онлайн' : 'офлайн')] > 0) && remaining > 0;
+    const btnStyle = 'border:none;border-radius:9px;padding:8px 12px;font-weight:700;font-size:.8rem;cursor:pointer;white-space:nowrap';
+    const openGroups = (data.openGroups || []).map(g => {
+      const fmtIcon = g.format === 'online' ? '💻 онлайн' : '📍 офлайн';
+      const spots = g.max ? `${g.count}/${g.max}` : `${g.count}`;
+      const full = g.max && g.count >= g.max;
+      let action;
+      if (g.joined) action = `<button onclick="leaveGroup('${esc(g.id)}')" style="${btnStyle};background:transparent;color:var(--hint);border:1px solid rgba(127,127,127,.35)">✓ Записан · отменить</button>`;
+      else if (full) action = `<span class="muted">мест нет</span>`;
+      else if (!canGroup(g.format)) action = `<span class="muted">нужен групповой пакет</span>`;
+      else action = `<button onclick="joinGroup('${esc(g.id)}')" style="${btnStyle};background:var(--accent);color:var(--accent-text)">Записаться</button>`;
+      return `<div class="row"><span>📅 ${esc(g.date)}${g.time ? ' · ' + esc(g.time) : ''} · ${fmtIcon}
+        <div class="muted">${esc(g.venue || '')}${g.trainerName ? ' · ' + esc(g.trainerName) : ''} · ${spots} чел.</div></span>${action}</div>`;
+    }).join('') || '<div class="muted">сейчас открытых занятий нет</div>';
+
     render(`
       <div class="header"><span class="logo">♟</span><h1>Rep Chess Education</h1></div>
       <div class="card"><h2>Привет, ${esc(data.name)}!</h2><div class="muted">📧 ${esc(data.email)}</div></div>
@@ -106,6 +122,7 @@ async function load(){
         <div class="rows">${cats}</div>
       </div>
       <div class="card"><h2>Ближайшие занятия</h2><div class="rows">${upcoming}</div></div>
+      <div class="card"><h2>👥 Запись на групповые</h2><div class="rows">${openGroups}</div><div id="grp-join-msg" class="muted" style="margin-top:6px"></div></div>
       <div class="card"><h2>История занятий</h2><div class="rows">${lessonHist}</div></div>
       <div class="card"><h2>История покупок</h2><div class="rows">${purch}</div></div>
       <div class="card"><h2>🎁 Есть сертификат?</h2>
@@ -156,6 +173,40 @@ async function redeemCert(){
   }
   btn.disabled = false;
 }
+
+// Самозапись на групповые занятия / отмена записи
+async function _groupAction(action, id) {
+  const msg = document.getElementById('grp-join-msg');
+  if (msg) { msg.style.color = ''; msg.textContent = 'Секундочку…'; }
+  try {
+    const res = await fetch(BACKEND + '?action=' + action + '&groupId=' + encodeURIComponent(id)
+      + '&initData=' + encodeURIComponent(tg.initData) + '&t=' + Date.now());
+    const d = await res.json();
+    if (d.ok) {
+      if (msg) {
+        msg.style.color = 'var(--green)';
+        msg.textContent = action === 'joinGroup' ? '✅ Вы записаны! Обновляю…' : '↩️ Запись отменена. Обновляю…';
+      }
+      setTimeout(load, 1200);
+      return;
+    }
+    const errs = {
+      full: 'Мест больше нет',
+      already: 'Вы уже записаны',
+      past: 'Запись на это занятие закрыта',
+      too_late: 'Отменить можно только до дня занятия — напишите администратору',
+      no_group_pack: 'Нужен активный групповой пакет' + (d.need ? ' (' + d.need + ')' : ''),
+      no_balance: 'Занятия на балансе закончились',
+      closed: 'Запись закрыта',
+      not_found: 'Занятие не найдено',
+      not_joined: 'Вы не записаны на это занятие',
+      server: 'Ошибка сервера, попробуйте позже'
+    };
+    if (msg) msg.textContent = '⚠️ ' + (errs[d.error] || d.error || 'ошибка');
+  } catch(e) { if (msg) msg.textContent = '⚠️ Ошибка сети'; }
+}
+function joinGroup(id) { _groupAction('joinGroup', id); }
+function leaveGroup(id) { _groupAction('leaveGroup', id); }
 load();
 </script>
 </body>
