@@ -431,10 +431,10 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
       </div>
 
-      <!-- админ: сводный календарь занятий всех тренеров -->
+      <!-- админ: сводная панель всех тренеров (слоты / занятия) -->
       <div class="card" id="sched-all-card" style="margin-bottom:14px;display:none">
         <div class="card-head">
-          <span class="card-title">📅 Занятия всех тренеров</span>
+          <span class="card-title" id="sched-all-title">🕐 Свободные слоты тренеров</span>
           <span class="dim" id="sched-all-range" style="font-size:.75rem"></span>
         </div>
         <div class="card-body">
@@ -443,7 +443,12 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
             <button class="btn-full btn-ghost" style="flex:1;padding:8px;font-size:.8rem" onclick="schedAllShift(0)">Сегодня</button>
             <button class="btn-full btn-ghost" style="flex:1;padding:8px;font-size:.8rem" onclick="schedAllShift(1)">Неделя →</button>
           </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button class="toggle-btn on" id="sched-view-slots" style="flex:1" onclick="schedAllSetView('slots')">🕐 Свободные слоты</button>
+            <button class="toggle-btn" id="sched-view-lessons" style="flex:1" onclick="schedAllSetView('lessons')">📅 Занятия недели</button>
+          </div>
           <div id="sched-all-legend" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+          <div id="sched-all-days" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0"></div>
           <div id="sched-all-list"><div class="empty">Загрузка...</div></div>
         </div>
       </div>
@@ -3237,9 +3242,10 @@ async function loadSchedulePage() {
     if (!_trainersCache.length) await loadTrainers();
     const sel = document.getElementById('sched-trainer-sel');
     if (!sel.options.length) {
-      sel.innerHTML = '<option value="__all__">👥 Все тренеры — календарь занятий</option>'
-        + _trainersCache.map(t => `<option value="${esc(t.id)}">${esc(t.name || t.email || t.id)}</option>`).join('');
-      sel.value = currentUser.uid;
+      // Админы не ведут занятия — в списке только тренеры; по умолчанию сводная панель
+      sel.innerHTML = '<option value="__all__">👥 Все тренеры</option>'
+        + _trainersCache.filter(t => t.role !== 'admin').map(t => `<option value="${esc(t.id)}">${esc(t.name || t.email || t.id)}</option>`).join('');
+      sel.value = '__all__';
     }
     _schedTrainerId = sel.value || currentUser.uid;
   } else {
@@ -3251,8 +3257,25 @@ async function loadSchedulePage() {
   await schedLoad();
 }
 
-// ── Сводный календарь занятий всех тренеров (только админ) ──
-let _schedAllOffset = 0;   // смещение недель от текущей
+// ── Сводная панель всех тренеров (только админ): свободные слоты / занятия недели ──
+let _schedAllOffset = 0;        // смещение недель от текущей
+let _schedAllView = 'slots';    // 'slots' (по умолчанию) | 'lessons'
+let _schedAllDay = null;        // выбранный день (YYYY-MM-DD) для вида «слоты»
+let _allSchedCache = {};        // trainerId → график
+let _allWeekLessons = [];       // индив. занятия недели (без группо-дубликатов)
+let _allWeekGroups = [];        // групповые занятия недели
+let _allWeekFrom = '';
+
+// Стабильные контрастные цвета: только тренеры (без админов), сортировка по id —
+// новый тренер автоматически получает следующий цвет из палитры
+const _TRAINER_PALETTE = ['#4a9eff','#f97316','#22c55e','#a855f7','#eab308','#14b8a6','#ec4899','#84cc16','#06b6d4','#f43f5e','#8b5cf6','#d97706'];
+function _trainerColors() {
+  const map = {};
+  _trainersCache.filter(t => t.role !== 'admin')
+    .slice().sort((a, b) => a.id > b.id ? 1 : -1)
+    .forEach((t, i) => { map[t.id] = _TRAINER_PALETTE[i % _TRAINER_PALETTE.length]; });
+  return map;
+}
 
 function _schedSetMode(all) {
   const ids = ['sched-template-card', 'sched-exc-card'];
@@ -3263,8 +3286,20 @@ function _schedSetMode(all) {
 
 function schedAllShift(dir) {
   _schedAllOffset = dir === 0 ? 0 : _schedAllOffset + dir;
+  _schedAllDay = null;
   loadAllSchedules();
 }
+
+function schedAllSetView(v) {
+  _schedAllView = v;
+  document.getElementById('sched-view-slots')?.classList.toggle('on', v === 'slots');
+  document.getElementById('sched-view-lessons')?.classList.toggle('on', v === 'lessons');
+  const title = document.getElementById('sched-all-title');
+  if (title) title.textContent = v === 'slots' ? '🕐 Свободные слоты тренеров' : '📅 Занятия всех тренеров';
+  renderSchedAll();
+}
+
+function schedAllSelectDay(ds) { _schedAllDay = ds; renderSchedAll(); }
 
 async function loadAllSchedules() {
   const list = document.getElementById('sched-all-list');
@@ -3279,30 +3314,108 @@ async function loadAllSchedules() {
   const from = localDateStr(monday);
   const toD = new Date(monday); toD.setDate(monday.getDate() + 6);
   const to = localDateStr(toD);
+  _allWeekFrom = from;
   const rangeEl = document.getElementById('sched-all-range');
   if (rangeEl) rangeEl.textContent = from.split('-').reverse().slice(0,2).join('.') + ' – ' + to.split('-').reverse().slice(0,2).join('.');
 
-  let lessons = [], groups = [];
+  const trainers = _trainersCache.filter(t => t.role !== 'admin');
   try {
-    const [ls, gs] = await Promise.all([
+    // Параллельно: графики тренеров + занятия/группы недели
+    const [schedDocs, ls, gs] = await Promise.all([
+      Promise.all(trainers.map(t => db.collection('trainerSchedules').doc(t.id).get())),
       db.collection('lessons').where('_date', '>=', from).where('_date', '<=', to).get(),
       db.collection('groupLessons').where('_date', '>=', from).where('_date', '<=', to).get()
     ]);
-    lessons = ls.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => !_deletedLessonIds.has(l.id) && l.type !== 'group');
-    groups  = gs.docs.map(d => ({ id: d.id, ...d.data(), _isGroup: true })).filter(g => !_deletedGroupIds.has(g.id));
+    _allSchedCache = {};
+    schedDocs.forEach((doc, i) => {
+      _allSchedCache[trainers[i].id] = doc.exists ? doc.data() : { template: {}, exceptions: {}, formats: {} };
+    });
+    _allWeekLessons = ls.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => !_deletedLessonIds.has(l.id) && l.type !== 'group');
+    _allWeekGroups  = gs.docs.map(d => ({ id: d.id, ...d.data(), _isGroup: true })).filter(g => !_deletedGroupIds.has(g.id));
   } catch(e) { list.innerHTML = `<div class="empty">Ошибка: ${esc(e.message)}</div>`; return; }
 
-  // Цвет каждому тренеру + легенда
-  const palette = ['#4a9eff', '#22c55e', '#f97316', '#a855f7', '#eab308', '#14b8a6', '#ef4444'];
-  const colorOf = {};
-  _trainersCache.forEach((t, i) => { colorOf[t.id] = palette[i % palette.length]; });
+  // День по умолчанию: сегодня, если внутри недели, иначе понедельник
+  const todayStr = localDateStr(new Date());
+  if (!_schedAllDay || _schedAllDay < from || _schedAllDay > to) {
+    _schedAllDay = (todayStr >= from && todayStr <= to) ? todayStr : from;
+  }
+  renderSchedAll();
+}
+
+function renderSchedAll() {
+  const list = document.getElementById('sched-all-list');
+  if (!list) return;
+  const colorOf = _trainerColors();
+  const trainers = _trainersCache.filter(t => t.role !== 'admin');
   const legendEl = document.getElementById('sched-all-legend');
-  if (legendEl) legendEl.innerHTML = _trainersCache.filter(t => t.role !== 'admin').map(t =>
+  if (legendEl) legendEl.innerHTML = trainers.map(t =>
     `<span style="font-size:.72rem;padding:2px 9px;border-radius:10px;border:1px solid ${colorOf[t.id]};color:${colorOf[t.id]}">${esc(t.name || t.email || '—')}</span>`).join('');
 
-  const all = [...lessons, ...groups];
-  let html = '';
+  const daysEl = document.getElementById('sched-all-days');
+  if (_schedAllView === 'lessons') {
+    if (daysEl) daysEl.innerHTML = '';
+    list.innerHTML = _renderAllLessonsWeek(colorOf);
+    return;
+  }
+  // Вид «свободные слоты»: чипы дней недели + сетка выбранного дня
+  const monday = new Date(_allWeekFrom + 'T12:00:00');
   const todayStr = localDateStr(new Date());
+  let chips = '';
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    const ds = localDateStr(d);
+    chips += `<button class="day-chip ${ds === _schedAllDay ? 'on' : ''}" style="${ds < todayStr ? 'opacity:.45;' : ''}text-align:center;line-height:1.25" onclick="schedAllSelectDay('${ds}')">${SCHED_DAYS[i]}<br><span style="font-size:.68rem">${ds.slice(8)}.${ds.slice(5,7)}</span></button>`;
+  }
+  if (daysEl) daysEl.innerHTML = chips;
+  list.innerHTML = _renderAllSlotsDay(colorOf, trainers);
+}
+
+// Занятость тренера: индив с временем + группы с временем (кроме отменённых)
+function _allBusy() {
+  const busy = {};
+  _allWeekLessons.forEach(l => { if (l.time && l.status !== 'cancelled' && l.trainerId) busy[l.trainerId + '|' + l._date + '|' + l.time] = true; });
+  _allWeekGroups.forEach(g => { if (g.time && g.trainerId) busy[g.trainerId + '|' + g._date + '|' + g.time] = true; });
+  return busy;
+}
+
+// Эффективные слоты тренера на дату (шаблон + исключения) — как в боте
+function _schedEffective(sched, dateStr) {
+  const dow = String((new Date(dateStr + 'T12:00:00').getDay() + 6) % 7);
+  const exc = (sched.exceptions || {})[dateStr];
+  if (exc && exc.closed) return { slots: [], fmts: {} };
+  if (exc) return { slots: exc.slots || [], fmts: exc.formats || {} };
+  return { slots: (sched.template || {})[dow] || [], fmts: ((sched.formats || {})[dow]) || {} };
+}
+
+function _renderAllSlotsDay(colorOf, trainers) {
+  const ds = _schedAllDay;
+  const busy = _allBusy();
+  const mark = { both: '', offline: ' 📍', online: ' 💻' };
+  let rows = '';
+  SCHED_SLOTS.forEach(s => {
+    const avail = [];
+    trainers.forEach(t => {
+      const eff = _schedEffective(_allSchedCache[t.id] || {}, ds);
+      if (eff.slots.indexOf(s) < 0) return;
+      if (busy[t.id + '|' + ds + '|' + s]) return;
+      const f = eff.fmts[s] || 'both';
+      const shortName = (t.name || '').split(/\s+/)[0] || t.email || '—';
+      avail.push(`<span style="font-size:.72rem;padding:2px 8px;border-radius:8px;border:1px solid ${colorOf[t.id]};color:${colorOf[t.id]}">${esc(shortName)}${mark[f]}</span>`);
+    });
+    if (!avail.length) return;
+    rows += `<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-top:1px solid rgba(45,49,66,.4)">
+      <span style="font-size:.82rem;font-weight:700;color:var(--text2);min-width:46px;padding-top:2px">${s}</span>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">${avail.join('')}</div>
+    </div>`;
+  });
+  return rows || '<div class="empty">В этот день свободных слотов нет</div>';
+}
+
+function _renderAllLessonsWeek(colorOf) {
+  const monday = new Date(_allWeekFrom + 'T12:00:00');
+  const all = [..._allWeekLessons, ..._allWeekGroups];
+  const todayStr = localDateStr(new Date());
+  let html = '';
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday); d.setDate(monday.getDate() + i);
     const ds = localDateStr(d);
@@ -3328,7 +3441,7 @@ async function loadAllSchedules() {
       </div>`;
     });
   }
-  list.innerHTML = html;
+  return html;
 }
 
 async function schedLoad() {
