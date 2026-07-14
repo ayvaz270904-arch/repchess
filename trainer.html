@@ -431,8 +431,25 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
       </div>
 
+      <!-- админ: сводный календарь занятий всех тренеров -->
+      <div class="card" id="sched-all-card" style="margin-bottom:14px;display:none">
+        <div class="card-head">
+          <span class="card-title">📅 Занятия всех тренеров</span>
+          <span class="dim" id="sched-all-range" style="font-size:.75rem"></span>
+        </div>
+        <div class="card-body">
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <button class="btn-full btn-ghost" style="flex:1;padding:8px;font-size:.8rem" onclick="schedAllShift(-1)">← Неделя</button>
+            <button class="btn-full btn-ghost" style="flex:1;padding:8px;font-size:.8rem" onclick="schedAllShift(0)">Сегодня</button>
+            <button class="btn-full btn-ghost" style="flex:1;padding:8px;font-size:.8rem" onclick="schedAllShift(1)">Неделя →</button>
+          </div>
+          <div id="sched-all-legend" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px"></div>
+          <div id="sched-all-list"><div class="empty">Загрузка...</div></div>
+        </div>
+      </div>
+
       <!-- недельный шаблон -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" id="sched-template-card" style="margin-bottom:14px">
         <div class="card-head">
           <span class="card-title">Недельный шаблон</span>
           <span class="dim" id="sched-status" style="font-size:.75rem"></span>
@@ -451,7 +468,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       </div>
 
       <!-- исключения по датам -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" id="sched-exc-card" style="margin-bottom:14px">
         <div class="card-head"><span class="card-title">Исключения (отпуск, изменения на дату)</span></div>
         <div class="card-body">
           <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">Выбери дату, чтобы закрыть её целиком или изменить слоты только на этот день.</div>
@@ -552,11 +569,14 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 
       <!-- Certificates (promo codes) -->
       <div class="card" style="margin-bottom:14px">
-        <div class="card-head">
+        <div class="card-head" onclick="toggleCertCard()" style="cursor:pointer;user-select:none">
           <span class="card-title">🎟 Сертификаты (промокоды)</span>
-          <span class="dim" id="cert-count" style="font-size:.78rem"></span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span class="dim" id="cert-count" style="font-size:.78rem"></span>
+            <span id="cert-card-arrow" class="dim">▸</span>
+          </span>
         </div>
-        <div class="card-body">
+        <div class="card-body" id="cert-card-body" style="display:none">
           <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">Создай коды, напечатай их на сертификатах. Человек вводит код в Telegram-кабинете — и сам появляется в базе с пакетом занятий.</div>
           <div style="display:flex;gap:8px;margin-bottom:10px">
             <div style="flex:1"><div class="form-label">Кодов</div><input class="form-inp" id="cert-qty" type="number" min="1" max="50" value="5"></div>
@@ -2690,7 +2710,13 @@ function renderAdmLessons(){
 
 async function loadAdminData() {
   if (currentTrainer.role !== 'admin') return;
-  loadCertCodes(); // асинхронно, не блокирует
+  // Карточка сертификатов: восстанавливаем свёрнутость, коды грузим только если открыта
+  const certOpen = !!sessionStorage.getItem('_certOpen');
+  const certBody = document.getElementById('cert-card-body');
+  if (certBody) certBody.style.display = certOpen ? '' : 'none';
+  const certArrow = document.getElementById('cert-card-arrow');
+  if (certArrow) certArrow.textContent = certOpen ? '▾' : '▸';
+  if (certOpen) loadCertCodes();
   const from = document.getElementById('adm-from').value;
   const to   = document.getElementById('adm-to').value;
 
@@ -3211,7 +3237,8 @@ async function loadSchedulePage() {
     if (!_trainersCache.length) await loadTrainers();
     const sel = document.getElementById('sched-trainer-sel');
     if (!sel.options.length) {
-      sel.innerHTML = _trainersCache.map(t => `<option value="${esc(t.id)}">${esc(t.name || t.email || t.id)}</option>`).join('');
+      sel.innerHTML = '<option value="__all__">👥 Все тренеры — календарь занятий</option>'
+        + _trainersCache.map(t => `<option value="${esc(t.id)}">${esc(t.name || t.email || t.id)}</option>`).join('');
       sel.value = currentUser.uid;
     }
     _schedTrainerId = sel.value || currentUser.uid;
@@ -3219,7 +3246,89 @@ async function loadSchedulePage() {
     card.style.display = 'none';
     _schedTrainerId = currentUser.uid;
   }
+  if (_schedTrainerId === '__all__') { _schedSetMode(true); loadAllSchedules(); return; }
+  _schedSetMode(false);
   await schedLoad();
+}
+
+// ── Сводный календарь занятий всех тренеров (только админ) ──
+let _schedAllOffset = 0;   // смещение недель от текущей
+
+function _schedSetMode(all) {
+  const ids = ['sched-template-card', 'sched-exc-card'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = all ? 'none' : ''; });
+  const ac = document.getElementById('sched-all-card');
+  if (ac) ac.style.display = all ? '' : 'none';
+}
+
+function schedAllShift(dir) {
+  _schedAllOffset = dir === 0 ? 0 : _schedAllOffset + dir;
+  loadAllSchedules();
+}
+
+async function loadAllSchedules() {
+  const list = document.getElementById('sched-all-list');
+  if (!list) return;
+  list.innerHTML = '<div class="empty">Загрузка...</div>';
+  if (!_trainersCache.length) await loadTrainers();
+
+  // Неделя: понедельник + смещение
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7) + _schedAllOffset * 7);
+  const from = localDateStr(monday);
+  const toD = new Date(monday); toD.setDate(monday.getDate() + 6);
+  const to = localDateStr(toD);
+  const rangeEl = document.getElementById('sched-all-range');
+  if (rangeEl) rangeEl.textContent = from.split('-').reverse().slice(0,2).join('.') + ' – ' + to.split('-').reverse().slice(0,2).join('.');
+
+  let lessons = [], groups = [];
+  try {
+    const [ls, gs] = await Promise.all([
+      db.collection('lessons').where('_date', '>=', from).where('_date', '<=', to).get(),
+      db.collection('groupLessons').where('_date', '>=', from).where('_date', '<=', to).get()
+    ]);
+    lessons = ls.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => !_deletedLessonIds.has(l.id) && l.type !== 'group');
+    groups  = gs.docs.map(d => ({ id: d.id, ...d.data(), _isGroup: true })).filter(g => !_deletedGroupIds.has(g.id));
+  } catch(e) { list.innerHTML = `<div class="empty">Ошибка: ${esc(e.message)}</div>`; return; }
+
+  // Цвет каждому тренеру + легенда
+  const palette = ['#4a9eff', '#22c55e', '#f97316', '#a855f7', '#eab308', '#14b8a6', '#ef4444'];
+  const colorOf = {};
+  _trainersCache.forEach((t, i) => { colorOf[t.id] = palette[i % palette.length]; });
+  const legendEl = document.getElementById('sched-all-legend');
+  if (legendEl) legendEl.innerHTML = _trainersCache.filter(t => t.role !== 'admin').map(t =>
+    `<span style="font-size:.72rem;padding:2px 9px;border-radius:10px;border:1px solid ${colorOf[t.id]};color:${colorOf[t.id]}">${esc(t.name || t.email || '—')}</span>`).join('');
+
+  const all = [...lessons, ...groups];
+  let html = '';
+  const todayStr = localDateStr(new Date());
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday); d.setDate(monday.getDate() + i);
+    const ds = localDateStr(d);
+    const isToday = ds === todayStr;
+    const items = all.filter(x => x._date === ds).sort((a, b) => (a.time || '99') > (b.time || '99') ? 1 : -1);
+    html += `<div style="font-size:.75rem;font-weight:700;color:${isToday ? 'var(--accent)' : 'var(--text2)'};padding:10px 0 4px;text-transform:uppercase;letter-spacing:.04em">${SCHED_DAYS[i]} ${ds.slice(8)}.${ds.slice(5,7)}${isToday ? ' · сегодня' : ''}</div>`;
+    if (!items.length) { html += '<div class="dim" style="font-size:.75rem;padding:2px 0 2px 10px">—</div>'; continue; }
+    items.forEach(x => {
+      const c = colorOf[x.trainerId] || 'var(--text2)';
+      const cancelled = x.status === 'cancelled';
+      const who = x._isGroup
+        ? `👥 ${esc(x.venue || 'Группа')} · ${(x.studentEmails || []).length} чел.`
+        : esc(x.studentName || '—');
+      const st = x._isGroup
+        ? (x.adminApproved ? '✅' : (x.attendanceMarked ? '⏳' : ''))
+        : (cancelled ? '❌' : (!x.status || x.status === 'done') ? '✅' : x.status === 'pending' ? '📅' : '🔄');
+      const tName = (_trainersCache.find(t => t.id === x.trainerId) || {}).name || x.trainerName || '';
+      html += `<div style="display:flex;align-items:center;gap:8px;padding:5px 0 5px 10px;border-left:3px solid ${c};margin:3px 0;font-size:.83rem;${cancelled ? 'opacity:.45;text-decoration:line-through' : ''}">
+        <span style="color:var(--text2);flex-shrink:0;min-width:42px">${x.time || '—'}</span>
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${who}</span>
+        <span style="font-size:.72rem;flex-shrink:0;color:${c}">${esc(tName)}</span>
+        <span style="flex-shrink:0;font-size:.78rem">${x.format === 'online' ? '💻' : '📍'}${st ? ' ' + st : ''}</span>
+      </div>`;
+    });
+  }
+  list.innerHTML = html;
 }
 
 async function schedLoad() {
@@ -3337,6 +3446,8 @@ function schedOnTrainerChange() {
     return;
   }
   _schedTrainerId = sel.value;
+  if (_schedTrainerId === '__all__') { _schedSetMode(true); loadAllSchedules(); return; }
+  _schedSetMode(false);
   schedLoad();
 }
 
@@ -4743,28 +4854,103 @@ async function generateCertCodes() {
   btn.disabled = false; btn.textContent = 'Создать коды';
 }
 
+let _certShowArchive = false;
+
+function toggleCertCard() {
+  const body = document.getElementById('cert-card-body');
+  if (!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  const arrow = document.getElementById('cert-card-arrow');
+  if (arrow) arrow.textContent = open ? '▾' : '▸';
+  try { sessionStorage.setItem('_certOpen', open ? '1' : ''); } catch(e) {}
+  if (open) loadCertCodes();   // грузим коды только когда карточка открыта (экономия чтений)
+}
+
 async function loadCertCodes() {
   if (currentTrainer?.role !== 'admin') return;
   const el = document.getElementById('cert-list');
   if (!el) return;
   try {
-    const snap = await db.collection('certCodes').orderBy('createdAt', 'desc').limit(60).get();
+    const snap = await db.collection('certCodes').orderBy('createdAt', 'desc').limit(300).get();
     const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const free = docs.filter(c => !c.usedBy && !c.archived);
+    const used = docs.filter(c => c.usedBy && !c.archived);
+    const arch = docs.filter(c => c.archived);
     const cnt = document.getElementById('cert-count');
-    if (cnt) cnt.textContent = docs.filter(c => !c.usedBy).length + ' свободных';
-    el.innerHTML = docs.map(c => {
-      const used = !!c.usedBy;
-      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-top:1px solid rgba(45,49,66,.4);font-size:.82rem">
-        <span style="font-family:monospace;font-weight:700;${used ? 'opacity:.45;text-decoration:line-through' : ''}">${esc(c.id)}</span>
-        <span class="dim" style="font-size:.72rem;flex:1;text-align:center">${esc(c.kind||'')} ${esc(c.format||'')} ×${c.lessons||0}</span>
-        ${used
-          ? `<span style="font-size:.72rem;color:var(--green)">✅ ${esc(c.usedByName || c.usedBy)}</span>`
-          : `<button class="copy-btn" onclick="navigator.clipboard.writeText('${esc(c.id)}').then(()=>toast('Код скопирован','ok'))">📋</button>`}
+    if (cnt) cnt.textContent = free.length + ' свободных';
+
+    // Свободные — группами по номиналу
+    const byNominal = {};
+    free.forEach(c => {
+      const k = `${c.kind || ''} ${c.format || ''} ×${c.lessons || 0}`;
+      (byNominal[k] = byNominal[k] || []).push(c.id);
+    });
+    let html = Object.keys(byNominal).sort().map(k => `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:.8rem;font-weight:700">${esc(k)} <span class="dim">· ${byNominal[k].length} шт</span></span>
+          <button onclick="navigator.clipboard.writeText('${byNominal[k].join('\\n')}').then(()=>toast('Скопированы все (${byNominal[k].length})','ok'))"
+            style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--accent);padding:3px 9px;border-radius:6px;cursor:pointer">📋 все</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">${byNominal[k].map(code =>
+          `<span onclick="navigator.clipboard.writeText('${code}').then(()=>toast('${code} скопирован','ok'))"
+            style="font-family:monospace;font-size:.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer">${code}</span>`).join('')}</div>
+      </div>`).join('') || '<div class="dim" style="font-size:.8rem;margin-bottom:10px">Свободных кодов нет</div>';
+
+    // Активированные (не в архиве)
+    if (used.length) {
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 4px">
+        <span style="font-size:.8rem;font-weight:700;color:var(--text2)">Активированные · ${used.length}</span>
+        <button onclick="archiveUsedCerts()" style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:3px 9px;border-radius:6px;cursor:pointer">🗄 Все в архив</button>
       </div>`;
-    }).join('') || '<div class="empty">Кодов пока нет</div>';
+      html += used.map(c => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-top:1px solid rgba(45,49,66,.4);font-size:.78rem">
+        <span style="font-family:monospace;opacity:.6">${esc(c.id)}</span>
+        <span class="dim" style="flex:1;text-align:center;font-size:.7rem">${esc(c.kind||'')} ${esc(c.format||'')} ×${c.lessons||0}</span>
+        <span style="font-size:.7rem;color:var(--green)">✅ ${esc(c.usedByName || c.usedBy)}</span>
+        <button onclick="archiveCert('${esc(c.id)}')" style="background:none;border:none;cursor:pointer;font-size:.85rem;padding:2px 4px" title="В архив">🗄</button>
+      </div>`).join('');
+    }
+
+    // Архив — спойлером
+    if (arch.length) {
+      html += `<div style="margin-top:12px"><button onclick="_certShowArchive=!_certShowArchive;loadCertCodes()"
+        style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.75rem;padding:0">${_certShowArchive ? '▾' : '▸'} Архив (${arch.length})</button></div>`;
+      if (_certShowArchive) {
+        html += arch.map(c => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;font-size:.73rem;opacity:.5">
+          <span style="font-family:monospace">${esc(c.id)}</span>
+          <span class="dim">${esc(c.kind||'')} ${esc(c.format||'')} ×${c.lessons||0}</span>
+          <span class="dim">${esc(c.usedByName || c.usedBy || '—')}</span>
+        </div>`).join('');
+      }
+    }
+    el.innerHTML = html;
   } catch(e) {
     el.innerHTML = `<div class="empty">Ошибка загрузки кодов: ${esc(e.message)}</div>`;
   }
+}
+
+async function archiveCert(code) {
+  try {
+    await db.collection('certCodes').doc(code).update({ archived: true });
+    loadCertCodes();
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
+}
+
+async function archiveUsedCerts() {
+  try {
+    const snap = await db.collection('certCodes').orderBy('createdAt', 'desc').limit(300).get();
+    const batch = db.batch();
+    let n = 0;
+    snap.docs.forEach(d => {
+      const c = d.data();
+      if (c.usedBy && !c.archived) { batch.update(d.ref, { archived: true }); n++; }
+    });
+    if (!n) { toast('Архивировать нечего', 'ok'); return; }
+    await batch.commit();
+    toast(`В архив: ${n} ✓`, 'ok');
+    loadCertCodes();
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
 }
 
 // ── Добавление ученика вручную (сертификаты / пробные) — пишет строку в Table 2 через GAS ──
