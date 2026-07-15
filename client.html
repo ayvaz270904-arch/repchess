@@ -102,8 +102,14 @@ const BACKEND = 'https://script.google.com/macros/s/AKfycbymBB1BkAnqLi_uLt9M1rVJ
 const tg = window.Telegram ? window.Telegram.WebApp : null;
 const app = document.getElementById('app');
 
+// Кнопки покупки на главной: [подпись, ссылка на страницу оплаты]. Пустой список — карточка скрыта.
+const BUY_LINKS = [
+  // ['👤 Индивидуальные занятия', 'https://...'],
+  // ['👥 Групповые занятия', 'https://...'],
+];
+
 let data = null;          // основной payload кабинета
-let activeTab = 'home';   // home | book | history
+let activeTab = 'home';   // home | book | events | history
 let slotsData = null;     // кэш ответа indivSlots
 let bookDay = null;       // выбранная дата записи
 let bookFmt = null;       // выбранный формат ('offline'|'online')
@@ -160,7 +166,7 @@ function renderShell(){
     </div>
     <div id="tab-content"></div>
     <div class="tabbar">
-      ${[['home','🏠','Главная'],['book','📅','Запись'],['history','📖','История']].map(t =>
+      ${[['home','🏠','Главная'],['book','📅','Запись'],['events','🎪','Ивенты'],['history','📖','История']].map(t =>
         `<div class="tab ${activeTab===t[0]?'on':''}" onclick="showTab('${t[0]}')"><div class="ico">${t[1]}</div><div class="lbl">${t[2]}</div></div>`).join('')}
     </div>`;
   renderTab();
@@ -168,7 +174,7 @@ function renderShell(){
 
 function showTab(name){
   activeTab = name;
-  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('on', ['home','book','history'][i] === name));
+  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('on', ['home','book','events','history'][i] === name));
   renderTab();
   window.scrollTo(0, 0);
 }
@@ -182,6 +188,7 @@ function renderTab(){
     // слоты кэшируются: повторное открытие вкладки рисует из кэша без запроса
     if (slotsData) renderIndivBook(); else loadSlots();
   }
+  else if (activeTab === 'events') el.innerHTML = viewEvents();
   else el.innerHTML = viewHistory();
 }
 
@@ -206,6 +213,10 @@ function viewHome(){
       ${remaining > 0 ? `<button class="btn btn-acc btn-full" style="margin-top:14px" onclick="showTab('book')">📅 Записаться на занятие</button>` : ''}
     </div>
     <div class="card"><h2>Ближайшие занятия</h2><div class="rows" id="upcoming-rows">${upcoming}</div><div id="up-msg"></div></div>
+    ${BUY_LINKS.length ? `<div class="card"><h2>🛒 Купить занятия</h2>
+      <div style="display:flex;flex-direction:column;gap:8px">${BUY_LINKS.map(b =>
+        `<button class="btn btn-acc btn-full" onclick="openLink('${esc(b[1])}')">${esc(b[0])}</button>`).join('')}</div>
+    </div>` : ''}
     <div class="card"><h2>🎁 Есть сертификат?</h2>
       <div class="muted" style="margin-bottom:8px">Введите код с сертификата — занятия сразу появятся в кабинете.</div>
       <div style="display:flex;gap:8px">
@@ -314,6 +325,25 @@ function cancelIndiv(id, dateRu){
       else if (msg) msg.innerHTML = `<div class="msg-err">⚠️ ${esc(errText(d))}</div>`;
     } catch(e) { if (msg) msg.innerHTML = '<div class="msg-err">⚠️ Ошибка сети</div>'; }
   });
+}
+
+// ══════════ ИВЕНТЫ (афиша) ══════════
+function viewEvents(){
+  const evs = (data.events || []).map(v => `
+    <div class="row"><span>📅 <b>${esc(v.date)}</b>${v.dow ? ' (' + esc(v.dow) + ')' : ''}${v.time ? ' · ' + esc(v.time) : ''}
+      <div style="font-weight:700;margin-top:2px">${esc(v.title)}</div>
+      ${v.desc ? `<div class="muted">${esc(v.desc)}</div>` : ''}</span>
+      ${v.ticketUrl ? `<button class="btn btn-acc" onclick="openLink('${esc(v.ticketUrl)}')">🎟 Билеты</button>` : ''}
+    </div>`).join('');
+  return `
+    <div class="card"><h2>🎪 Афиша Rep Chess</h2>
+      ${evs ? `<div class="rows">${evs}</div>` : '<div class="muted">Пока нет анонсов — загляните позже.</div>'}
+    </div>`;
+}
+
+function openLink(url){
+  if (!/^https?:\/\//i.test(url)) return;
+  if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank');
 }
 
 // ══════════ ИСТОРИЯ ══════════

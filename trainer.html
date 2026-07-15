@@ -608,6 +608,29 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
       </div>
 
+      <!-- Events (афиша в TG-кабинете) -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head" onclick="toggleEventsCard()" style="cursor:pointer;user-select:none">
+          <span class="card-title">🎪 Ивенты (афиша в кабинете)</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span class="dim" id="ev-count" style="font-size:.78rem"></span>
+            <span id="ev-card-arrow" class="dim">▸</span>
+          </span>
+        </div>
+        <div class="card-body" id="ev-card-body" style="display:none">
+          <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">Эти ивенты видят все ученики во вкладке «Ивенты» Telegram-кабинета — с кнопкой покупки билета, если указана ссылка.</div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <div style="flex:1"><div class="form-label">Дата</div><input class="form-inp" id="ev-date" type="date"></div>
+            <div style="flex:1"><div class="form-label">Время</div><input class="form-inp" id="ev-time" type="time"></div>
+          </div>
+          <div class="form-row"><div class="form-label">Название</div><input class="form-inp" id="ev-title" type="text" placeholder="Турнир выходного дня"></div>
+          <div class="form-row"><div class="form-label">Описание (необязательно)</div><input class="form-inp" id="ev-desc" type="text" placeholder="Место, формат, детали"></div>
+          <div class="form-row"><div class="form-label">Ссылка на билеты (необязательно)</div><input class="form-inp" id="ev-url" type="url" placeholder="https://..."></div>
+          <button class="btn-full btn-gold" id="ev-add-btn" onclick="addEvent()">Добавить ивент</button>
+          <div id="ev-list" style="margin-top:12px"></div>
+        </div>
+      </div>
+
       <!-- Quick links -->
       <div class="card">
         <div class="card-head"><span class="card-title">🔗 Быстрые ссылки</span></div>
@@ -5063,6 +5086,75 @@ async function archiveUsedCerts() {
     await batch.commit();
     toast(`В архив: ${n} ✓`, 'ok');
     loadCertCodes();
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
+}
+
+// ── Ивенты (афиша TG-кабинета): Firestore events/{id} ──
+function toggleEventsCard() {
+  const body = document.getElementById('ev-card-body');
+  if (!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  const arrow = document.getElementById('ev-card-arrow');
+  if (arrow) arrow.textContent = open ? '▾' : '▸';
+  if (open) loadEvents();   // грузим только при открытии карточки (экономия чтений)
+}
+
+async function addEvent() {
+  if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
+  const date = document.getElementById('ev-date').value;
+  const title = document.getElementById('ev-title').value.trim();
+  if (!date) { toast('Укажи дату', 'err'); return; }
+  if (!title) { toast('Укажи название', 'err'); return; }
+  const url = document.getElementById('ev-url').value.trim();
+  if (url && !/^https?:\/\//i.test(url)) { toast('Ссылка должна начинаться с https://', 'err'); return; }
+  const btn = document.getElementById('ev-add-btn');
+  btn.disabled = true;
+  try {
+    await db.collection('events').add({
+      date, time: document.getElementById('ev-time').value || '',
+      title, desc: document.getElementById('ev-desc').value.trim(), ticketUrl: url,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    ['ev-title','ev-desc','ev-url'].forEach(id => document.getElementById(id).value = '');
+    toast('Ивент добавлен ✓ (в кабинетах появится в течение 10 минут)', 'ok');
+    loadEvents();
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
+  btn.disabled = false;
+}
+
+async function loadEvents() {
+  if (currentTrainer?.role !== 'admin') return;
+  const el = document.getElementById('ev-list');
+  if (!el) return;
+  try {
+    const snap = await db.collection('events').orderBy('date', 'desc').limit(100).get();
+    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const today = localDateStr(new Date());
+    const up = docs.filter(v => v.date >= today).sort((a,b) => a.date > b.date ? 1 : -1);
+    const past = docs.filter(v => v.date < today);
+    const cnt = document.getElementById('ev-count');
+    if (cnt) cnt.textContent = up.length ? up.length + ' предстоящих' : '';
+    const row = v => {
+      const d = new Date(v.date + 'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'});
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-top:1px solid rgba(45,49,66,.4);font-size:.82rem;${v.date < today ? 'opacity:.45' : ''}">
+        <span><b>${esc(d)}</b>${v.time ? ' · ' + esc(v.time) : ''} — ${esc(v.title)}
+          ${v.desc ? `<div class="dim" style="font-size:.72rem">${esc(v.desc)}</div>` : ''}
+          ${v.ticketUrl ? `<div style="font-size:.72rem"><a href="${esc(v.ticketUrl)}" target="_blank" style="color:var(--accent2)">🎟 билеты</a></div>` : ''}</span>
+        <button onclick="deleteEvent('${v.id}')" style="background:none;border:none;cursor:pointer;font-size:.9rem;padding:2px 4px" title="Удалить">🗑</button>
+      </div>`;
+    };
+    el.innerHTML = (up.map(row).join('') || '<div class="dim" style="font-size:.8rem">Предстоящих ивентов нет</div>')
+      + (past.length ? `<div class="dim" style="margin-top:12px;font-size:.75rem;font-weight:700">Прошедшие · ${past.length}</div>` + past.slice(0, 10).map(row).join('') : '');
+  } catch(e) { el.innerHTML = `<div class="empty">Ошибка загрузки ивентов: ${esc(e.message)}</div>`; }
+}
+
+async function deleteEvent(id) {
+  if (!confirm('Удалить ивент из афиши?')) return;
+  try {
+    await db.collection('events').doc(id).delete();
+    toast('Ивент удалён', 'ok');
+    loadEvents();
   } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
 }
 
