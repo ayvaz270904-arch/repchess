@@ -114,7 +114,7 @@ let slotsData = null;     // кэш ответа indivSlots
 let bookDay = null;       // выбранная дата записи
 let bookFmt = null;       // выбранный формат ('offline'|'online')
 
-function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function fmtRub(n){return String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,' ')+' ₽';}
 function confirmTg(text, cb){ if (tg && tg.showConfirm) tg.showConfirm(text, ok => { if (ok) cb(); }); else if (confirm(text)) cb(); }
 function api(params){ return fetch(BACKEND + '?' + params + '&initData=' + encodeURIComponent(tg.initData) + '&t=' + Date.now()).then(r => r.json()); }

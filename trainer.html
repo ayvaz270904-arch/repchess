@@ -3727,7 +3727,7 @@ function splitLine(line){
 // ══════════════════════════════════════════════
 //  UTILS
 // ══════════════════════════════════════════════
-function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // Сравнение email с закреплениями — без учёта регистра и пробелов (в старых закреплениях бывают заглавные буквы)
 function _normEmail(e){ return String(e==null?'':e).trim().toLowerCase(); }
 function assignedHas(list, email){ const t=_normEmail(email); return (list||[]).some(e=>_normEmail(e)===t); }
