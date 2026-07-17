@@ -380,9 +380,7 @@ function viewEvents(){
             </div>`).join('')}
         </div>`;
       }).join('')}
-      ${s.note ? `<div class="sd-note">${s.note.url
-        ? `<a href="#" onclick="openLink('${esc(s.note.url)}');return false" style="color:inherit">${esc(s.note.text)}</a>`
-        : esc(s.note.text)}</div>` : ''}
+      ${s.note ? `<div class="sd-note"${s.note.url ? ` onclick="openLink('${esc(s.note.url)}')" style="cursor:pointer"` : ''}>🎁 ${esc(s.note.text)}${s.note.url ? ' <b style="color:var(--blue)">›</b>' : ''}</div>` : ''}
       ${s.postUrl ? `<button class="btn btn-ghost btn-full" style="margin-top:12px" onclick="openLink('${esc(s.postUrl)}')">Открыть пост в канале</button>` : ''}
     </div>`;
   }
