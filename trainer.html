@@ -4516,27 +4516,18 @@ async function openAttendModal(groupId) {
       }).join('');
     }
 
-    // Дополнительные вписанные тренером + авто-матч
+    // Дополнительные вписанные тренером + авто-матч — админ может править имя и удалять
     if (submitted) {
       const extraRaw = g.extraRaw || g.extraAttendees || [];
       const extraMatched = g.extraMatched || [];
       const extraEl = document.getElementById('attend-extra-list');
       extraEl.innerHTML = '';
-      if (extraRaw.length) {
-        extraRaw.forEach((name, i) => {
-          const m = extraMatched[i] || {};
-          const foundEl = m.found
-            ? `<span style="font-size:.7rem;color:var(--green)">✓ найден в базе: ${esc(m.email||'')}</span>`
-            : `<span style="font-size:.7rem;color:var(--orange)">не найден в базе</span>`;
-          const div = document.createElement('div');
-          div.className = 'attend-row';
-          div.innerHTML = `<div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:.88rem">${esc(name)}</div>
-            ${foundEl}
-          </div>`;
-          extraEl.appendChild(div);
-        });
-      }
+      extraRaw.forEach((name, i) => {
+        const m = extraMatched[i] || {};
+        _appendExtraRow(typeof name === 'object' ? name.name : name, m.found
+          ? `<span style="color:var(--green)">✓ найден в базе: ${esc(m.email||'')}</span>`
+          : `<span style="color:var(--orange)">не найден в базе — исправьте имя или удалите ✕</span>`);
+      });
     } else {
       const extraEl = document.getElementById('attend-extra-list');
       extraEl.innerHTML = '';
@@ -4582,14 +4573,29 @@ function toggleAttend(el) {
   el.textContent = el.classList.contains('on') ? '✓' : '';
 }
 
-function _appendExtraRow(value) {
+function _appendExtraRow(value, hintHtml) {
   const el = document.getElementById('attend-extra-list');
   const div = document.createElement('div');
   div.className = 'attend-row';
   div.style.gap = '8px';
-  div.innerHTML = `<input class="form-inp extra-attend-inp" type="text" placeholder="Имя Фамилия" value="${esc(value)}" style="flex:1;padding:8px 12px;font-size:.85rem;margin-bottom:0">
+  div.innerHTML = `<div style="flex:1;min-width:0">
+      <input class="form-inp extra-attend-inp" type="text" placeholder="Имя Фамилия" value="${esc(value)}" oninput="_extraHintLive(this)" style="width:100%;padding:8px 12px;font-size:.85rem;margin-bottom:0">
+      <div class="extra-match-hint" style="font-size:.7rem;margin-top:3px">${hintHtml || ''}</div>
+    </div>
     <button onclick="this.closest('.attend-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;padding:4px">✕</button>`;
   el.appendChild(div);
+}
+
+// Живой авто-матч: при правке имени сразу видно, нашлось ли оно в базе
+function _extraHintLive(inp) {
+  const hint = inp.parentElement.querySelector('.extra-match-hint');
+  if (!hint) return;
+  const v = inp.value.trim();
+  if (!v) { hint.innerHTML = ''; return; }
+  const found = _matchNameToStudent(v);
+  hint.innerHTML = found
+    ? `<span style="color:var(--green)">✓ найден в базе: ${esc(found.name)}</span>`
+    : `<span style="color:var(--orange)">не найден в базе</span>`;
 }
 
 function addExtraAttendeeRow() {
@@ -4849,10 +4855,18 @@ async function approveAttendance() {
     }
   });
 
-  // «Дополнительные», найденные в базе, становятся полноценными участниками группы —
+  // «Дополнительные» берём из полей формы — админ мог исправить имя, удалить или дописать
+  const extraRawAll = [];
+  document.querySelectorAll('.extra-attend-inp').forEach(inp => {
+    const v = inp.value.trim(); if (v) extraRawAll.push(v);
+  });
+  // Авто-матч заново по полной базе (у тренера матч шёл только по его ученикам)
+  const extraMatchedAll = extraRawAll.map(name => {
+    const found = _matchNameToStudent(name);
+    return found ? { name, email: found.email, found: true } : { name, email: '', found: false };
+  });
+  // Найденные в базе становятся полноценными участниками группы —
   // не нужно вписывать их второй раз (на следующем занятии они уже в списке)
-  const extraMatchedAll = g.extraMatched || [];
-  const extraRawAll = g.extraRaw || g.extraAttendees || [];
   const promoted = [];
   extraMatchedAll.forEach(m => {
     if (m && m.found && m.email && !expectedEmails.includes(m.email)) {
@@ -4888,11 +4902,10 @@ async function approveAttendance() {
       updateData.studentNames  = expectedNames;
       updateData.count = expectedEmails.length;
     }
-    if (promoted.length > 0) {
-      updateData.extraRaw = extraRaw;
-      updateData.extraAttendees = extraRaw;
-      updateData.extraMatched = extraMatchedLeft;
-    }
+    // Дополнительные пишем всегда: админ мог их править/удалять без повышений
+    updateData.extraRaw = extraRaw;
+    updateData.extraAttendees = extraRaw;
+    updateData.extraMatched = extraMatchedLeft;
     batch.update(db.collection('groupLessons').doc(groupId), updateData);
 
     // Обновляем balance-записи
@@ -4916,6 +4929,28 @@ async function approveAttendance() {
       }
     }
 
+    // Синхронизируем записи «вне списка» (isExtraAttendee) с правками админа:
+    // удалённые/переименованные убираем, новые ненайденные создаём;
+    // повышенные до участников уже обновлены циклом выше по email
+    const keepNames = new Set(extraRaw);
+    indSnap.docs.filter(d => d.data().isExtraAttendee).forEach(d => {
+      const dd = d.data();
+      const em = String(dd.studentEmail || '').toLowerCase();
+      if (em && expectedEmails.some(x => String(x).toLowerCase() === em)) return;
+      if (keepNames.has(dd.studentName)) { keepNames.delete(dd.studentName); return; }
+      batch.delete(d.ref);
+    });
+    keepNames.forEach(name => {
+      const ref = db.collection('lessons').doc();
+      batch.set(ref, {
+        trainerId: g.trainerId, trainerName: g.trainerName,
+        studentEmail: '', studentName: name, studentId: '',
+        _date: g._date, format: g.format, type: 'group', notes: g.notes || '',
+        status: 'done', attended: true, groupLessonId: groupId, isExtraAttendee: true,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
     await batch.commit();
 
     const updatedG = { ...g, adminApproved: true, attendanceMarked: true,
@@ -4925,11 +4960,9 @@ async function approveAttendance() {
       updatedG.studentNames  = expectedNames;
       updatedG.count = expectedEmails.length;
     }
-    if (promoted.length > 0) {
-      updatedG.extraRaw = extraRaw;
-      updatedG.extraAttendees = extraRaw;
-      updatedG.extraMatched = extraMatchedLeft;
-    }
+    updatedG.extraRaw = extraRaw;
+    updatedG.extraAttendees = extraRaw;
+    updatedG.extraMatched = extraMatchedLeft;
     _editGroupCache[groupId] = updatedG;
     _attendNewExpected = [];
 
