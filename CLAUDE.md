@@ -21,6 +21,7 @@ Chess school CRM. Three static apps + Telegram bot. Owner is admin; Russian UI, 
 - Balance: only status 'done' (or legacy no-status) burns lessons; FIFO against expired packs; 1 lesson=1mo, 4=3mo, 10=6mo validity.
 - Cert promo codes: Firestore `certCodes/{code}` (REP-XXXX-XX, alphabet excludes 0O1ILX), redeemed by bot `action=redeemCert`.
 - Group self-booking (bot `joinGroup`/`leaveGroup`): needs active group pack matching lesson format + total remaining > 0; cancel only before lesson day.
+- Cabinet is open to EVERYONE (guest mode): unknown phone → link with empty email. Empty email must NEVER reach Firestore/sheet queries (matches technical rows) — every booking action guards `if (!link.email)`. Guest cert redemption mints `cert-<phone>@repchess.local`; doGet auto-upgrades guests via findClientByPhone every 10 min.
 
 ## Firestore quota discipline (Spark 50K reads/day; exhausted once — 2026-07-09)
 - NEVER add unconditional `loadAdminData()/loadHomePage()/loadGroupLessons()` after user actions.
