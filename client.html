@@ -327,22 +327,41 @@ function cancelIndiv(id, dateRu){
   });
 }
 
-// ══════════ ИВЕНТЫ (афиша) ══════════
+// ══════════ ИВЕНТЫ (расписание недели из канала + доп. анонсы) ══════════
 function viewEvents(){
+  const s = data.schedule;
+  let schedHtml = '';
+  if (s && s.days && s.days.length) {
+    schedHtml = `<div class="card"><h2>📅 Расписание недели</h2>
+      ${s.days.map(d => `
+        <div style="font-weight:800;font-size:.92rem;margin:14px 0 2px;color:var(--accent)">${esc(d.label)}</div>
+        <div class="rows">${d.items.map(it => `
+          <div class="row"><span><b>${esc(it.time)}</b> · ${it.url
+            ? `<a href="#" onclick="openLink('${esc(it.url)}');return false" style="color:var(--text);text-decoration:underline;text-underline-offset:3px">${esc(it.title)}</a>`
+            : esc(it.title)}</span>
+          ${it.ticketUrl ? `<button class="btn btn-acc" onclick="openLink('${esc(it.ticketUrl)}')">🎟</button>` : ''}</div>`).join('')}</div>`).join('')}
+      ${s.note ? `<div class="muted" style="margin-top:14px">${s.note.url
+        ? `<a href="#" onclick="openLink('${esc(s.note.url)}');return false" style="color:var(--hint)">${esc(s.note.text)}</a>`
+        : esc(s.note.text)}</div>` : ''}
+      ${s.postUrl ? `<button class="btn btn-ghost btn-full" style="margin-top:12px" onclick="openLink('${esc(s.postUrl)}')">Открыть пост в канале</button>` : ''}
+    </div>`;
+  }
   const evs = (data.events || []).map(v => `
     <div class="row"><span>📅 <b>${esc(v.date)}</b>${v.dow ? ' (' + esc(v.dow) + ')' : ''}${v.time ? ' · ' + esc(v.time) : ''}
       <div style="font-weight:700;margin-top:2px">${esc(v.title)}</div>
       ${v.desc ? `<div class="muted">${esc(v.desc)}</div>` : ''}</span>
       ${v.ticketUrl ? `<button class="btn btn-acc" onclick="openLink('${esc(v.ticketUrl)}')">🎟 Билеты</button>` : ''}
     </div>`).join('');
-  return `
-    <div class="card"><h2>🎪 Афиша Rep Chess</h2>
-      ${evs ? `<div class="rows">${evs}</div>` : '<div class="muted">Пока нет анонсов — загляните позже.</div>'}
-    </div>`;
+  const evsHtml = evs ? `<div class="card"><h2>🎪 ${schedHtml ? 'Доп. анонсы' : 'Афиша Rep Chess'}</h2><div class="rows">${evs}</div></div>` : '';
+  return schedHtml || evsHtml
+    ? schedHtml + evsHtml
+    : `<div class="card"><h2>🎪 Афиша Rep Chess</h2><div class="muted">Пока нет анонсов — загляните позже.</div></div>`;
 }
 
 function openLink(url){
   if (!/^https?:\/\//i.test(url)) return;
+  // t.me-ссылки открываем внутри Telegram, остальные — во внешнем браузере
+  if (tg && tg.openTelegramLink && /^https:\/\/t\.me\//i.test(url)) { tg.openTelegramLink(url); return; }
   if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank');
 }
 
