@@ -152,6 +152,7 @@ const ERRS = {
   used:'Этот код уже был активирован', bad_code:'Некорректный код',
   not_linked:'Сначала поделитесь номером телефона в боте',
   bad_fio:'Укажите ФИО', bad_email:'Проверьте адрес почты',
+  email_locked:'Почта подтверждена администратором — для изменения напишите нам',
   auth:'Откройте кабинет заново через бота', server:'Ошибка сервера, попробуйте позже'
 };
 function errText(d){ return ERRS[d.error] || d.error || 'ошибка'; }
@@ -408,11 +409,16 @@ let profGender = '';
 function viewProfile(){
   const p = data.profile || {};
   if (!profGender) profGender = p.gender || '';
+  // Почта, совпадающая с привязкой кабинета, подтверждена — менять её может только администратор
+  const emailVerified = !!(p.email && data.email && p.email === data.email);
   return `
     <div class="card"><h2>👤 Мой профиль</h2>
       <div class="muted" style="margin-bottom:14px">Анкета помогает подбирать занятия под ваш уровень. Почта дополнительно свяжет с кабинетом покупки, сделанные не с вашего номера.</div>
       <div class="p-row"><div class="p-lbl">ФИО</div><input id="pf-fio" class="inp" value="${esc(p.fio||'')}" placeholder="Иванов Иван" autocomplete="name"></div>
-      <div class="p-row"><div class="p-lbl">Почта</div><input id="pf-email" class="inp" type="email" value="${esc(p.email||'')}" placeholder="you@mail.ru" autocomplete="email"></div>
+      <div class="p-row"><div class="p-lbl">Почта</div>
+        <input id="pf-email" class="inp" type="email" value="${esc(p.email||'')}" placeholder="you@mail.ru" autocomplete="email" ${emailVerified ? 'disabled style="opacity:.6"' : ''}>
+        ${emailVerified ? '<div style="font-size:.72rem;color:var(--green);margin-top:4px">✅ подтверждена администратором — для изменения напишите нам</div>' : ''}
+      </div>
       <div style="display:flex;gap:8px">
         <div class="p-row" style="flex:1"><div class="p-lbl">Возраст</div><input id="pf-age" class="inp" type="number" min="3" max="99" value="${esc(p.age||'')}"></div>
         <div class="p-row" style="flex:2"><div class="p-lbl">Город</div><input id="pf-city" class="inp" value="${esc(p.city||'')}" placeholder="Москва"></div>
