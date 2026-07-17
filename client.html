@@ -82,6 +82,21 @@
 
   .inp { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:10px;
     padding:11px 12px; color:var(--text); font-size:.95rem; }
+
+  /* Расписание недели */
+  .sd-img { width:100%; border-radius:12px; margin:2px 0 8px; display:block; }
+  .sd-day { font-weight:800; font-size:.95rem; margin:16px 0 4px; display:flex; align-items:center; gap:8px; }
+  .sd-today { font-size:.65rem; font-weight:700; color:var(--accent); background:rgba(201,74,66,.12);
+    border:1px solid rgba(201,74,66,.3); padding:1px 8px; border-radius:10px; }
+  .sd-item { display:flex; gap:10px; padding:8px 0; border-top:1px solid var(--border); }
+  .sd-time { font-weight:800; font-size:.88rem; flex-shrink:0; width:46px; padding-top:1px; }
+  .sd-body { flex:1; min-width:0; }
+  .sd-title { display:block; font-size:.9rem; line-height:1.35; font-weight:600; color:var(--text); text-decoration:none; }
+  a.sd-title { color:var(--blue); }
+  .sd-ticket { margin-top:6px; background:rgba(201,74,66,.12); border:1px solid rgba(201,74,66,.35);
+    color:var(--accent); border-radius:8px; padding:4px 11px; font-size:.75rem; font-weight:700; cursor:pointer; }
+  .sd-note { margin-top:14px; font-size:.78rem; color:var(--hint); background:rgba(127,127,127,.07);
+    border:1px solid var(--border); border-radius:10px; padding:9px 11px; line-height:1.4; }
   .center { text-align:center; padding:44px 16px; }
   .spinner { width:28px; height:28px; border:3px solid var(--card); border-top-color:var(--accent);
     border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 14px; }
@@ -332,16 +347,28 @@ function viewEvents(){
   const s = data.schedule;
   let schedHtml = '';
   if (s && s.days && s.days.length) {
+    const d0 = new Date();
+    const todayIso = d0.getFullYear() + '-' + String(d0.getMonth()+1).padStart(2,'0') + '-' + String(d0.getDate()).padStart(2,'0');
     schedHtml = `<div class="card"><h2>📅 Расписание недели</h2>
-      ${s.days.map(d => `
-        <div style="font-weight:800;font-size:.92rem;margin:14px 0 2px;color:var(--accent)">${esc(d.label)}</div>
-        <div class="rows">${d.items.map(it => `
-          <div class="row"><span><b>${esc(it.time)}</b> · ${it.url
-            ? `<a href="#" onclick="openLink('${esc(it.url)}');return false" style="color:var(--text);text-decoration:underline;text-underline-offset:3px">${esc(it.title)}</a>`
-            : esc(it.title)}</span>
-          ${it.ticketUrl ? `<button class="btn btn-acc" onclick="openLink('${esc(it.ticketUrl)}')">🎟</button>` : ''}</div>`).join('')}</div>`).join('')}
-      ${s.note ? `<div class="muted" style="margin-top:14px">${s.note.url
-        ? `<a href="#" onclick="openLink('${esc(s.note.url)}');return false" style="color:var(--hint)">${esc(s.note.text)}</a>`
+      ${s.imgUrl ? `<img class="sd-img" src="${esc(s.imgUrl)}" alt="Афиша недели" loading="lazy">` : ''}
+      ${s.days.map(d => {
+        const past = d.date < todayIso, isToday = d.date === todayIso;
+        return `<div${past ? ' style="opacity:.45"' : ''}>
+          <div class="sd-day">${esc(d.label)}${isToday ? '<span class="sd-today">сегодня</span>' : ''}</div>
+          ${d.items.map(it => `
+            <div class="sd-item">
+              <div class="sd-time">${esc(it.time)}</div>
+              <div class="sd-body">
+                ${it.url
+                  ? `<a class="sd-title" href="#" onclick="openLink('${esc(it.url)}');return false">${esc(it.title)} ›</a>`
+                  : `<div class="sd-title">${esc(it.title)}</div>`}
+                ${it.ticketUrl ? `<button class="sd-ticket" onclick="openLink('${esc(it.ticketUrl)}')">${it.ticketLabel === 'Регистрация' ? '✍️ Регистрация' : '🎟 Билеты'}</button>` : ''}
+              </div>
+            </div>`).join('')}
+        </div>`;
+      }).join('')}
+      ${s.note ? `<div class="sd-note">${s.note.url
+        ? `<a href="#" onclick="openLink('${esc(s.note.url)}');return false" style="color:inherit">${esc(s.note.text)}</a>`
         : esc(s.note.text)}</div>` : ''}
       ${s.postUrl ? `<button class="btn btn-ghost btn-full" style="margin-top:12px" onclick="openLink('${esc(s.postUrl)}')">Открыть пост в канале</button>` : ''}
     </div>`;
