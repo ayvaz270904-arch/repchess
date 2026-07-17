@@ -29,7 +29,7 @@ Chess school CRM. Three static apps + Telegram bot. Owner is admin; Russian UI, 
 
 ## trainer.html structure (search by these anchors, don't trust line numbers)
 - Tabs: Главная (home, actions only) / История (archive; trainer=view, admin=edit) / Групповые / График (per-slot format: `formats {0..6:{"16:00":"offline"|"online"}}`, no entry = both) / Финансы / Админ
-- Key functions: `loadHomePage(fromCache)`, `lessonItemHTML`, `groupFeedItemHTML`, `histLessonItemHTML`, `openEditModal(id, viewMode)`, `openEditGroupModal(id, viewMode)`, `openAttendModal`, `submitAttendance`, `approveAttendance` (auto-promotes matched extras into studentEmails), `generateCertCodes`, `submitAddStudent` (POST to GAS, no Content-Type header — avoids preflight), `_openModal/_closeModal` (scroll-lock, nested-safe), `getLessonFlags/getGroupFlags`.
+- Key functions: `loadHomePage(fromCache)`, `lessonItemHTML`, `groupFeedItemHTML`, `histLessonItemHTML`, `openEditModal(id, viewMode)`, `openEditGroupModal(id, viewMode)`, `openAttendModal`, `submitAttendance`, `approveAttendance` (reads extras from form inputs `.extra-attend-inp` — admin edits them even after approve; re-matches vs full base, promotes found into studentEmails, syncs isExtraAttendee lessons: deleted rows → batch.delete, renamed → recreate), `generateCertCodes`, `submitAddStudent` (POST to GAS, no Content-Type header — avoids preflight), `_openModal/_closeModal` (scroll-lock, nested-safe), `getLessonFlags/getGroupFlags`.
 - Modals are `.overlay` divs; delegated click handler near end of file (`data-edit-id`, `data-edit-group-id`).
 
 ## Working conventions (user's standing rules)
