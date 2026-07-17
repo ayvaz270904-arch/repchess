@@ -97,6 +97,10 @@
     color:var(--accent); border-radius:8px; padding:4px 11px; font-size:.75rem; font-weight:700; cursor:pointer; }
   .sd-note { margin-top:14px; font-size:.78rem; color:var(--hint); background:rgba(127,127,127,.07);
     border:1px solid var(--border); border-radius:10px; padding:9px 11px; line-height:1.4; }
+
+  /* Профиль */
+  .p-row { margin-bottom:11px; }
+  .p-lbl { font-size:.7rem; color:var(--hint); font-weight:700; margin-bottom:4px; text-transform:uppercase; letter-spacing:.05em; }
   .center { text-align:center; padding:44px 16px; }
   .spinner { width:28px; height:28px; border:3px solid var(--card); border-top-color:var(--accent);
     border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 14px; }
@@ -147,6 +151,7 @@ const ERRS = {
   not_yours:'Это не ваша запись', not_cancellable:'Это занятие нельзя отменить',
   used:'Этот код уже был активирован', bad_code:'Некорректный код',
   not_linked:'Сначала поделитесь номером телефона в боте',
+  bad_fio:'Укажите ФИО', bad_email:'Проверьте адрес почты',
   auth:'Откройте кабинет заново через бота', server:'Ошибка сервера, попробуйте позже'
 };
 function errText(d){ return ERRS[d.error] || d.error || 'ошибка'; }
@@ -181,7 +186,7 @@ function renderShell(){
     </div>
     <div id="tab-content"></div>
     <div class="tabbar">
-      ${[['home','🏠','Главная'],['book','📅','Запись'],['events','🎪','Ивенты'],['history','📖','История']].map(t =>
+      ${[['home','🏠','Главная'],['book','📅','Запись'],['events','🎪','Ивенты'],['history','📖','История'],['profile','👤','Профиль']].map(t =>
         `<div class="tab ${activeTab===t[0]?'on':''}" onclick="showTab('${t[0]}')"><div class="ico">${t[1]}</div><div class="lbl">${t[2]}</div></div>`).join('')}
     </div>`;
   renderTab();
@@ -189,7 +194,7 @@ function renderShell(){
 
 function showTab(name){
   activeTab = name;
-  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('on', ['home','book','events','history'][i] === name));
+  document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('on', ['home','book','events','history','profile'][i] === name));
   renderTab();
   window.scrollTo(0, 0);
 }
@@ -204,6 +209,7 @@ function renderTab(){
     if (slotsData) renderIndivBook(); else loadSlots();
   }
   else if (activeTab === 'events') el.innerHTML = viewEvents();
+  else if (activeTab === 'profile') el.innerHTML = viewProfile();
   else el.innerHTML = viewHistory();
 }
 
@@ -228,6 +234,13 @@ function viewHome(){
       ${remaining > 0 ? `<button class="btn btn-acc btn-full" style="margin-top:14px" onclick="showTab('book')">📅 Записаться на занятие</button>` : ''}
     </div>
     <div class="card"><h2>Ближайшие занятия</h2><div class="rows" id="upcoming-rows">${upcoming}</div><div id="up-msg"></div></div>
+    ${!data.profile ? `<div class="card" style="cursor:pointer" onclick="showTab('profile')">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:1.5rem">👤</span>
+        <span style="flex:1;min-width:0"><b>Расскажите о себе</b>
+          <div class="muted">поможем подбирать занятия под ваш уровень</div></span>
+        <span style="color:var(--accent);font-weight:800;font-size:1.1rem">→</span>
+      </div></div>` : ''}
     ${BUY_LINKS.length ? `<div class="card"><h2>🛒 Купить занятия</h2>
       <div style="display:flex;flex-direction:column;gap:8px">${BUY_LINKS.map(b =>
         `<button class="btn btn-acc btn-full" onclick="openLink('${esc(b[1])}')">${esc(b[0])}</button>`).join('')}</div>
@@ -390,6 +403,64 @@ function openLink(url){
   // t.me-ссылки открываем внутри Telegram, остальные — во внешнем браузере
   if (tg && tg.openTelegramLink && /^https:\/\/t\.me\//i.test(url)) { tg.openTelegramLink(url); return; }
   if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank');
+}
+
+// ══════════ ПРОФИЛЬ ══════════
+let profGender = '';
+function viewProfile(){
+  const p = data.profile || {};
+  if (!profGender) profGender = p.gender || '';
+  return `
+    <div class="card"><h2>👤 Мой профиль</h2>
+      <div class="muted" style="margin-bottom:14px">Анкета помогает подбирать занятия под ваш уровень. Почта дополнительно свяжет с кабинетом покупки, сделанные не с вашего номера.</div>
+      <div class="p-row"><div class="p-lbl">ФИО</div><input id="pf-fio" class="inp" value="${esc(p.fio||'')}" placeholder="Иванов Иван" autocomplete="name"></div>
+      <div class="p-row"><div class="p-lbl">Почта</div><input id="pf-email" class="inp" type="email" value="${esc(p.email||'')}" placeholder="you@mail.ru" autocomplete="email"></div>
+      <div style="display:flex;gap:8px">
+        <div class="p-row" style="flex:1"><div class="p-lbl">Возраст</div><input id="pf-age" class="inp" type="number" min="3" max="99" value="${esc(p.age||'')}"></div>
+        <div class="p-row" style="flex:2"><div class="p-lbl">Город</div><input id="pf-city" class="inp" value="${esc(p.city||'')}" placeholder="Москва"></div>
+      </div>
+      <div class="p-row"><div class="p-lbl">Пол</div>
+        <div class="fmt-toggle" style="margin-bottom:0">
+          <div class="fmt-btn pf-g ${profGender==='м'?'on':''}" data-g="м" onclick="setGender('м')">М</div>
+          <div class="fmt-btn pf-g ${profGender==='ж'?'on':''}" data-g="ж" onclick="setGender('ж')">Ж</div>
+        </div>
+      </div>
+      <div class="p-row"><div class="p-lbl">Уровень игры</div><input id="pf-level" class="inp" value="${esc(p.level||'')}" placeholder="например: 1400 lichess / новичок"></div>
+      <button id="pf-save" class="btn btn-acc btn-full" style="margin-top:4px" onclick="saveProfile()">Сохранить</button>
+      <div id="pf-msg" class="muted" style="margin-top:8px"></div>
+    </div>`;
+}
+
+function setGender(g){
+  profGender = (profGender === g) ? '' : g;
+  document.querySelectorAll('.pf-g').forEach(el => el.classList.toggle('on', el.dataset.g === profGender));
+}
+
+async function saveProfile(){
+  const val = id => (document.getElementById(id).value || '').trim();
+  const msg = document.getElementById('pf-msg');
+  msg.style.color = '';
+  if (!val('pf-fio')) { msg.textContent = '⚠️ Укажите ФИО'; return; }
+  const btn = document.getElementById('pf-save');
+  btn.disabled = true;
+  msg.textContent = 'Сохраняю…';
+  try {
+    const d = await api('action=saveProfile'
+      + '&fio=' + encodeURIComponent(val('pf-fio'))
+      + '&pemail=' + encodeURIComponent(val('pf-email'))
+      + '&age=' + encodeURIComponent(val('pf-age'))
+      + '&gender=' + encodeURIComponent(profGender)
+      + '&city=' + encodeURIComponent(val('pf-city'))
+      + '&level=' + encodeURIComponent(val('pf-level')));
+    if (d.ok) {
+      data.profile = d.profile;
+      msg.style.color = 'var(--green)';
+      msg.textContent = d.emailPending
+        ? '✅ Сохранено! На эту почту нашлись покупки — администратор проверит и привяжет их.'
+        : '✅ Сохранено!';
+    } else msg.textContent = '⚠️ ' + errText(d);
+  } catch(e) { msg.textContent = '⚠️ Ошибка сети'; }
+  btn.disabled = false;
 }
 
 // ══════════ ИСТОРИЯ ══════════
