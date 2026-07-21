@@ -7,7 +7,8 @@ Chess school CRM. Three static apps + Telegram bot. Owner is admin; Russian UI, 
 - `index.html` — CRM admin (reads Google Sheets via GAS proxy)
 - `trainer.html` — trainer/admin cabinet (Firebase Firestore + same GAS proxy for student base). ~4600 lines, single file.
 - `client.html` — Telegram Mini App client cabinet (talks to bot GAS)
-- `gas/` — **local-only mirrors** of the two Apps Script projects (crm-proxy.gs, bot.gs). NEVER commit (contains bot token; repo is public). User copies file content into script.google.com and redeploys: Deploy → Manage deployments → ✏️ → New version.
+- `gas/` — **local-only mirrors** of the two Apps Script projects (crm-proxy.gs, bot.gs) + `firestore.rules` copy + `backup/`. NEVER commit (contains bot token; repo is public).
+- **gas/ has NO git safety net.** Before any scripted/bulk edit of `gas/*.gs`, `cp` it to `gas/backup/` first. Marker-to-marker slicing (`s[a:b]`) already destroyed 50KB of bot.gs once — always assert the cut is small and contains only the target before writing. Rescue paths if it happens again: the TextEdit window still holds the pre-edit text (`osascript -e 'tell application "TextEdit" to get text of document "bot.gs"'`), and the deployed GAS project has the last shipped version. User copies file content into script.google.com and redeploys: Deploy → Manage deployments → ✏️ → New version.
 - Verify JS syntax after editing any html: `./check.sh` (no node on this Mac; parse-pass = OK, runtime errors like `console.error is not a function` are sandbox artifacts).
 
 ## Data flow & security
