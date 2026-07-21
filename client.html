@@ -388,16 +388,8 @@ function viewEvents(){
       ${s.postUrl ? `<button class="btn btn-ghost btn-full" style="margin-top:12px" onclick="openLink('${esc(s.postUrl)}')">Открыть пост в канале</button>` : ''}
     </div>`;
   }
-  const evs = (data.events || []).map(v => `
-    <div class="row"><span>📅 <b>${esc(v.date)}</b>${v.dow ? ' (' + esc(v.dow) + ')' : ''}${v.time ? ' · ' + esc(v.time) : ''}
-      <div style="font-weight:700;margin-top:2px">${esc(v.title)}</div>
-      ${v.desc ? `<div class="muted">${esc(v.desc)}</div>` : ''}</span>
-      ${v.ticketUrl ? `<button class="btn btn-acc" onclick="openLink('${esc(v.ticketUrl)}')">🎟 Билеты</button>` : ''}
-    </div>`).join('');
-  const evsHtml = evs ? `<div class="card"><h2>🎪 ${schedHtml ? 'Доп. анонсы' : 'Афиша Rep Chess'}</h2><div class="rows">${evs}</div></div>` : '';
-  return schedHtml || evsHtml
-    ? schedHtml + evsHtml
-    : `<div class="card"><h2>🎪 Афиша Rep Chess</h2><div class="muted">Пока нет анонсов — загляните позже.</div></div>`;
+  return schedHtml || `<div class="card"><h2>🎪 Афиша Rep Chess</h2>
+    <div class="muted">Расписание на неделю появится здесь, как только выйдет в канале.</div></div>`;
 }
 
 function openLink(url){
