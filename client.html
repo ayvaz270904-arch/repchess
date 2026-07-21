@@ -98,6 +98,20 @@
   .sd-note { margin-top:14px; font-size:.78rem; color:var(--hint); background:rgba(127,127,127,.07);
     border:1px solid var(--border); border-radius:10px; padding:9px 11px; line-height:1.4; }
 
+  /* Задача дня */
+  .pz-board { display:grid; grid-template-columns:repeat(8,1fr); width:100%; max-width:330px; margin:0 auto;
+    aspect-ratio:1; border-radius:10px; overflow:hidden; }
+  .pz-sq { display:flex; align-items:center; justify-content:center; cursor:pointer; user-select:none;
+    font-size:clamp(18px,7.4vw,30px); line-height:1; }
+  .pz-l { background:#e9e4d4; } .pz-d { background:#7a945a; }
+  .pz-sq.sel { box-shadow:inset 0 0 0 3px var(--accent); }
+  .pz-sq.hl { box-shadow:inset 0 0 0 3px var(--green); }
+  .pz-w { color:#fff; text-shadow:0 1px 1px #000,0 -1px 1px #000,1px 0 1px #000,-1px 0 1px #000; }
+  .pz-b { color:#1a1a1a; text-shadow:0 1px 1px rgba(255,255,255,.5); }
+  .streak { display:inline-flex; align-items:center; gap:5px; font-size:.78rem; font-weight:700;
+    color:var(--orange); background:rgba(249,115,22,.12); border:1px solid rgba(249,115,22,.3);
+    padding:3px 10px; border-radius:20px; }
+
   /* Профиль */
   .p-row { margin-bottom:11px; }
   .p-lbl { font-size:.7rem; color:var(--hint); font-weight:700; margin-bottom:4px; text-transform:uppercase; letter-spacing:.05em; }
@@ -178,6 +192,7 @@ async function load(){
     }
     data = d;
     slotsData = null; bookDay = null;   // данные обновились — слоты перезапросим
+    pzPos = null; pzSel = null; pzDone = false; pzLast = null;   // задача дня — из свежего payload
     renderShell();
   } catch (e) { showError('Ошибка сети', e.message); }
 }
@@ -237,6 +252,7 @@ function viewHome(){
       ${cats ? `<div class="cat-chips">${cats}</div>` : ''}
       ${remaining > 0 ? `<button class="btn btn-acc btn-full" style="margin-top:14px" onclick="showTab('book')">📅 Записаться на занятие</button>` : ''}
     </div>
+    ${viewPuzzle()}
     <div class="card"><h2>Ближайшие занятия</h2><div class="rows" id="upcoming-rows">${upcoming}</div><div id="up-msg"></div></div>
     ${!data.profile ? `<div class="card" style="cursor:pointer" onclick="showTab('profile')">
       <div style="display:flex;align-items:center;gap:12px">
@@ -405,6 +421,120 @@ function openLink(url){
   // t.me-ссылки открываем внутри Telegram, остальные — во внешнем браузере
   if (tg && tg.openTelegramLink && /^https:\/\/t\.me\//i.test(url)) { tg.openTelegramLink(url); return; }
   if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank');
+}
+
+// ══════════ ЗАДАЧА ДНЯ ══════════
+// Решение хранится только на сервере: клиент отправляет ход, сервер сверяет и ведёт серию
+let pzPos = null;      // расстановка (первая часть FEN), меняется после верного хода
+let pzSel = null;      // выбранная клетка
+let pzDone = false;    // задача решена в этой сессии
+let pzLast = null;     // последний ход для подсветки
+
+const PZ_GLYPH = { k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' };
+
+function pzArr(pos){
+  const arr = [];
+  pos.split('/').forEach(row => {
+    for (const ch of row) {
+      if (ch >= '1' && ch <= '8') { for (let i = 0; i < +ch; i++) arr.push(''); }
+      else arr.push(ch);
+    }
+  });
+  return arr;
+}
+function pzToPos(arr){
+  const rows = [];
+  for (let r = 0; r < 8; r++) {
+    let s = '', empty = 0;
+    for (let f = 0; f < 8; f++) {
+      const c = arr[r*8+f];
+      if (c) { if (empty) { s += empty; empty = 0; } s += c; } else empty++;
+    }
+    if (empty) s += empty;
+    rows.push(s);
+  }
+  return rows.join('/');
+}
+function pzIdx(sq){ return (8 - +sq[1]) * 8 + (sq.charCodeAt(0) - 97); }
+function pzName(i){ return 'abcdefgh'[i % 8] + (8 - Math.floor(i / 8)); }
+
+function viewPuzzle(){
+  const p = data.puzzle;
+  if (!p || !p.fen) return '';
+  if (pzPos === null) pzPos = p.fen.split(' ')[0];
+  const st = data.streak || { n:0, best:0, todayDone:false };
+  const solved = pzDone || st.todayDone;
+  const arr = pzArr(pzPos);
+  const cells = arr.map((c, i) => {
+    const dark = (Math.floor(i/8) + i%8) % 2 === 1;
+    const nm = pzName(i);
+    const mark = pzSel === nm ? ' sel'
+      : (pzLast && (pzLast.slice(0,2) === nm || pzLast.slice(2,4) === nm)) ? ' hl' : '';
+    const g = c ? `<span class="${c === c.toUpperCase() ? 'pz-w' : 'pz-b'}">${PZ_GLYPH[c.toLowerCase()]}</span>` : '';
+    return `<div class="pz-sq ${dark ? 'pz-d' : 'pz-l'}${mark}" onclick="pzClick('${nm}')">${g}</div>`;
+  }).join('');
+
+  return `<div class="card" id="pz-card">
+    <h2 style="display:flex;justify-content:space-between;align-items:center">
+      <span>♟ Задача дня</span>
+      ${st.n > 0 ? `<span class="streak">🔥 ${st.n} ${plural(st.n,'день','дня','дней')}</span>` : ''}
+    </h2>
+    <div class="pz-board">${cells}</div>
+    <div id="pz-msg" class="muted" style="text-align:center;margin-top:10px">${
+      solved
+        ? `<span style="color:var(--green);font-weight:700">✅ Решено!</span>${st.best > 1 ? ` · рекорд серии: ${st.best}` : ''}`
+        : `${esc(p.hint || 'Найдите лучший ход')} · ход белых`
+    }</div>
+  </div>`;
+}
+
+function plural(n, one, few, many){
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+  return many;
+}
+
+function pzRender(){
+  const el = document.getElementById('pz-card');
+  if (el) el.outerHTML = viewPuzzle();
+}
+
+async function pzClick(sq){
+  if (pzDone || (data.streak && data.streak.todayDone)) return;
+  const arr = pzArr(pzPos);
+  const piece = arr[pzIdx(sq)];
+  if (!pzSel) {                                   // выбираем свою фигуру (белые)
+    if (!piece || piece !== piece.toUpperCase()) return;
+    pzSel = sq; pzRender(); return;
+  }
+  if (pzSel === sq) { pzSel = null; pzRender(); return; }
+  if (piece && piece === piece.toUpperCase()) { pzSel = sq; pzRender(); return; }   // перевыбор
+
+  const from = pzSel, to = sq;
+  pzSel = null;
+  let move = from + to;
+  if (arr[pzIdx(from)] === 'P' && to[1] === '8') move += 'q';   // превращение — всегда в ферзя
+  const msg = document.getElementById('pz-msg');
+  if (msg) msg.textContent = 'Проверяю…';
+  try {
+    const d = await api('action=puzzleTry&move=' + move);
+    if (d.ok && d.correct) {
+      const a = pzArr(pzPos);
+      a[pzIdx(to)] = move.length > 4 ? 'Q' : a[pzIdx(from)];
+      a[pzIdx(from)] = '';
+      pzPos = pzToPos(a);
+      pzLast = move; pzDone = true;
+      if (d.streak) data.streak = d.streak;
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+      pzRender();
+    } else {
+      pzRender();
+      const m2 = document.getElementById('pz-msg');
+      if (m2) m2.innerHTML = '<span class="msg-err">Не тот ход — попробуйте ещё</span>';
+      if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error');
+    }
+  } catch(e) { pzRender(); }
 }
 
 // ══════════ ПРОФИЛЬ ══════════
