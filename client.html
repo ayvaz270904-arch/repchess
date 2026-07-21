@@ -416,7 +416,7 @@ function viewProfile(){
   const emailVerified = !!(p.email && data.email && p.email === data.email);
   return `
     <div class="card"><h2>👤 Мой профиль</h2>
-      <div class="muted" style="margin-bottom:14px">Анкета помогает подбирать занятия под ваш уровень. Почта дополнительно свяжет с кабинетом покупки, сделанные не с вашего номера.</div>
+      <div class="muted" style="margin-bottom:14px">Анкета помогает подбирать занятия под ваш уровень. Почта дополнительно свяжет с кабинетом покупки, сделанные не с вашего номера.<br><br>Если ученику меньше 18 лет, анкету заполняет родитель или законный представитель — укажите данные ученика.</div>
       <div class="p-row"><div class="p-lbl">ФИО</div><input id="pf-fio" class="inp" value="${esc(p.fio||'')}" placeholder="Иванов Иван" autocomplete="name"></div>
       <div class="p-row"><div class="p-lbl">Почта</div>
         <input id="pf-email" class="inp" type="email" value="${esc(p.email||'')}" placeholder="you@mail.ru" autocomplete="email" ${emailVerified ? 'disabled style="opacity:.6"' : ''}>
@@ -435,7 +435,7 @@ function viewProfile(){
       <div class="p-row"><div class="p-lbl">Уровень игры</div><input id="pf-level" class="inp" value="${esc(p.level||'')}" placeholder="например: 1400 lichess / новичок"></div>
       <button id="pf-save" class="btn btn-acc btn-full" style="margin-top:4px" onclick="saveProfile()">Сохранить</button>
       <div id="pf-msg" class="muted" style="margin-top:8px"></div>
-      <div class="muted" style="margin-top:10px;font-size:.7rem;line-height:1.45">Нажимая «Сохранить», вы даёте согласие на обработку указанных персональных данных${POLICY_URL ? ` в соответствии с <a href="#" onclick="openLink('${esc(POLICY_URL)}');return false" style="color:var(--hint);text-decoration:underline">политикой конфиденциальности</a>` : ''}.</div>
+      <div class="muted" style="margin-top:10px;font-size:.7rem;line-height:1.45">Нажимая «Сохранить», вы даёте согласие на обработку указанных персональных данных${POLICY_URL ? ` в соответствии с <a href="#" onclick="openLink('${esc(POLICY_URL)}');return false" style="color:var(--hint);text-decoration:underline">политикой конфиденциальности</a>` : ''}. За ученика младше 18 лет согласие даёт родитель или законный представитель.</div>
     </div>`;
 }
 
