@@ -608,6 +608,27 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
       </div>
 
+      <!-- Лиды и профили -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head" onclick="toggleInsightsCard()" style="cursor:pointer;user-select:none">
+          <span class="card-title">👥 Лиды и профили</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span class="dim" id="ins-count" style="font-size:.78rem"></span>
+            <span id="ins-card-arrow" class="dim">▸</span>
+          </span>
+        </div>
+        <div class="card-body" id="ins-card-body" style="display:none">
+          <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">Гости бота (лиды) и анкеты учеников. Данные из приватной таблицы, обновляются при открытии карточки.</div>
+          <div id="ins-summary" style="display:flex;gap:8px;margin-bottom:12px"></div>
+          <div class="toggle-group" style="margin-bottom:12px">
+            <button class="toggle-btn on" id="ins-tab-leads" onclick="insightsTab('leads')">🌱 Лиды</button>
+            <button class="toggle-btn" id="ins-tab-profiles" onclick="insightsTab('profiles')">📇 Профили</button>
+          </div>
+          <input class="form-inp" id="ins-search" type="text" placeholder="Поиск..." oninput="renderInsights()" style="margin-bottom:12px">
+          <div id="ins-list"><div class="empty">Загрузка...</div></div>
+        </div>
+      </div>
+
       <!-- Quick links -->
       <div class="card">
         <div class="card-head"><span class="card-title">🔗 Быстрые ссылки</span></div>
@@ -4963,6 +4984,112 @@ async function approveAttendance() {
 // ══════════════════════════════════════════════
 //  STUDENT DATABASE (admin)
 // ══════════════════════════════════════════════
+// ── Лиды и профили: читаем листы «Лиды»/«Профили» через CRM-прокси (не Firestore) ──
+let _insData = null;          // { leads:[], profiles:[] }
+let _insTab = 'leads';
+
+function toggleInsightsCard() {
+  const body = document.getElementById('ins-card-body');
+  if (!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  const arrow = document.getElementById('ins-card-arrow');
+  if (arrow) arrow.textContent = open ? '▾' : '▸';
+  if (open) loadInsights();   // грузим только при открытии
+}
+
+async function loadInsights() {
+  if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
+  const list = document.getElementById('ins-list');
+  if (list) list.innerHTML = '<div class="empty">Загрузка...</div>';
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const res = await fetch(_CSV + '?action=insights&token=' + encodeURIComponent(idToken));
+    const txt = await res.text();
+    if (txt === 'Unauthorized' || txt.startsWith('Error:')) { if (list) list.innerHTML = `<div class="empty">Ошибка: ${esc(txt)}</div>`; return; }
+    _insData = JSON.parse(txt);
+    renderInsightsSummary();
+    renderInsights();
+  } catch(e) { if (list) list.innerHTML = `<div class="empty">Ошибка загрузки: ${esc(e.message)}</div>`; }
+}
+
+function renderInsightsSummary() {
+  if (!_insData) return;
+  const leads = _insData.leads || [];
+  const profiles = _insData.profiles || [];
+  const conv = leads.filter(l => (l['Стал клиентом'] || '').trim()).length;
+  const pct = leads.length ? Math.round(conv / leads.length * 100) : 0;
+  const cnt = document.getElementById('ins-count');
+  if (cnt) cnt.textContent = `${leads.length} лид. · ${profiles.length} анкет`;
+  const tile = (v, l, c) => `<div style="flex:1;text-align:center;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:9px 4px">
+    <div style="font-size:1.3rem;font-weight:800;color:${c}">${v}</div><div style="font-size:.68rem;color:var(--text2)">${l}</div></div>`;
+  const el = document.getElementById('ins-summary');
+  if (el) el.innerHTML = tile(leads.length, 'лидов', 'var(--accent2)')
+    + tile(`${conv}<span style="font-size:.8rem"> · ${pct}%</span>`, 'сконвертир.', 'var(--green)')
+    + tile(profiles.length, 'анкет', 'var(--gold, #eab308)');
+}
+
+function insightsTab(t) {
+  _insTab = t;
+  document.getElementById('ins-tab-leads')?.classList.toggle('on', t === 'leads');
+  document.getElementById('ins-tab-profiles')?.classList.toggle('on', t === 'profiles');
+  const s = document.getElementById('ins-search');
+  if (s) s.placeholder = t === 'leads' ? 'Поиск по имени, телефону...' : 'Поиск по ФИО, городу, уровню...';
+  renderInsights();
+}
+
+function renderInsights() {
+  const el = document.getElementById('ins-list');
+  if (!el || !_insData) return;
+  const q = (document.getElementById('ins-search')?.value || '').toLowerCase().trim();
+  el.innerHTML = _insTab === 'leads' ? _renderLeads(q) : _renderProfiles(q);
+}
+
+function _renderLeads(q) {
+  let rows = (_insData.leads || []).slice().reverse();   // свежие сверху
+  if (q) rows = rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+  if (!rows.length) return '<div class="empty">Ничего не найдено</div>';
+  return rows.slice(0, 200).map(r => {
+    const conv = (r['Стал клиентом'] || '').trim();
+    const nick = (r['Ник'] || '').trim();
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid rgba(45,49,66,.4);font-size:.84rem">
+      <span><b>${esc(r['Имя (Telegram)'] || '—')}</b> · ${esc(r['Телефон'] || '')}
+        <div class="dim" style="font-size:.72rem">${esc(r['Дата'] || '')}${nick ? ' · ' + esc(nick) : ''}</div></span>
+      ${conv ? `<span class="tag" style="background:rgba(34,197,94,.12);color:var(--green);white-space:nowrap">✅ клиент</span>`
+             : `<span class="tag" style="background:rgba(249,115,22,.12);color:var(--orange);white-space:nowrap">лид</span>`}
+    </div>`;
+  }).join('');
+}
+
+function _renderProfiles(q) {
+  let rows = (_insData.profiles || []).slice().reverse();
+  if (q) rows = rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+  if (!rows.length) return '<div class="empty">Ничего не найдено</div>';
+  // Сводка по городам и уровням (топ-5)
+  const top = (field) => {
+    const m = {};
+    (_insData.profiles || []).forEach(r => { const v = (r[field] || '').trim(); if (v) m[v] = (m[v] || 0) + 1; });
+    return Object.entries(m).sort((a,b) => b[1]-a[1]).slice(0, 5)
+      .map(([k,v]) => `<span class="tag" style="background:var(--surface2);border:1px solid var(--border)">${esc(k)} · ${v}</span>`).join(' ');
+  };
+  const cities = top('Город'), levels = top('Уровень');
+  const summary = (cities || levels) ? `<div style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px">
+    ${cities ? `<div style="font-size:.72rem"><span class="dim">Города:</span> ${cities}</div>` : ''}
+    ${levels ? `<div style="font-size:.72rem"><span class="dim">Уровень:</span> ${levels}</div>` : ''}</div>` : '';
+  const list = rows.slice(0, 200).map(r => {
+    const client = (r['Email в базе'] || '').trim();
+    const meta = [r['Возраст'], r['Пол'], r['Город']].map(x => (x||'').trim()).filter(Boolean).join(' · ');
+    return `<div style="padding:8px 0;border-top:1px solid rgba(45,49,66,.4);font-size:.84rem">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <b>${esc(r['ФИО'] || '—')}</b>
+        ${client ? `<span class="tag" style="background:rgba(34,197,94,.12);color:var(--green);white-space:nowrap">клиент</span>` : ''}
+      </div>
+      <div class="dim" style="font-size:.72rem">${esc(meta)}${(r['Уровень']||'').trim() ? ' · ♟ ' + esc(r['Уровень']) : ''}${(r['Почта']||'').trim() ? ' · ' + esc(r['Почта']) : ''}</div>
+    </div>`;
+  }).join('');
+  return summary + list;
+}
+
 // ── Сертификаты-промокоды: генерация и список (Firestore certCodes/{code}) ──
 // Алфавит без 0/O/1/I/L/X — читаемо с бумаги и не ломает парсер тарифов (X участвует в «NxЦЕНА»)
 const _CERT_ALPH = 'ABCDEFGHJKMNPQRSTUVWZ23456789';
