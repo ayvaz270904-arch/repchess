@@ -5007,7 +5007,10 @@ async function loadInsights() {
     const res = await fetch(_CSV + '?action=insights&token=' + encodeURIComponent(idToken));
     const txt = await res.text();
     if (txt === 'Unauthorized' || txt.startsWith('Error:')) { if (list) list.innerHTML = `<div class="empty">Ошибка: ${esc(txt)}</div>`; return; }
-    _insData = JSON.parse(txt);
+    let parsed;
+    try { parsed = JSON.parse(txt); }
+    catch(_) { if (list) list.innerHTML = '<div class="empty">CRM-прокси вернул старый формат — нужно задеплоить <b>новую версию CRM-прокси</b> (проект с базой учеников, не бота).</div>'; return; }
+    _insData = parsed;
     renderInsightsSummary();
     renderInsights();
   } catch(e) { if (list) list.innerHTML = `<div class="empty">Ошибка загрузки: ${esc(e.message)}</div>`; }
