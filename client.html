@@ -143,7 +143,7 @@ const ERRS = {
   full:'Мест больше нет', already:'Вы уже записаны', past:'Запись на это занятие закрыта',
   too_late:'Отменить можно только до дня занятия — напишите администратору',
   no_group_pack:'Нужен активный групповой пакет', no_balance:'Занятия на балансе закончились',
-  closed:'Запись закрыта', not_found:'Не найдено', not_joined:'Вы не записаны',
+  closed:'Запись закрыта', reg_closed:'Запись на это занятие ещё не открыта', not_found:'Не найдено', not_joined:'Вы не записаны',
   no_trainer:'За вами пока не закреплён тренер — напишите администратору',
   no_schedule:'Тренер ещё не заполнил график — попробуйте позже',
   slot_taken:'Это время только что заняли — выберите другое', slot_gone:'Это время уже недоступно',
@@ -275,6 +275,7 @@ function viewGroups(){
     const full = g.max && g.count >= g.max;
     let action;
     if (g.joined) action = `<button class="btn btn-ghost" onclick="leaveGroup('${esc(g.id)}')">✓ Записан · отменить</button>`;
+    else if (g.regOpen === false) action = `<span class="muted" style="text-align:right">🔒 ${g.opensAt ? 'Запись откроется<br>' + esc(g.opensAt) : 'Запись скоро откроется'}</span>`;
     else if (full) action = `<span class="muted">мест нет</span>`;
     else if (!canGroup(g.format)) action = `<span class="muted">нужен групповой пакет</span>`;
     else action = `<button class="btn btn-acc" onclick="joinGroup('${esc(g.id)}')">Записаться</button>`;

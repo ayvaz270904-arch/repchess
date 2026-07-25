@@ -782,12 +782,18 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </div>
     <div class="form-row">
       <div class="form-label">Видимость в Telegram</div>
-      <div class="toggle-group">
-        <button class="toggle-btn" onclick="toggle('grp-public',this,'true')" id="grp-public-btn-on">🌐 Открыто для записи</button>
-        <button class="toggle-btn on" onclick="toggle('grp-public',this,'false')" id="grp-public-btn-off">🔒 Только для списка</button>
+      <div class="toggle-group" style="flex-wrap:wrap">
+        <button class="toggle-btn on" onclick="setGrpVis('private')" id="grp-vis-private">🔒 Только для списка</button>
+        <button class="toggle-btn" onclick="setGrpVis('closed')" id="grp-vis-closed">⏳ Видно, запись закрыта</button>
+        <button class="toggle-btn" onclick="setGrpVis('open')" id="grp-vis-open">🌐 Открыто для записи</button>
       </div>
-      <input type="hidden" id="grp-public" value="false">
-      <div style="font-size:.72rem;color:var(--text2);margin-top:6px">«Открыто» — клиенты видят занятие в Telegram и могут записаться сами</div>
+      <input type="hidden" id="grp-vis" value="private">
+      <div id="grp-openat-row" style="display:none;margin-top:8px">
+        <div class="form-label">Отложенное открытие записи</div>
+        <input class="form-inp" id="grp-openat" type="datetime-local">
+        <div style="font-size:.72rem;color:var(--text2);margin-top:6px">Запись откроется автоматически в это время. Оставь пустым — откроешь вручную кнопкой «Открыть запись».</div>
+      </div>
+      <div style="font-size:.72rem;color:var(--text2);margin-top:6px">«Видно, запись закрыта» — ученики видят занятие в Telegram, но записаться смогут только после открытия записи.</div>
     </div>
     <div class="form-row">
       <div class="form-label">Формат</div>
@@ -2179,6 +2185,61 @@ function _renderGrpAttendBlock(g) {
     </div>`;
 }
 
+// Видимость группового занятия: private / closed / open + строка «отложенного открытия»
+function setGrpVis(mode) {
+  document.getElementById('grp-vis').value = mode;
+  ['private','closed','open'].forEach(m => document.getElementById('grp-vis-'+m)?.classList.toggle('on', m === mode));
+  const row = document.getElementById('grp-openat-row');
+  if (row) row.style.display = mode === 'closed' ? '' : 'none';
+}
+
+function _nowLocalDT() {
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+}
+// Состояние записи: 'hidden' | 'open' | 'closed' | 'scheduled'
+function _grpRegState(g) {
+  if (!g.isPublic) return 'hidden';
+  if (g.regOpen === true) return 'open';
+  if (g.regOpen === false) {
+    if (g.regOpensAt) return _nowLocalDT() >= g.regOpensAt ? 'open' : 'scheduled';
+    return 'closed';
+  }
+  return 'open';   // legacy: публичное без поля regOpen
+}
+function _fmtDT(s) {
+  const m = String(s||'').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  return m ? (m[3]+'.'+m[2]+' в '+m[4]+':'+m[5]) : '';
+}
+
+// Бейдж состояния записи для ленты групповых
+function _grpVisBadge(g) {
+  const st = _grpRegState(g);
+  if (st === 'hidden') return '';
+  const box = (bg, col, txt) => `<span style="font-size:.72rem;background:${bg};color:${col};border:1px solid ${col}55;border-radius:10px;padding:1px 7px">${txt}</span>`;
+  if (st === 'open')      return box('rgba(74,158,255,.12)', 'var(--accent2)', '🌐 запись открыта');
+  if (st === 'scheduled') return box('rgba(249,115,22,.12)', 'var(--orange)', '⏳ откроется ' + _fmtDT(g.regOpensAt));
+  return box('rgba(249,115,22,.12)', 'var(--orange)', '⏳ запись закрыта');
+}
+// Кнопка «Открыть запись» — когда запись закрыта/отложена (только админ)
+function _grpOpenBtn(g, gid) {
+  const st = _grpRegState(g);
+  return (st === 'closed' || st === 'scheduled')
+    ? `<button onclick="openGroupReg('${gid}')" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--green);font-size:.75rem;padding:5px 9px;cursor:pointer;white-space:nowrap">🔓 Открыть запись</button>`
+    : '';
+}
+
+// Быстрое открытие записи из ленты (одна кнопка)
+async function openGroupReg(gid) {
+  if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
+  try {
+    await db.collection('groupLessons').doc(gid).update({ isPublic: true, regOpen: true, regOpensAt: '' });
+    delete _editGroupCache[gid];
+    toast('Запись открыта ✓', 'ok');
+    loadGroupLessons();
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
+}
+
 function openGroupModal() {
   if (currentTrainer?.role !== 'admin') { toast('Групповые занятия создаёт администратор', 'err'); return; }
   _setGroupModalReadOnly(false);
@@ -2190,9 +2251,9 @@ function openGroupModal() {
   document.getElementById('grp-venue').value = '';
   document.getElementById('grp-max').value = '';
   document.getElementById('grp-notes').value = '';
-  document.getElementById('grp-public').value = 'false';
+  document.getElementById('grp-openat').value = '';
   document.querySelectorAll('#group-modal .toggle-btn').forEach(b => b.classList.remove('on'));
-  document.getElementById('grp-public-btn-off').classList.add('on');
+  setGrpVis('private');
   document.getElementById('grp-submit').textContent = 'Создать занятие';
   document.getElementById('group-modal-title').textContent = 'Новое групповое занятие';
   _renderGrpAttendBlock(null); // скрываем блок посещаемости
@@ -2239,12 +2300,13 @@ async function openEditGroupModal(groupId, viewMode) {
   // Формат
   const fmt = g.format || 'offline';
   document.getElementById('grp-format').value = fmt;
-  document.getElementById('grp-public').value = g.isPublic ? 'true' : 'false';
   document.querySelectorAll('#group-modal .toggle-btn').forEach(b => b.classList.remove('on'));
   const fmtBtn = document.querySelector(`#group-modal .toggle-btn[onclick*="${fmt}"]`);
   if (fmtBtn) fmtBtn.classList.add('on');
-  const pubBtnId = g.isPublic ? 'grp-public-btn-on' : 'grp-public-btn-off';
-  document.getElementById(pubBtnId)?.classList.add('on');
+  // Видимость: private (не публичное) / open (публичное, запись открыта) / closed (публичное, запись закрыта)
+  const vis = !g.isPublic ? 'private' : (g.regOpen === false ? 'closed' : 'open');
+  document.getElementById('grp-openat').value = g.regOpensAt || '';
+  setGrpVis(vis);
   document.getElementById('grp-submit').textContent = 'Сохранить изменения';
   document.getElementById('group-modal-title').textContent = 'Редактировать занятие';
   // Показываем кнопку удаления
@@ -2327,7 +2389,11 @@ async function submitGroupLesson() {
   const format     = document.getElementById('grp-format').value;
   const notes      = document.getElementById('grp-notes').value.trim();
   const maxStudents = parseInt(document.getElementById('grp-max').value) || null;
-  const isPublic   = document.getElementById('grp-public').value === 'true';
+  // Видимость → флаги: private=скрыто, closed=видно но запись закрыта, open=видно и открыто
+  const vis        = document.getElementById('grp-vis').value;
+  const isPublic   = vis !== 'private';
+  const regOpen    = vis === 'open';
+  const regOpensAt = (vis === 'closed') ? (document.getElementById('grp-openat').value || '') : '';
 
   if (!date)  { toast('Укажи дату', 'err'); return; }
   if (!venue) { toast('Укажи место', 'err'); return; }
@@ -2355,7 +2421,7 @@ async function submitGroupLesson() {
     if (editingGroupId) {
       // ── РЕЖИМ РЕДАКТИРОВАНИЯ ──
       batch.update(db.collection('groupLessons').doc(editingGroupId), {
-        _date: date, time, venue, format, notes, isPublic,
+        _date: date, time, venue, format, notes, isPublic, regOpen, regOpensAt,
         ...(maxStudents ? { maxStudents } : { maxStudents: null }),
         studentEmails: grpSelectedStudents.map(s=>s.email),
         studentNames:  grpSelectedStudents.map(s=>s.name),
@@ -2380,7 +2446,7 @@ async function submitGroupLesson() {
     const grpRef = db.collection('groupLessons').doc();
     batch.set(grpRef, {
       trainerId, trainerName,
-      _date: date, time, venue, format, notes, isPublic,
+      _date: date, time, venue, format, notes, isPublic, regOpen, regOpensAt,
       ...(maxStudents ? { maxStudents } : {}),
       studentEmails: grpSelectedStudents.map(s=>s.email),
       studentNames:  grpSelectedStudents.map(s=>s.name),
@@ -2479,7 +2545,7 @@ async function loadGroupLessons() {
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px">
             <span style="font-size:.75rem;color:var(--text2)">${dt}${timeStr}</span>
             <span style="font-size:.75rem;color:var(--text2)">${g.count||0}${maxStr} уч.</span>
-            ${g.isPublic ? `<span style="font-size:.72rem;background:rgba(74,158,255,.12);color:var(--accent2);border:1px solid rgba(74,158,255,.25);border-radius:10px;padding:1px 7px">🌐 TG</span>` : ''}
+            ${_grpVisBadge(g)}
             <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${g.format==='online'?'Онлайн':'Офлайн'}</span>
             ${approved?`<span class="tag tag-attendance-ok" style="padding:1px 6px">✅ подтверждено</span>`:''}
             ${submitted&&!approved?`<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2);padding:1px 6px">⏳ на проверке</span>`:''}
@@ -2495,6 +2561,7 @@ async function loadGroupLessons() {
             : submitted
               ? `<button onclick="openAttendModal('${gid}')" style="background:${needsApproval?'rgba(74,158,255,.15)':'none'};border:1px solid ${needsApproval?'rgba(74,158,255,.4)':'var(--border)'};border-radius:8px;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.75rem;padding:5px 9px;cursor:pointer">${needsApproval?'✅ Подтвердить':'👁 Просмотр'}</button>`
               : ''}
+          ${isAdmin ? _grpOpenBtn(g, gid) : ''}
           ${canEdit ? `<button data-edit-group-id="${gid}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px">✏️</button>` : ''}
         </div>
       </div>
@@ -2673,7 +2740,7 @@ function histGroupItemHTML(g) {
       <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
       ${approved ? `<span class="tag tag-attendance-ok" style="padding:1px 5px;font-size:.68rem">✅ подтв.</span>` : ''}
       ${submitted&&!approved ? `<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2);padding:1px 5px;font-size:.68rem">⏳ проверка</span>` : ''}
-      ${g.isPublic ? `<span style="font-size:.72rem;background:rgba(74,158,255,.12);color:var(--accent2);border:1px solid rgba(74,158,255,.25);border-radius:10px;padding:1px 7px">🌐 TG</span>` : ''}
+      ${_grpVisBadge(g)}
       ${g.time ? `<span style="font-size:.72rem;color:var(--text2)">🕐 ${g.time}</span>` : ''}
       ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
     </div>
