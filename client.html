@@ -490,16 +490,8 @@ async function saveProfile(){
       }
       msg.style.color = 'var(--green)';
       msg.textContent = d.emailPending
-        ? '✅ Сохранено! Эта почта уже привязана к другому аккаунту — администратор проверит.'
-        : d.emailLinked
-          ? '✅ Сохранено! Покупки привязаны к кабинету.'
-          : '✅ Сохранено!';
-      if (d.emailLinked) {
-        data.email = (d.profile && d.profile.email) || data.email;   // почта подтверждена — блокируем поле сразу
-        const emInp = document.getElementById('pf-email');
-        if (emInp) { emInp.disabled = true; emInp.style.opacity = '.6'; }
-        setTimeout(load, 1500);   // подтянуть привязанный баланс
-      }
+        ? '✅ Сохранено! На эту почту нашлись покупки — администратор проверит и привяжет их.'
+        : '✅ Сохранено!';
     } else msg.textContent = '⚠️ ' + errText(d);
   } catch(e) { msg.textContent = '⚠️ Ошибка сети'; }
   btn.disabled = false;
