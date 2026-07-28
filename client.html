@@ -179,6 +179,8 @@ async function load(){
     }
     data = d;
     slotsData = null; bookDay = null;   // данные обновились — слоты перезапросим
+    // Жёсткий гейт: без заполненной анкеты кабинет не открываем
+    if (!data.profile) { renderGate(); return; }
     renderShell();
   } catch (e) { showError('Ошибка сети', e.message); }
 }
@@ -195,6 +197,23 @@ function renderShell(){
         `<div class="tab ${activeTab===t[0]?'on':''}" onclick="showTab('${t[0]}')"><div class="ico">${t[1]}</div><div class="lbl">${t[2]}</div></div>`).join('')}
     </div>`;
   renderTab();
+}
+
+// Гейт-экран первого входа: анкета на весь экран, без вкладок, пока не заполнено.
+let inGate = false;
+function renderGate(){
+  inGate = true;
+  const promo = data.promoAvailable;
+  app.innerHTML = `
+    <div class="header">
+      <div class="logo">♟</div>
+      <div><h1>Rep Chess Education</h1><div class="sub">${esc(data.name || '')}</div></div>
+    </div>
+    <div class="card" style="border:1px solid var(--accent)">
+      <h2>Давайте познакомимся 👋</h2>
+      <div class="muted">Заполните короткую анкету — и кабинет откроется: расписание недели, запись на занятия и баланс.${promo ? ` <b style="color:var(--accent)">🎁 Первым 20 — бесплатное групповое онлайн-занятие сразу на баланс.</b>` : ''}</div>
+    </div>
+    ${viewProfile()}`;
 }
 
 function showTab(name){
@@ -455,6 +474,20 @@ async function saveProfile(){
       + '&level=' + encodeURIComponent(val('pf-level')));
     if (d.ok) {
       data.profile = d.profile;
+      if (inGate) {
+        inGate = false;
+        if (d.promoGranted) {
+          app.innerHTML = `<div class="center" style="padding:24px;text-align:center">
+            <div style="font-size:2.6rem;margin-bottom:8px">🎁</div>
+            <div style="font-size:1.15rem;font-weight:800;margin-bottom:6px">Поздравляем!</div>
+            <div class="muted" style="margin-bottom:18px">Вам начислено бесплатное <b>групповое онлайн-занятие</b> — оно уже на балансе. Запишитесь на него во вкладке «Запись».</div>
+            <button class="btn btn-acc btn-full" onclick="load()">Открыть кабинет</button>
+          </div>`;
+        } else {
+          load();   // анкета заполнена — перезагружаем кабинет
+        }
+        return;
+      }
       msg.style.color = 'var(--green)';
       msg.textContent = d.emailPending
         ? '✅ Сохранено! На эту почту нашлись покупки — администратор проверит и привяжет их.'
