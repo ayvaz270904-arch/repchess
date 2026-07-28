@@ -494,7 +494,12 @@ async function saveProfile(){
         : d.emailLinked
           ? '✅ Сохранено! Покупки привязаны к кабинету.'
           : '✅ Сохранено!';
-      if (d.emailLinked) setTimeout(load, 1200);   // подтянуть привязанный баланс
+      if (d.emailLinked) {
+        data.email = (d.profile && d.profile.email) || data.email;   // почта подтверждена — блокируем поле сразу
+        const emInp = document.getElementById('pf-email');
+        if (emInp) { emInp.disabled = true; emInp.style.opacity = '.6'; }
+        setTimeout(load, 1500);   // подтянуть привязанный баланс
+      }
     } else msg.textContent = '⚠️ ' + errText(d);
   } catch(e) { msg.textContent = '⚠️ Ошибка сети'; }
   btn.disabled = false;
