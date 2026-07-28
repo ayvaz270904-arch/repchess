@@ -2309,6 +2309,15 @@ async function openEditGroupModal(groupId, viewMode) {
   setGrpVis(vis);
   document.getElementById('grp-submit').textContent = 'Сохранить изменения';
   document.getElementById('group-modal-title').textContent = 'Редактировать занятие';
+  // Выбор тренера — админ может переназначить тренера и при редактировании
+  const isAdminEdit = currentTrainer?.role === 'admin';
+  const gTrainerRow = document.getElementById('grp-trainer-row');
+  if (gTrainerRow) gTrainerRow.style.display = isAdminEdit ? '' : 'none';
+  if (isAdminEdit) {
+    populateTrainerSelect('grp-trainer-sel');
+    const gSel = document.getElementById('grp-trainer-sel');
+    if (gSel) gSel.value = g.trainerId || '';
+  }
   // Показываем кнопку удаления
   let delBtn = document.getElementById('grp-delete-btn');
   if (!delBtn) {
@@ -2399,11 +2408,11 @@ async function submitGroupLesson() {
   if (!venue) { toast('Укажи место', 'err'); return; }
   // Студенты необязательны при создании — добавляются позже через редактирование
 
-  // Для администратора — используем выбранного тренера (только при создании)
+  // Для администратора — используем выбранного тренера (при создании и при редактировании)
   const isAdmin = currentTrainer.role === 'admin';
   let trainerId   = currentUser.uid;
   let trainerName = currentTrainer.name;
-  if (isAdmin && !editingGroupId) {
+  if (isAdmin) {
     const selId = document.getElementById('grp-trainer-sel').value;
     if (!selId) { toast('Выбери тренера', 'err'); return; }
     const selTrainer = _trainersCache.find(t => t.id === selId);
@@ -2421,6 +2430,7 @@ async function submitGroupLesson() {
     if (editingGroupId) {
       // ── РЕЖИМ РЕДАКТИРОВАНИЯ ──
       batch.update(db.collection('groupLessons').doc(editingGroupId), {
+        trainerId, trainerName,
         _date: date, time, venue, format, notes, isPublic, regOpen, regOpensAt,
         ...(maxStudents ? { maxStudents } : { maxStudents: null }),
         studentEmails: grpSelectedStudents.map(s=>s.email),
@@ -2428,9 +2438,9 @@ async function submitGroupLesson() {
         studentIds:    grpSelectedStudents.map(s=>s.id),
         count: grpSelectedStudents.length,
       });
-      // Обновляем связанные индивидуальные записи
+      // Обновляем связанные индивидуальные записи (в т.ч. переназначенного тренера)
       const indSnap = await db.collection('lessons').where('groupLessonId','==',editingGroupId).get();
-      indSnap.docs.forEach(d => batch.update(d.ref, { _date: date, format, notes }));
+      indSnap.docs.forEach(d => batch.update(d.ref, { _date: date, format, notes, trainerId, trainerName }));
       await batch.commit();
       delete _editGroupCache[editingGroupId];
       closeGroupModal();
