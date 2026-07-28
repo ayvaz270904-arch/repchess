@@ -424,15 +424,19 @@ let profGender = '';
 function viewProfile(){
   const p = data.profile || {};
   if (!profGender) profGender = p.gender || '';
-  // Почта, совпадающая с привязкой кабинета, подтверждена — менять её может только администратор
+  // Почта, совпадающая с привязкой кабинета, подтверждена — менять её может только администратор.
+  // Пока почта на подтверждении у администратора (нашлись покупки) — поле тоже заперто.
   const emailVerified = !!(p.email && data.email && p.email === data.email);
+  const emailPend = !emailVerified && !!data.emailPending;
+  const emailLocked = emailVerified || emailPend;
   return `
     <div class="card"><h2>👤 Мой профиль</h2>
       <div class="muted" style="margin-bottom:14px">Анкета помогает подбирать занятия под ваш уровень. Почта дополнительно свяжет с кабинетом покупки, сделанные не с вашего номера.<br><br>Если ученику меньше 18 лет, анкету заполняет родитель или законный представитель — укажите данные ученика.</div>
       <div class="p-row"><div class="p-lbl">ФИО</div><input id="pf-fio" class="inp" value="${esc(p.fio||'')}" placeholder="Иванов Иван" autocomplete="name"></div>
       <div class="p-row"><div class="p-lbl">Почта</div>
-        <input id="pf-email" class="inp" type="email" value="${esc(p.email||'')}" placeholder="you@mail.ru" autocomplete="email" ${emailVerified ? 'disabled style="opacity:.6"' : ''}>
-        ${emailVerified ? '<div style="font-size:.72rem;color:var(--green);margin-top:4px">✅ подтверждена администратором — для изменения напишите нам</div>' : ''}
+        <input id="pf-email" class="inp" type="email" value="${esc(p.email||'')}" placeholder="you@mail.ru" autocomplete="email" ${emailLocked ? 'disabled style="opacity:.6"' : ''}>
+        ${emailVerified ? '<div style="font-size:.72rem;color:var(--green);margin-top:4px">✅ подтверждена администратором — для изменения напишите нам</div>'
+          : emailPend ? '<div style="font-size:.72rem;color:var(--hint);margin-top:4px">⏳ отправлена администратору на подтверждение</div>' : ''}
       </div>
       <div style="display:flex;gap:8px">
         <div class="p-row" style="flex:1"><div class="p-lbl">Возраст</div><input id="pf-age" class="inp" type="number" min="3" max="99" value="${esc(p.age||'')}"></div>
@@ -492,6 +496,12 @@ async function saveProfile(){
       msg.textContent = d.emailPending
         ? '✅ Сохранено! На эту почту нашлись покупки — администратор проверит и привяжет их.'
         : '✅ Сохранено!';
+      // Почта ушла на подтверждение админу — мгновенно блокируем поле (и держим до решения)
+      if (d.emailPending) {
+        data.emailPending = true;
+        const emInp = document.getElementById('pf-email');
+        if (emInp) { emInp.disabled = true; emInp.style.opacity = '.6'; }
+      }
     } else msg.textContent = '⚠️ ' + errText(d);
   } catch(e) { msg.textContent = '⚠️ Ошибка сети'; }
   btn.disabled = false;
