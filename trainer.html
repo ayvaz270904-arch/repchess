@@ -408,6 +408,8 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
           <button class="toggle-btn" id="hist-tab-indiv" onclick="histTab('indiv',this)" style="flex:1;padding:8px">Индив.</button>
           <button class="toggle-btn" id="hist-tab-group" onclick="histTab('group',this)" style="flex:1;padding:8px">Группы</button>
         </div>
+        <!-- Разбивка по тренерам (только админ) -->
+        <div id="hist-breakdown" style="margin-bottom:12px"></div>
         <div class="card">
           <div class="card-head">
             <span class="card-title" id="hist-title">Все занятия</span>
@@ -2591,6 +2593,7 @@ async function loadGroupLessons() {
 //  HISTORY
 // ══════════════════════════════════════════════
 let _histTab = 'all';  // 'all' | 'indiv' | 'group'
+let _histTrainerId = '';  // '' = все тренеры; иначе фильтр истории по конкретному тренеру (админ)
 let _histLessonsCache = [];
 let _histGroupsCache  = [];
 
@@ -2605,6 +2608,7 @@ async function loadHistory() {
   const from = document.getElementById('hist-from').value;
   const to   = document.getElementById('hist-to').value;
   const isAdmin = currentTrainer.role === 'admin';
+  if (isAdmin && !_trainersCache.length) { try { await loadTrainers(); } catch (e) {} }  // имена для разбивки
 
   // Инд. занятия (исключаем per-student записи из групповых)
   const snap = isAdmin
@@ -2630,14 +2634,18 @@ async function loadHistory() {
 
   _histLessonsCache = lessons;
   _histGroupsCache  = groups;
+  renderHistoryList();   // статистика и разбивка по тренерам считаются в рендере (учитывают фильтр)
+}
 
-  // Статистика (lessons уже содержит только индив. занятия)
+// Статистика истории по показанному набору (после фильтра по тренеру)
+function _renderHistStats(lessons, groups) {
+  const el = document.getElementById('hist-stats');
+  if (!el) return;
   const offline = lessons.filter(l=>l.format==='offline').length;
   const online  = lessons.filter(l=>l.format==='online').length;
   const unique  = new Set(lessons.map(l=>l.studentEmail)).size;
   const totalStudentsInGroups = groups.reduce((t,g)=>t+(g.count||0),0);
-
-  document.getElementById('hist-stats').innerHTML = `
+  el.innerHTML = `
     <div class="stat-card sc-blue">
       <div class="stat-label">Инд. занятий</div>
       <div class="stat-val">${lessons.length}</div>
@@ -2653,17 +2661,53 @@ async function loadHistory() {
       <div class="stat-val">${unique}</div>
       <div class="stat-sub">уникальных</div>
     </div>`;
-
-  renderHistoryList();
 }
+
+// Разбивка по тренерам (админ): чипы с кол-вом занятий за период, клик — фильтр списка
+function _renderHistTrainerBreakdown() {
+  const el = document.getElementById('hist-breakdown');
+  if (!el) return;
+  if (currentTrainer.role !== 'admin') { el.innerHTML = ''; return; }
+  // Счётчики по тренерам за текущий период (весь кэш, без фильтра)
+  const cnt = {};
+  _histLessonsCache.forEach(l => { const k=l.trainerId||'—'; (cnt[k]=cnt[k]||{i:0,g:0}).i++; });
+  _histGroupsCache .forEach(g => { const k=g.trainerId||'—'; (cnt[k]=cnt[k]||{i:0,g:0}).g++; });
+  const trainers = _trainersCache.filter(t => t.role !== 'admin');
+  const chip = (id, label, c) => {
+    const on = _histTrainerId === id;
+    const sub = c ? ` · ${c.i}и/${c.g}г` : '';
+    return `<button onclick="histTrainerFilter('${escJs(id)}')" style="padding:6px 10px;border-radius:9px;font-size:.78rem;font-weight:700;cursor:pointer;border:1px solid ${on?'var(--accent)':'var(--border)'};background:${on?'var(--accent)':'var(--surface2)'};color:${on?'#fff':'var(--text)'}">${esc(label)}${sub}</button>`;
+  };
+  let html = `<div style="font-size:.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Разбивка по тренерам</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">` + chip('', 'Все', null);
+  trainers.forEach(t => { html += chip(t.id, t.name || t.email || t.id, cnt[t.id] || {i:0,g:0}); });
+  // Тренеры из занятий, которых уже нет в списке тренеров (уволенные) — показываем как есть
+  Object.keys(cnt).forEach(id => {
+    if (id !== '—' && !trainers.some(t => t.id === id)) {
+      const nm = (_histLessonsCache.find(l=>l.trainerId===id) || _histGroupsCache.find(g=>g.trainerId===id) || {}).trainerName || 'Тренер';
+      html += chip(id, nm, cnt[id]);
+    }
+  });
+  el.innerHTML = html + `</div>`;
+}
+
+function histTrainerFilter(id) { _histTrainerId = id; _histCollapsed = true; renderHistoryList(); }
 
 let _histCollapsed = true;   // по умолчанию свёрнуто до 5 последних
 const HIST_LIMIT = 5;
 function toggleHistCollapse() { _histCollapsed = !_histCollapsed; renderHistoryList(); }
 
 function renderHistoryList() {
-  const lessons = _histLessonsCache;
-  const groups  = _histGroupsCache;
+  const isAdmin = currentTrainer.role === 'admin';
+  let lessons = _histLessonsCache;
+  let groups  = _histGroupsCache;
+  // Разбивка по тренерам (админ): фильтр списка к выбранному тренеру
+  if (isAdmin && _histTrainerId) {
+    lessons = lessons.filter(l => (l.trainerId||'') === _histTrainerId);
+    groups  = groups.filter(g => (g.trainerId||'') === _histTrainerId);
+  }
+  _renderHistStats(lessons, groups);
+  _renderHistTrainerBreakdown();
   const collapsed = _histCollapsed;
   let html = '';
   let count = 0;
