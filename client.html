@@ -156,7 +156,7 @@ const ERRS = {
   expired:'Срок действия сертификата истёк',
   not_linked:'Сначала поделитесь номером телефона в боте',
   bad_fio:'Укажите ФИО', bad_email:'Проверьте адрес почты',
-  email_locked:'Почта подтверждена администратором — для изменения напишите нам',
+  email_locked:'Почту можно изменить только через администратора — напишите нам',
   auth:'Откройте кабинет заново через бота', server:'Ошибка сервера, попробуйте позже'
 };
 function errText(d){ return ERRS[d.error] || d.error || 'ошибка'; }
@@ -428,7 +428,7 @@ function viewProfile(){
   // Пока почта на подтверждении у администратора (нашлись покупки) — поле тоже заперто.
   const emailVerified = !!(p.email && data.email && p.email === data.email);
   const emailPend = !emailVerified && !!data.emailPending;
-  const emailLocked = emailVerified || emailPend;
+  const emailLocked = !!p.email;   // любая уже сохранённая почта — сменить только через админа
   return `
     <div class="card"><h2>👤 Мой профиль</h2>
       <div class="muted" style="margin-bottom:14px">Анкета помогает подбирать занятия под ваш уровень. Почта дополнительно свяжет с кабинетом покупки, сделанные не с вашего номера.<br><br>Если ученику меньше 18 лет, анкету заполняет родитель или законный представитель — укажите данные ученика.</div>
@@ -436,7 +436,8 @@ function viewProfile(){
       <div class="p-row"><div class="p-lbl">Почта</div>
         <input id="pf-email" class="inp" type="email" value="${esc(p.email||'')}" placeholder="you@mail.ru" autocomplete="email" ${emailLocked ? 'disabled style="opacity:.6"' : ''}>
         ${emailVerified ? '<div style="font-size:.72rem;color:var(--green);margin-top:4px">✅ подтверждена администратором — для изменения напишите нам</div>'
-          : emailPend ? '<div style="font-size:.72rem;color:var(--hint);margin-top:4px">⏳ отправлена администратору на подтверждение</div>' : ''}
+          : emailPend ? '<div style="font-size:.72rem;color:var(--hint);margin-top:4px">⏳ отправлена администратору на подтверждение</div>'
+          : emailLocked ? '<div style="font-size:.72rem;color:var(--hint);margin-top:4px">🔒 чтобы изменить почту — напишите нам</div>' : ''}
       </div>
       <div style="display:flex;gap:8px">
         <div class="p-row" style="flex:1"><div class="p-lbl">Возраст</div><input id="pf-age" class="inp" type="number" min="3" max="99" value="${esc(p.age||'')}"></div>
@@ -496,9 +497,9 @@ async function saveProfile(){
       msg.textContent = d.emailPending
         ? '✅ Сохранено! На эту почту нашлись покупки — администратор проверит и привяжет их.'
         : '✅ Сохранено!';
-      // Почта ушла на подтверждение админу — мгновенно блокируем поле (и держим до решения)
-      if (d.emailPending) {
-        data.emailPending = true;
+      // Любую сохранённую почту сразу блокируем (сменить — только через админа)
+      if (d.emailPending) data.emailPending = true;
+      if (val('pf-email')) {
         const emInp = document.getElementById('pf-email');
         if (emInp) { emInp.disabled = true; emInp.style.opacity = '.6'; }
       }
