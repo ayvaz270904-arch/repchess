@@ -301,8 +301,20 @@ function viewGroups(){
     else if (full) action = `<span class="muted">мест нет</span>`;
     else if (!canGroup(g.format)) action = `<span class="muted">нужен групповой пакет</span>`;
     else action = `<button class="btn btn-acc" onclick="joinGroup('${esc(g.id)}')">Записаться</button>`;
+    // Ссылки на онлайн-занятие — записавшимся, за 10 минут до начала
+    let linksHtml = '';
+    if (g.joined && g.format === 'online') {
+      if (g.linksOpen && (g.voiceUrl || g.studioUrl)) {
+        linksHtml = `<div style="display:flex;gap:6px;margin:2px 0 10px;flex-wrap:wrap">
+          ${g.voiceUrl ? `<button class="btn btn-acc" style="flex:1;min-width:130px" onclick="openLink('${esc(g.voiceUrl)}')">🎙 Войс-чат</button>` : ''}
+          ${g.studioUrl ? `<button class="btn btn-ghost" style="flex:1;min-width:130px" onclick="openLink('${esc(g.studioUrl)}')">♟ Студия</button>` : ''}
+        </div>`;
+      } else if (g.hasLinks) {
+        linksHtml = `<div class="muted" style="margin:2px 0 10px;font-size:.8rem">🔗 Ссылки на занятие откроются за 10 минут до начала</div>`;
+      }
+    }
     return `<div class="row"><span>📅 <b>${esc(g.date)}</b>${g.time ? ' · ' + esc(g.time) : ''} · ${fmtIcon}
-      <div class="muted">${esc(g.venue || '')}${g.trainerName ? ' · ' + esc(g.trainerName) : ''} · ${spots} чел.</div></span>${action}</div>`;
+      <div class="muted">${esc(g.venue || '')}${g.trainerName ? ' · ' + esc(g.trainerName) : ''} · ${spots} чел.</div></span>${action}</div>${linksHtml}`;
   }).join('') || '<div class="muted">сейчас открытых занятий нет</div>';
 }
 

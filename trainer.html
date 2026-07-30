@@ -1814,6 +1814,8 @@ function groupFeedItemHTML(g) {
       </div>
       <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
         <span class="lesson-date">${d}</span>
+        ${g.format==='online' && (currentTrainer.role==='admin' || g.trainerId===currentUser.uid)
+          ? `<button onclick="openGroupLinksModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--accent2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Ссылки на онлайн-занятие">🔗</button>` : ''}
         ${!submitted && (pastDate || currentTrainer.role==='admin')
           ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--green);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Отметить посещаемость">📋</button>`
           : needsApproval
@@ -2573,6 +2575,8 @@ async function loadGroupLessons() {
             : submitted
               ? `<button onclick="openAttendModal('${gid}')" style="background:${needsApproval?'rgba(74,158,255,.15)':'none'};border:1px solid ${needsApproval?'rgba(74,158,255,.4)':'var(--border)'};border-radius:8px;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.75rem;padding:5px 9px;cursor:pointer">${needsApproval?'✅ Подтвердить':'👁 Просмотр'}</button>`
               : ''}
+          ${g.format==='online' && (isAdmin || g.trainerId===currentUser.uid)
+            ? `<button onclick="openGroupLinksModal('${gid}')" style="background:none;border:none;cursor:pointer;color:var(--accent2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px" title="Ссылки на онлайн-занятие">🔗</button>` : ''}
           ${isAdmin ? _grpOpenBtn(g, gid) : ''}
           ${canEdit ? `<button data-edit-group-id="${gid}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px">✏️</button>` : ''}
         </div>
@@ -4499,6 +4503,63 @@ function _patchGroupCaches(groupId, updatedG, attendedEmails) {
       }
     });
   }
+}
+
+// Ссылки на онлайн-групповое занятие (войс-чат + студия Lichess).
+// Редактируют админ и тренер этого занятия. Ученику открываются за 10 мин до начала.
+async function openGroupLinksModal(groupId) {
+  let g = _editGroupCache[groupId];
+  if (!g) {
+    try {
+      const doc = await db.collection('groupLessons').doc(groupId).get();
+      if (!doc.exists) { toast('Занятие не найдено', 'err'); return; }
+      g = { id: doc.id, ...doc.data() }; _editGroupCache[groupId] = g;
+    } catch (e) { toast('Ошибка: ' + e.message, 'err'); return; }
+  }
+  const isAdmin = currentTrainer.role === 'admin';
+  if (!isAdmin && g.trainerId !== currentUser.uid) { toast('Ссылки меняет админ или тренер занятия', 'err'); return; }
+
+  let m = document.getElementById('group-links-modal');
+  if (!m) {
+    m = document.createElement('div');
+    m.className = 'overlay'; m.id = 'group-links-modal'; m.style.display = 'none';
+    m.innerHTML = `<div class="modal" style="max-width:440px" onclick="event.stopPropagation()">
+      <div style="font-weight:800;font-size:1.05rem;margin-bottom:4px">🔗 Ссылки на онлайн-занятие</div>
+      <div style="color:var(--text2);font-size:.8rem;margin-bottom:14px">Откроются ученикам в кабинете и придут в бота за 10 минут до начала.</div>
+      <div style="font-size:.8rem;color:var(--text2);margin-bottom:4px">🎙 Войс-чат</div>
+      <input id="gl-voice" type="url" inputmode="url" placeholder="https://..." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px;color:var(--text);font-size:.9rem;margin-bottom:12px">
+      <div style="font-size:.8rem;color:var(--text2);margin-bottom:4px">♟ Студия Lichess</div>
+      <input id="gl-studio" type="url" inputmode="url" placeholder="https://lichess.org/study/..." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px;color:var(--text);font-size:.9rem;margin-bottom:16px">
+      <div style="display:flex;gap:8px">
+        <button onclick="_closeModal('group-links-modal')" style="flex:1;padding:12px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:10px;font-weight:700;cursor:pointer">Отмена</button>
+        <button id="gl-save" onclick="saveGroupLinks()" style="flex:1;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">Сохранить</button>
+      </div>
+      <input type="hidden" id="gl-id">
+    </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click', e => { if (e.target === m) _closeModal('group-links-modal'); });
+  }
+  document.getElementById('gl-id').value = groupId;
+  document.getElementById('gl-voice').value  = g.voiceUrl  || '';
+  document.getElementById('gl-studio').value = g.studioUrl || '';
+  _openModal('group-links-modal');
+}
+
+async function saveGroupLinks() {
+  const groupId  = document.getElementById('gl-id').value;
+  const voiceUrl  = document.getElementById('gl-voice').value.trim();
+  const studioUrl = document.getElementById('gl-studio').value.trim();
+  const badUrl = u => u && !/^https?:\/\//i.test(u);
+  if (badUrl(voiceUrl) || badUrl(studioUrl)) { toast('Ссылка должна начинаться с http:// или https://', 'err'); return; }
+  const btn = document.getElementById('gl-save'); btn.disabled = true; btn.textContent = 'Сохранение...';
+  try {
+    await db.collection('groupLessons').doc(groupId).update({ voiceUrl, studioUrl });
+    if (_editGroupCache[groupId]) { _editGroupCache[groupId].voiceUrl = voiceUrl; _editGroupCache[groupId].studioUrl = studioUrl; }
+    _patchGroupCaches(groupId, { voiceUrl, studioUrl });
+    _closeModal('group-links-modal');
+    toast('Ссылки сохранены ✓', 'ok');
+  } catch (e) { toast('Ошибка: ' + e.message, 'err'); }
+  btn.disabled = false; btn.textContent = 'Сохранить';
 }
 
 async function openAttendModal(groupId) {
