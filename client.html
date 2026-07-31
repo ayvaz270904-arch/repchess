@@ -126,8 +126,9 @@ const POLICY_URL = 'https://repchess.ru/policy';
 const OFFER_URL = 'https://repchess.ru/offer';
 
 // Кнопки покупки на главной: [подпись, ссылка на страницу оплаты]. Пустой список — карточка скрыта.
+// UTM-метки → аналитика сайта (Тильда) видит переходы из бота.
 const BUY_LINKS = [
-  ['Выбрать пакет на сайте', 'https://repchess.ru/education'],
+  ['Выбрать пакет на сайте', 'https://repchess.ru/education?utm_source=telegram&utm_medium=bot_cabinet&utm_campaign=buy'],
 ];
 
 let data = null;          // основной payload кабинета
@@ -140,6 +141,18 @@ function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'
 function fmtRub(n){return String(Math.round(n||0)).replace(/\B(?=(\d{3})+(?!\d))/g,' ')+' ₽';}
 function confirmTg(text, cb){ if (tg && tg.showConfirm) tg.showConfirm(text, ok => { if (ok) cb(); }); else if (confirm(text)) cb(); }
 function api(params){ return fetch(BACKEND + '?' + params + '&initData=' + encodeURIComponent(tg.initData) + '&t=' + Date.now()).then(r => r.json()); }
+
+// Трекинг событий кабинета — fire-and-forget, UI не блокирует, ошибки глотает
+let _openTracked = false;
+function track(event, detail){
+  try {
+    if (!tg || !tg.initData) return;
+    let u = BACKEND + '?action=track&event=' + encodeURIComponent(event);
+    if (detail) u += '&detail=' + encodeURIComponent(String(detail).slice(0, 80));
+    u += '&initData=' + encodeURIComponent(tg.initData) + '&t=' + Date.now();
+    fetch(u).catch(function(){});
+  } catch(e){}
+}
 
 const ERRS = {
   full:'Мест больше нет', already:'Вы уже записаны', past:'Запись на это занятие закрыта',
@@ -179,6 +192,7 @@ async function load(){
     }
     data = d;
     slotsData = null; bookDay = null;   // данные обновились — слоты перезапросим
+    if (!_openTracked) { _openTracked = true; track('open'); }
     // Жёсткий гейт: без заполненной анкеты кабинет не открываем
     if (!data.profile) { renderGate(); return; }
     renderShell();
@@ -218,6 +232,7 @@ function renderGate(){
 
 function showTab(name){
   activeTab = name;
+  track('tab', name);
   document.querySelectorAll('.tab').forEach((el,i) => el.classList.toggle('on', ['home','book','events','history','profile'][i] === name));
   renderTab();
   window.scrollTo(0, 0);
@@ -367,6 +382,7 @@ function setBookDay(dt){ bookDay = dt; renderIndivBook(); }
 function setBookFmt(f){ bookFmt = f; renderIndivBook(); }
 
 function bookSlot(date, time){
+  track('book_indiv');
   const dRu = date.split('-').reverse().slice(0,2).join('.');
   confirmTg(`Записаться на ${dRu} в ${time} (${bookFmt==='online'?'онлайн':'офлайн'})?`, async () => {
     const msg = document.getElementById('book-msg');
@@ -430,6 +446,7 @@ function viewEvents(){
 
 function openLink(url){
   if (!/^https?:\/\//i.test(url)) return;
+  track('link', url);
   // t.me-ссылки открываем внутри Telegram, остальные — во внешнем браузере
   if (tg && tg.openTelegramLink && /^https:\/\/t\.me\//i.test(url)) { tg.openTelegramLink(url); return; }
   if (tg && tg.openLink) tg.openLink(url); else window.open(url, '_blank');
@@ -495,6 +512,7 @@ async function saveProfile(){
       + '&level=' + encodeURIComponent(val('pf-level')));
     if (d.ok) {
       data.profile = d.profile;
+      track('profile_save');
       if (inGate) {
         inGate = false;
         if (d.promoGranted) {
@@ -527,6 +545,7 @@ async function saveProfile(){
 // Поделиться реферальной ссылкой через нативный шэринг Telegram
 function shareRef(){
   const link = data.refLink; if (!link) return;
+  track('ref_share');
   // Ссылку кладём последней строкой самого текста (url-параметр Telegram показывает первым)
   const text = 'Занимаюсь шахматами в Rep Chess Education — присоединяйся! Открой кабинет по ссылке:\n' + link;
   const share = 'https://t.me/share/url?url=&text=' + encodeURIComponent(text);
@@ -566,8 +585,8 @@ async function _groupAction(action, id) {
     if (msg) msg.innerHTML = `<div class="msg-err">⚠️ ${esc(errText(d))}${d.need ? ' (' + esc(d.need) + ')' : ''}</div>`;
   } catch(e) { if (msg) msg.innerHTML = '<div class="msg-err">⚠️ Ошибка сети</div>'; }
 }
-function joinGroup(id) { _groupAction('joinGroup', id); }
-function leaveGroup(id) { confirmTg('Отменить запись на групповое занятие?', () => _groupAction('leaveGroup', id)); }
+function joinGroup(id) { track('group_join'); _groupAction('joinGroup', id); }
+function leaveGroup(id) { track('group_leave'); confirmTg('Отменить запись на групповое занятие?', () => _groupAction('leaveGroup', id)); }
 
 async function redeemCert(){
   const inp = document.getElementById('cert-inp');
@@ -575,6 +594,7 @@ async function redeemCert(){
   const btn = document.getElementById('cert-btn');
   const code = (inp.value || '').toUpperCase().replace(/[^A-Z0-9-]/g, '');
   if (!code) { msg.textContent = 'Введите код с сертификата'; return; }
+  track('cert_redeem');
   btn.disabled = true;
   msg.style.color = '';
   msg.textContent = 'Проверяю код…';
