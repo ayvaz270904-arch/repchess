@@ -527,8 +527,9 @@ async function saveProfile(){
 // Поделиться реферальной ссылкой через нативный шэринг Telegram
 function shareRef(){
   const link = data.refLink; if (!link) return;
-  const text = 'Занимаюсь шахматами в Rep Chess Education — присоединяйся! Открой кабинет по ссылке:';
-  const share = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(text);
+  // Ссылку кладём последней строкой самого текста (url-параметр Telegram показывает первым)
+  const text = 'Занимаюсь шахматами в Rep Chess Education — присоединяйся! Открой кабинет по ссылке:\n' + link;
+  const share = 'https://t.me/share/url?url=&text=' + encodeURIComponent(text);
   if (tg && tg.openTelegramLink) tg.openTelegramLink(share);
   else if (tg && tg.openLink) tg.openLink(share);
   else window.open(share, '_blank');
