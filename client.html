@@ -269,6 +269,10 @@ function viewHome(){
       <div style="display:flex;flex-direction:column;gap:8px">${BUY_LINKS.map(b =>
         `<button class="btn btn-acc btn-full" onclick="openLink('${esc(b[1])}')">${esc(b[0])}</button>`).join('')}</div>
     </div>` : ''}
+    ${data.refLink ? `<div class="card"><h2>🤝 Пригласи друга</h2>
+      <div class="muted" style="margin-bottom:8px">Друг перейдёт по твоей ссылке и оплатит первое занятие — тебе бесплатное <b>групповое онлайн-занятие</b> на баланс.</div>
+      <button class="btn btn-acc btn-full" onclick="shareRef()">Поделиться приглашением</button>
+    </div>` : ''}
     <div class="card"><h2>🎁 Есть сертификат?</h2>
       <div class="muted" style="margin-bottom:8px">Введите код с сертификата — занятия сразу появятся в кабинете.</div>
       <div style="display:flex;gap:8px">
@@ -518,6 +522,16 @@ async function saveProfile(){
     } else msg.textContent = '⚠️ ' + errText(d);
   } catch(e) { msg.textContent = '⚠️ Ошибка сети'; }
   btn.disabled = false;
+}
+
+// Поделиться реферальной ссылкой через нативный шэринг Telegram
+function shareRef(){
+  const link = data.refLink; if (!link) return;
+  const text = 'Занимаюсь шахматами в Rep Chess Education — присоединяйся! Открой кабинет по ссылке:';
+  const share = 'https://t.me/share/url?url=' + encodeURIComponent(link) + '&text=' + encodeURIComponent(text);
+  if (tg && tg.openTelegramLink) tg.openTelegramLink(share);
+  else if (tg && tg.openLink) tg.openLink(share);
+  else window.open(share, '_blank');
 }
 
 // ══════════ ИСТОРИЯ ══════════
