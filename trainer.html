@@ -1260,6 +1260,7 @@ function _closeModal(id) {
 let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 let students = [];          // from  CSV
+let _nickByEmail = {}, _nickByPhone = {};   // ник ТГ из «Лиды»/«Профили» для поиска учеников по нику
 let _trainersCache = [];    // all trainers from Firestore
 let grpSelectedStudents = []; // for group lesson modal
 let editingGroupId = null;
@@ -1462,6 +1463,7 @@ async function showApp() {
   _unknownPayments = [];
   await loadStudents();
   await loadTrainers();
+  loadNickMap();   // карта ников ТГ для поиска (админ, не блокируем загрузку)
   await _enrichStudentsWithRemaining(); // обогащаем s.remaining для всех учеников
   loadHomePage();
   const _savedPage = sessionStorage.getItem('_activePage') || 'home';
@@ -1875,6 +1877,45 @@ function lessonItemHTML(l) {
 // ══════════════════════════════════════════════
 //  STUDENT SEARCH
 // ══════════════════════════════════════════════
+// ── Поиск учеников по нику Telegram ──
+// Ник берём из insights: «Лиды» (Телефон+Ник) и «Профили» (Почта→Ник напрямую или через Chat ID).
+function _np(phone){ const d = String(phone == null ? '' : phone).replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : ''; }
+function _stuNick(s){ return _nickByEmail[String(s && s.email || '').toLowerCase()] || _nickByPhone[_np(s && s.phone)] || ''; }
+function _stuMatch(s, q){
+  const ql = String(q || '').toLowerCase();
+  const nk = _stuNick(s);
+  return s.name.toLowerCase().includes(ql) || String(s.email || '').includes(ql) || (!!nk && nk.includes(ql.replace(/^@/, '')));
+}
+function _buildNickMaps(d){
+  _nickByEmail = {}; _nickByPhone = {};
+  const chatToNick = {};
+  (d && d.leads || []).forEach(function(l){
+    const nick = String(l['Ник'] || '').replace(/^@/, '').toLowerCase().trim();
+    if (!nick) return;
+    const ph = _np(l['Телефон']); if (ph) _nickByPhone[ph] = nick;
+    const cid = String(l['Chat ID'] || '').trim(); if (cid) chatToNick[cid] = nick;
+  });
+  (d && d.profiles || []).forEach(function(p){
+    const email = String(p['Почта'] || '').toLowerCase().trim();
+    if (!email) return;
+    let nick = String(p['Ник'] || '').replace(/^@/, '').toLowerCase().trim();
+    if (!nick) nick = chatToNick[String(p['Chat ID'] || '').trim()] || '';
+    if (nick) _nickByEmail[email] = nick;
+  });
+}
+async function loadNickMap(){
+  if (currentTrainer?.role !== 'admin') return;
+  try {
+    const idToken = await firebase.auth().currentUser.getIdToken();
+    const res = await fetch(_CSV + '?action=insights&token=' + encodeURIComponent(idToken));
+    const txt = await res.text();
+    if (txt === 'Unauthorized' || txt.startsWith('Error:')) return;
+    const d = JSON.parse(txt);
+    _insData = d;   // переиспользуется карточкой «Лиды и профили»
+    _buildNickMaps(d);
+  } catch (e) {}
+}
+
 function searchStudents(q, prefix) {
   const resultsEl = document.getElementById(`${prefix}-student-results`);
   const isAdmin = currentTrainer.role === 'admin';
@@ -1888,7 +1929,7 @@ function searchStudents(q, prefix) {
   }
 
   let matches = q.length > 0
-    ? pool.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase()))
+    ? pool.filter(s => _stuMatch(s, q))
     : pool.slice();
 
   // Для групповых занятий (prefix === 'grp') — сначала те, у кого куплены группы
@@ -3029,9 +3070,7 @@ async function loadTrainerAssignments(trainersSnap) {
 function searchStudentsForAssign(q, trainerId) {
   const resultsEl = document.getElementById(`assign-results-${trainerId}`);
   if (!q || q.length < 2) { resultsEl.style.display='none'; return; }
-  const matches = students.filter(s =>
-    s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase())
-  ).slice(0,6);
+  const matches = students.filter(s => _stuMatch(s, q)).slice(0,6);
   if (!matches.length) { resultsEl.style.display='none'; return; }
   resultsEl.innerHTML = matches.map(s => {
     // Проверяем, закреплён ли ученик за другим тренером
@@ -4338,6 +4377,7 @@ async function openStudentInfoModal(email) {
       <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📦 Куплено: <span style="color:var(--text)">${s.purchased} занятий</span></div>
       ${Object.keys(s.byCat||{}).length ? `<div style="font-size:.78rem;color:var(--text2);margin:-2px 0 6px 22px">${Object.keys(s.byCat).map(k=>`${esc(k)} — <b style="color:var(--text)">${s.byCat[k]}</b>`).join('<br>')}</div>` : ''}
       ${expiryStr ? `<div style="font-size:.82rem;margin-bottom:6px">${expiryStr}</div>` : ''}
+      ${_stuNick(s) ? `<div style="font-size:.82rem;color:var(--text2);margin-top:8px">✈️ Telegram: @${esc(_stuNick(s))}</div>` : ''}
       ${s.phone ? `<div style="margin-top:10px;display:flex;gap:8px;align-items:center">
         <span style="font-size:.82rem;color:var(--text2)">📞 ${esc(s.phone)}</span>
         <button class="copy-btn" onclick="navigator.clipboard.writeText('${escJs(s.phone)}').then(()=>toast('Скопировано','ok'))">Копировать</button>
@@ -4796,7 +4836,7 @@ function searchAttendExpected(q) {
 
   let pool = students;
   let matches = q.length > 0
-    ? pool.filter(s => s.name.toLowerCase().includes(q.toLowerCase()) || s.email.includes(q.toLowerCase()))
+    ? pool.filter(s => _stuMatch(s, q))
     : pool.slice(0, 15);
   // Убираем уже добавленных
   matches = matches.filter(s => !alreadyEmails.has(s.email)).slice(0, 10);
@@ -5470,7 +5510,7 @@ function renderStudentDB(q) {
   let pool = students.slice();
   if (searching) {
     const lq = q.toLowerCase();
-    pool = pool.filter(s => s.name.toLowerCase().includes(lq) || s.email.includes(lq));
+    pool = pool.filter(s => _stuMatch(s, lq));
     pool.sort((a,b) => a.name.localeCompare(b.name, 'ru'));
   } else {
     // По умолчанию — последние 10 добавившихся с активными занятиями
