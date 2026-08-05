@@ -1477,7 +1477,7 @@ async function showApp() {
 // ══════════════════════════════════════════════
 //  LOAD STUDENTS FROM 
 // ══════════════════════════════════════════════
-const _CACHE_KEY = 'repchess__v3';   // v3: byCat + восстановление дат из кэша
+const _CACHE_KEY = 'repchess__v4';   // v4: + tgNick из заявки (сброс старого кэша без ника)
 const _CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
 async function loadStudents() {
@@ -1508,6 +1508,10 @@ async function loadStudents() {
       return;
     }
     const rows = parseCSV(txt);
+    // Ник ТГ из заявки Тильды — авто-определяем колонку по заголовку (полное покрытие по покупателям)
+    const _nickKey = (rows[0] ? Object.keys(rows[0]) : []).find(function(h){
+      return /ник|nick|telegram|телеграм|username|юзер|tg|тг/i.test(h);
+    }) || null;
 
     // Group by email, compute purchased lessons
     const map = {};
@@ -1517,9 +1521,10 @@ async function loadStudents() {
       // Составной ключ email+имя — как в CRM, чтобы подарочные покупки (один email, разные люди) не схлопывались
       const nameLower = (row['Name']||'').toLowerCase().trim();
       const key = email + '||' + nameLower;
-      if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', purchased: 0, purchasedExpired: 0, purchasedGroup: 0, purchasedIndiv: 0, byCat: {}, firstDate: null, nextExpiry: null };
+      if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', tgNick: '', purchased: 0, purchasedExpired: 0, purchasedGroup: 0, purchasedIndiv: 0, byCat: {}, firstDate: null, nextExpiry: null };
       const m = map[key];
       if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
+      if (_nickKey) { const _nk = String(row[_nickKey]||'').trim(); if (_nk) m.tgNick = _nk.replace(/^@/, ''); }
 
       // Check if paid
       if (/tinkoff|sber|pay/i.test(row['paymentid']||'')) {   // оплата = есть транзакция (paymentid); "Оплачено" без него не считаем
@@ -1880,7 +1885,10 @@ function lessonItemHTML(l) {
 // ── Поиск учеников по нику Telegram ──
 // Ник берём из insights: «Лиды» (Телефон+Ник) и «Профили» (Почта→Ник напрямую или через Chat ID).
 function _np(phone){ const d = String(phone == null ? '' : phone).replace(/\D/g, ''); return d.length >= 10 ? d.slice(-10) : ''; }
-function _stuNick(s){ return _nickByEmail[String(s && s.email || '').toLowerCase()] || _nickByPhone[_np(s && s.phone)] || ''; }
+function _stuNick(s){
+  const raw = (s && s.tgNick) || _nickByEmail[String(s && s.email || '').toLowerCase()] || _nickByPhone[_np(s && s.phone)] || '';
+  return String(raw).replace(/^@/, '').toLowerCase();
+}
 function _stuMatch(s, q){
   const ql = String(q || '').toLowerCase();
   const nk = _stuNick(s);
