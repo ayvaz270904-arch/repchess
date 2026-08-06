@@ -1,0 +1,165 @@
+import { retrieveRawInitData, popup } from '@telegram-apps/sdk-react'
+import { BACKEND } from './config'
+import type { Cabinet, IndivSlots, Profile } from './types'
+import { adapt, type RawCabinet, type RawSlots } from './adapt'
+import { MOCK_CABINET } from './mock/cabinet'
+import { MOCK_SLOTS } from './mock/slots'
+
+// В dev подпись initData поддельная — реальный GAS вернул бы auth. Поэтому в dev отдаём мок,
+// в проде (внутри Telegram) — реальные запросы к тому же бэкенду, что и старый client.html.
+const DEV = import.meta.env.DEV
+
+export class ApiError extends Error {
+  code: string
+  constructor(code: string) {
+    super(code)
+    this.code = code
+  }
+}
+
+export type ActionResult = { ok: true } | { ok: false; error?: string; need?: string }
+export type SaveResult = { ok: true; emailPending?: boolean; promoGranted?: boolean } | { ok: false; error?: string }
+export type CertResult = { ok: true; label?: string } | { ok: false; error?: string }
+
+function rawInitData(): string {
+  try {
+    return retrieveRawInitData() || ''
+  } catch {
+    return ''
+  }
+}
+
+async function api<T = unknown>(params: string): Promise<T> {
+  const url = BACKEND + '?' + params + '&initData=' + encodeURIComponent(rawInitData()) + '&t=' + Date.now()
+  let res: Response
+  try {
+    res = await fetch(url)
+  } catch {
+    throw new ApiError('network')
+  }
+  try {
+    return (await res.json()) as T
+  } catch {
+    throw new ApiError('server')
+  }
+}
+
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+export async function fetchCabinet(): Promise<Cabinet> {
+  if (DEV) {
+    await delay(350)
+    return MOCK_CABINET
+  }
+  const raw = await api<RawCabinet>('')
+  if (!raw.ok) throw new ApiError(raw.error || 'server')
+  return adapt(raw)
+}
+
+export async function fetchSlots(): Promise<IndivSlots> {
+  if (DEV) {
+    await delay(250)
+    return MOCK_SLOTS
+  }
+  const raw = await api<RawSlots>('action=indivSlots')
+  if (!raw.ok) throw new ApiError(raw.error || 'server')
+  return {
+    trainer: raw.trainer,
+    canOffline: raw.canOffline,
+    canOnline: raw.canOnline,
+    remaining: raw.remaining,
+    days: raw.days,
+  }
+}
+
+export async function bookIndiv(date: string, time: string, format: 'offline' | 'online'): Promise<ActionResult> {
+  if (DEV) {
+    await delay(400)
+    return { ok: true }
+  }
+  return api('action=bookIndiv&date=' + encodeURIComponent(date) + '&time=' + encodeURIComponent(time) + '&format=' + format)
+}
+
+export async function cancelIndiv(lessonId: string): Promise<ActionResult> {
+  if (DEV) {
+    await delay(400)
+    return { ok: true }
+  }
+  return api('action=cancelIndiv&lessonId=' + encodeURIComponent(lessonId))
+}
+
+export async function joinGroup(id: string): Promise<ActionResult> {
+  if (DEV) {
+    await delay(400)
+    return { ok: true }
+  }
+  return api('action=joinGroup&groupId=' + encodeURIComponent(id))
+}
+
+export async function leaveGroup(id: string): Promise<ActionResult> {
+  if (DEV) {
+    await delay(400)
+    return { ok: true }
+  }
+  return api('action=leaveGroup&groupId=' + encodeURIComponent(id))
+}
+
+export async function saveProfile(p: Profile): Promise<SaveResult> {
+  if (DEV) {
+    await delay(400)
+    return { ok: true }
+  }
+  const q =
+    'action=saveProfile' +
+    '&fio=' + encodeURIComponent(p.fio || '') +
+    '&pemail=' + encodeURIComponent(p.email || '') +
+    '&age=' + encodeURIComponent(p.age || '') +
+    '&gender=' + encodeURIComponent(p.gender || '') +
+    '&city=' + encodeURIComponent(p.city || '') +
+    '&level=' + encodeURIComponent(p.level || '')
+  return api(q)
+}
+
+export async function redeemCert(code: string): Promise<CertResult> {
+  if (DEV) {
+    await delay(400)
+    return { ok: true, label: 'Групп. онлайн ×1' }
+  }
+  return api('action=redeemCert&code=' + encodeURIComponent(code))
+}
+
+// Трекинг — fire-and-forget, только в проде.
+export function track(event: string, detail?: string): void {
+  if (DEV) return
+  try {
+    let u = BACKEND + '?action=track&event=' + encodeURIComponent(event)
+    if (detail) u += '&detail=' + encodeURIComponent(String(detail).slice(0, 80))
+    u += '&initData=' + encodeURIComponent(rawInitData()) + '&t=' + Date.now()
+    fetch(u).catch(() => {})
+  } catch {
+    /* noop */
+  }
+}
+
+// Нативное подтверждение Telegram; вне клиента — window.confirm.
+export async function confirmDialog(message: string): Promise<boolean> {
+  try {
+    if (popup.open.isAvailable()) {
+      const pressed = await popup.open({
+        message,
+        buttons: [
+          { id: 'ok', type: 'default', text: 'Да' },
+          { id: 'cancel', type: 'cancel' },
+        ],
+      })
+      return pressed === 'ok'
+    }
+  } catch {
+    /* упадём в window.confirm */
+  }
+  try {
+    return window.confirm(message)
+  } catch {
+    return true
+  }
+}
