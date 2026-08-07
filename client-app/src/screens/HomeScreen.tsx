@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { List, Section, Cell, Button, Input, LargeTitle, Caption, SegmentedControl } from '@telegram-apps/telegram-ui'
-import type { Cabinet, UpcomingLesson } from '../types'
+import { Button, Input } from '@telegram-apps/telegram-ui'
+import type { Cabinet, BalanceCategory, UpcomingLesson } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { haptic, openUrl, shareReferral } from '../telegram/ui'
 import { redeemCert, cancelIndiv, confirmDialog, track } from '../data'
 import { errText } from '../errors'
+import mascot from '../assets/mascot.svg'
 
 export function HomeScreen({
   data,
@@ -15,12 +16,19 @@ export function HomeScreen({
   onGoBook: () => void
   onReload: () => void
 }) {
-  const [group, setGroup] = useState<'indiv' | 'group'>('indiv')
   const [cert, setCert] = useState('')
   const [certMsg, setCertMsg] = useState('')
   const [certBusy, setCertBusy] = useState(false)
+  const [showCert, setShowCert] = useState(false)
   const [homeMsg, setHomeMsg] = useState('')
-  const cats = data.categories.filter((c) => c.group === group)
+
+  const buy = data.buyLinks[0]
+  const initial = (data.name || '?').trim().charAt(0).toUpperCase() || '?'
+
+  function catLabel(c: BalanceCategory): string {
+    const g = c.group === 'indiv' ? 'Индив.' : 'Групп.'
+    return g + ' ' + (c.title || '').toLowerCase()
+  }
 
   async function redeem() {
     const code = cert.toUpperCase().replace(/[^A-Z0-9-]/g, '')
@@ -58,118 +66,120 @@ export function HomeScreen({
   }
 
   return (
-    <List>
-      <div className="home-head">
-        <LargeTitle weight="1">Кабинет</LargeTitle>
-        <Caption level="1" className="home-sub">
-          {data.name} · {data.role}
-        </Caption>
-      </div>
-
-      <div className="balance-hero">
-        <div className="balance-num">{data.balanceTotal}</div>
-        <Caption level="1" className="balance-cap">
-          занятий на балансе{data.nextExpiry ? ` · действуют до ${data.nextExpiry}` : ''}
-        </Caption>
-      </div>
-
-      {data.balanceTotal > 0 && (
-        <div className="hero-cta">
-          <Button stretched size="l" onClick={() => { haptic(); onGoBook() }}>
-            Записаться на занятие
-          </Button>
+    <div className="home">
+      <div className="home-topbar">
+        <div>
+          <div className="greet">Привет, {data.name}</div>
+          <div className="sub2">Личный кабинет</div>
         </div>
-      )}
-
-      <div className="seg-wrap">
-        <SegmentedControl>
-          <SegmentedControl.Item className="seg-item" selected={group === 'indiv'} onClick={() => setGroup('indiv')}>
-            Личные
-          </SegmentedControl.Item>
-          <SegmentedControl.Item className="seg-item" selected={group === 'group'} onClick={() => setGroup('group')}>
-            Групповые
-          </SegmentedControl.Item>
-        </SegmentedControl>
+        <div className="ava" aria-hidden="true">
+          {initial}
+        </div>
       </div>
 
-      <Section header="Баланс">
-        {cats.map((c) => (
-          <Cell
-            key={c.key}
-            before={<CellIcon name={c.icon} />}
-            subtitle={c.until}
-            after={<span className={'cell-count' + (c.count === 0 ? ' zero' : '')}>{c.count}</span>}
+      <div className="home-hero">
+        <img className="hero-mascot" src={mascot} alt="" aria-hidden="true" />
+        <div className="hero-inner">
+          <div className="hero-num">{data.balanceTotal}</div>
+          <div className="hero-cap">занятий на балансе</div>
+          {data.nextExpiry && <div className="hero-pill">действуют до {data.nextExpiry}</div>}
+        </div>
+      </div>
+
+      <div className="home-cta-wrap">
+        {buy && (
+          <Button
+            stretched
+            size="l"
+            onClick={() => {
+              haptic()
+              track('link', buy[1])
+              openUrl(buy[1])
+            }}
           >
-            {c.title}
-          </Cell>
-        ))}
-      </Section>
-
-      {data.buyLinks.length > 0 && (
-        <Section header="Купить занятия">
-          <div className="section-foot">
-            {data.buyLinks.map((b, i) => (
-              <Button key={i} stretched size="l" onClick={() => { haptic(); track('link', b[1]); openUrl(b[1]) }}>
-                {b[0]}
-              </Button>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      <Section header="Ближайшее">
-        {data.upcoming.length ? (
-          data.upcoming.map((u) => (
-            <Cell
-              key={u.id}
-              multiline
-              before={<CellIcon name="calendar" />}
-              subtitle={[u.type, u.trainerName].filter(Boolean).join(' · ')}
-              after={
-                u.cancellable ? (
-                  <Button size="s" mode="bezeled" onClick={() => cancel(u)}>
-                    Отменить
-                  </Button>
-                ) : undefined
-              }
-            >
-              {u.date}
-              {u.time ? ` · ${u.time}` : ''}
-            </Cell>
-          ))
-        ) : (
-          <Cell>нет запланированных занятий</Cell>
+            Купить пакет
+          </Button>
         )}
-      </Section>
-      {homeMsg && <div className="book-msg" style={{ padding: '0 22px' }}>{homeMsg}</div>}
-
-      {data.refLink && (
-        <Section header="Приведи друга">
-          <Cell multiline before={<CellIcon name="gift" tone="red" />}>
-            Друг перейдёт по твоей ссылке и оплатит первое занятие — тебе бесплатное групповое онлайн-занятие на баланс.
-          </Cell>
-          <div className="section-foot">
-            <Button stretched onClick={() => { haptic(); track('ref_share'); shareReferral(data.refLink!) }}>
-              Поделиться приглашением
+        <button className="ghost-btn" onClick={() => { haptic(); setShowCert((v) => !v) }}>
+          Ввести сертификат
+        </button>
+        {showCert && (
+          <div className="cert-row">
+            <Input
+              className="cert-inp"
+              value={cert}
+              onChange={(e) => setCert(e.currentTarget.value.toUpperCase())}
+              placeholder="REP-XXXX-XX"
+            />
+            <Button size="l" loading={certBusy} onClick={redeem}>
+              OK
             </Button>
           </div>
-        </Section>
+        )}
+        {certMsg && <div className="section-note">{certMsg}</div>}
+      </div>
+
+      <div className="home-sec-title">По направлениям</div>
+      <div className="home-grid">
+        {data.categories.map((c) => (
+          <div className="home-tile" key={c.key}>
+            <div className="tile-top">
+              <CellIcon name={c.group === 'indiv' ? 'user' : 'users'} />
+              <span className={'tile-count' + (c.count === 0 ? ' zero' : '')}>{c.count}</span>
+            </div>
+            <div className="tile-label">{catLabel(c)}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="home-sec-title">Ближайшее занятие</div>
+      {data.upcoming.length ? (
+        <div className="home-next-list">
+          {data.upcoming.map((u) => (
+            <div className="home-next" key={u.id}>
+              <div className="next-date">
+                {u.date}
+                {u.time ? ` · ${u.time}` : ''}
+              </div>
+              <div className="next-meta">{[u.type, u.trainerName].filter(Boolean).join(' · ')}</div>
+              {u.cancellable && (
+                <div className="next-foot">
+                  <button className="next-cancel" onClick={() => cancel(u)}>
+                    Отменить
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="home-empty">Нет запланированных занятий</div>
+      )}
+      {homeMsg && (
+        <div className="book-msg" style={{ padding: '6px 20px 0' }}>
+          {homeMsg}
+        </div>
       )}
 
-      <Section header="Есть сертификат?">
-        <div className="cert-row">
-          <Input
-            className="cert-inp"
-            value={cert}
-            onChange={(e) => setCert(e.currentTarget.value.toUpperCase())}
-            placeholder="REP-XXXX-XX"
-          />
-          <Button size="l" loading={certBusy} onClick={redeem}>
-            OK
-          </Button>
-        </div>
-        {certMsg && <div className="section-note">{certMsg}</div>}
-      </Section>
-    </List>
+      <div className="home-actions">
+        <button className="act-tile" onClick={() => { haptic(); onGoBook() }}>
+          <CellIcon name="calendar" />
+          <span className="act-lbl">Записаться</span>
+        </button>
+        {data.refLink && (
+          <button
+            className="act-tile red"
+            onClick={() => {
+              haptic()
+              track('ref_share')
+              shareReferral(data.refLink!)
+            }}
+          >
+            <CellIcon name="gift" tone="red" />
+            <span className="act-lbl">Пригласить друга</span>
+          </button>
+        )}
+      </div>
+    </div>
   )
 }
