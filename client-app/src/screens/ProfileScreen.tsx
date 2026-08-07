@@ -6,6 +6,33 @@ import { saveProfile } from '../data'
 import { errText } from '../errors'
 import { POLICY_URL, OFFER_URL } from '../config'
 
+// Маска ввода даты рождения: цифры → дд.мм.гггг
+function maskBdate(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 8)
+  const parts: string[] = []
+  if (d.length > 0) parts.push(d.slice(0, 2))
+  if (d.length > 2) parts.push(d.slice(2, 4))
+  if (d.length > 4) parts.push(d.slice(4, 8))
+  return parts.join('.')
+}
+// Валидна ли дата рождения (реальная дата + возраст 3..99)
+function validBdate(s: string): boolean {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(s.trim())
+  if (!m) return false
+  const d = +m[1],
+    mo = +m[2],
+    y = +m[3]
+  const dt = new Date(y, mo - 1, d)
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return false
+  const now = new Date()
+  let age = now.getFullYear() - y
+  if (now.getMonth() < mo - 1 || (now.getMonth() === mo - 1 && now.getDate() < d)) age--
+  return age >= 3 && age <= 99
+}
+function validEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim())
+}
+
 function Field({
   label,
   hint,
@@ -38,7 +65,7 @@ export function ProfileScreen({
   const p = data.profile || {}
   const [fio, setFio] = useState(p.fio || '')
   const [email, setEmail] = useState(p.email || '')
-  const [age, setAge] = useState(p.age ? String(p.age) : '')
+  const [birthdate, setBirthdate] = useState(p.birthdate || '')
   const [city, setCity] = useState(p.city || '')
   const [level, setLevel] = useState(p.level || '')
   const [gender, setGender] = useState<'' | 'м' | 'ж'>(p.gender || '')
@@ -52,10 +79,20 @@ export function ProfileScreen({
       setMsg('⚠️ Укажите ФИО')
       return
     }
+    if (gate) {
+      // Первая анкета — все поля обязательны (включая почту и дату рождения)
+      if (!validBdate(birthdate)) return setMsg('⚠️ Укажите дату рождения (дд.мм.гггг)')
+      if (!gender) return setMsg('⚠️ Укажите пол')
+      if (!city.trim()) return setMsg('⚠️ Укажите город')
+      if (!level.trim()) return setMsg('⚠️ Укажите уровень игры')
+      if (!validEmail(email)) return setMsg('⚠️ Укажите корректную почту')
+    } else if (birthdate && !validBdate(birthdate)) {
+      return setMsg('⚠️ Проверьте дату рождения (дд.мм.гггг)')
+    }
     haptic()
     setBusy(true)
     setMsg('Сохраняю…')
-    const r = await saveProfile({ fio, email, age, gender, city, level })
+    const r = await saveProfile({ fio, email, birthdate, gender, city, level })
     setBusy(false)
     if (r.ok) {
       if (gate) {
@@ -110,14 +147,17 @@ export function ProfileScreen({
             disabled={emailLocked}
           />
         </Field>
-        <div className="field-row">
-          <Field label="Возраст" className="f-age">
-            <Input type="number" value={age} onChange={(e) => setAge(e.currentTarget.value)} placeholder="12" />
-          </Field>
-          <Field label="Город" className="f-city">
-            <Input value={city} onChange={(e) => setCity(e.currentTarget.value)} placeholder="Москва" />
-          </Field>
-        </div>
+        <Field label="Дата рождения" hint="для поздравлений и подарков 🎁">
+          <Input
+            inputMode="numeric"
+            value={birthdate}
+            onChange={(e) => setBirthdate(maskBdate(e.currentTarget.value))}
+            placeholder="дд.мм.гггг"
+          />
+        </Field>
+        <Field label="Город">
+          <Input value={city} onChange={(e) => setCity(e.currentTarget.value)} placeholder="Москва" />
+        </Field>
         <Field label="Пол">
           <SegmentedControl>
             <SegmentedControl.Item selected={gender === 'м'} onClick={() => { selectionHaptic(); setGender(gender === 'м' ? '' : 'м') }}>

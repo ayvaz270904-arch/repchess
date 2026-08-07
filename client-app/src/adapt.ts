@@ -36,6 +36,7 @@ export interface RawCabinet {
     fio?: string
     email?: string
     age?: string | number
+    birthdate?: string
     gender?: string
     city?: string
     level?: string
@@ -118,6 +119,7 @@ export function adapt(raw: RawCabinet): Cabinet {
           fio: raw.profile.fio,
           email: raw.profile.email,
           age: raw.profile.age != null ? String(raw.profile.age) : '',
+          birthdate: raw.profile.birthdate || '',
           gender: raw.profile.gender === 'м' || raw.profile.gender === 'ж' ? raw.profile.gender : '',
           city: raw.profile.city,
           level: raw.profile.level,

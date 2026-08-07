@@ -184,7 +184,7 @@ export async function saveProfile(p: Profile): Promise<SaveResult> {
     'action=saveProfile' +
     '&fio=' + encodeURIComponent(p.fio || '') +
     '&pemail=' + encodeURIComponent(p.email || '') +
-    '&age=' + encodeURIComponent(p.age || '') +
+    '&bdate=' + encodeURIComponent(p.birthdate || '') +
     '&gender=' + encodeURIComponent(p.gender || '') +
     '&city=' + encodeURIComponent(p.city || '') +
     '&level=' + encodeURIComponent(p.level || '')

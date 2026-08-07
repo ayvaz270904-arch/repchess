@@ -110,6 +110,7 @@ export interface Profile {
   fio?: string
   email?: string
   age?: string
+  birthdate?: string // дд.мм.гггг (у новых анкет; у старых остаётся age)
   gender?: '' | 'м' | 'ж'
   city?: string
   level?: string
