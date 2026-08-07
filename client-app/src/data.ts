@@ -46,14 +46,56 @@ async function api<T = unknown>(params: string): Promise<T> {
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
+// ── Кэш кабинета (stale-while-revalidate) ──
+// GAS отвечает медленно (~2с+ оверхед Apps Script). Чтобы повторное открытие было
+// мгновенным, показываем последний известный кабинет из localStorage, а свежий грузим в фоне.
+// Ключ по id пользователя — чтобы на общем устройстве не показать чужой баланс.
+function userKey(): string {
+  try {
+    const u = new URLSearchParams(rawInitData()).get('user')
+    if (u) {
+      const id = JSON.parse(u).id
+      if (id) return String(id)
+    }
+  } catch {
+    /* noop */
+  }
+  return 'anon'
+}
+
+function cabinetCacheKey(): string {
+  return 'rc_cabinet_v1_' + userKey()
+}
+
+export function getCachedCabinet(): Cabinet | null {
+  try {
+    const s = localStorage.getItem(cabinetCacheKey())
+    return s ? (JSON.parse(s) as Cabinet) : null
+  } catch {
+    return null
+  }
+}
+
+function saveCabinetCache(c: Cabinet): void {
+  try {
+    localStorage.setItem(cabinetCacheKey(), JSON.stringify(c))
+  } catch {
+    /* приватный режим / переполнение — не критично */
+  }
+}
+
 export async function fetchCabinet(): Promise<Cabinet> {
+  let c: Cabinet
   if (DEV) {
     await delay(350)
-    return MOCK_CABINET
+    c = MOCK_CABINET
+  } else {
+    const raw = await api<RawCabinet>('')
+    if (!raw.ok) throw new ApiError(raw.error || 'server')
+    c = adapt(raw)
   }
-  const raw = await api<RawCabinet>('')
-  if (!raw.ok) throw new ApiError(raw.error || 'server')
-  return adapt(raw)
+  saveCabinetCache(c)
+  return c
 }
 
 export async function fetchSlots(): Promise<IndivSlots> {

@@ -3,7 +3,7 @@ import { AppRoot, Tabbar, Spinner, Placeholder, Button } from '@telegram-apps/te
 import { subscribeAppearance } from './telegram/env'
 import { haptic } from './telegram/ui'
 import { tabIcons } from './ui/icons'
-import { fetchCabinet, track, ApiError } from './data'
+import { fetchCabinet, getCachedCabinet, track, ApiError } from './data'
 import { errText } from './errors'
 import type { Cabinet } from './types'
 import { HomeScreen } from './screens/HomeScreen'
@@ -39,7 +39,11 @@ export default function App({
 }) {
   const [appearance, setAppearance] = useState<'light' | 'dark'>(initialAppearance)
   const [tab, setTab] = useState<Tab>(initialTab())
-  const [state, setState] = useState<State>({ status: 'loading' })
+  // Мгновенный рендер из кэша (если открывали раньше); свежие данные подтянет reload().
+  const [state, setState] = useState<State>(() => {
+    const cached = getCachedCabinet()
+    return cached ? { status: 'ready', data: cached } : { status: 'loading' }
+  })
 
   const reload = useCallback(async () => {
     try {
