@@ -84,6 +84,31 @@ function saveCabinetCache(c: Cabinet): void {
   }
 }
 
+// ── Кэш индив-слотов (stale-while-revalidate) ──
+// Расписание тренера грузится с GAS при каждом открытии вкладки «Запись». Чтобы не мигать
+// спиннером на каждом свапе, показываем последние известные слоты из localStorage, а свежие
+// тянем в фоне. Устаревший слот при записи отсеет бэкенд (slot_taken/slot_gone → перезагрузка).
+function slotsCacheKey(): string {
+  return 'rc_slots_v1_' + userKey()
+}
+
+export function getCachedSlots(): IndivSlots | null {
+  try {
+    const s = localStorage.getItem(slotsCacheKey())
+    return s ? (JSON.parse(s) as IndivSlots) : null
+  } catch {
+    return null
+  }
+}
+
+function saveSlotsCache(s: IndivSlots): void {
+  try {
+    localStorage.setItem(slotsCacheKey(), JSON.stringify(s))
+  } catch {
+    /* noop */
+  }
+}
+
 export async function fetchCabinet(): Promise<Cabinet> {
   let c: Cabinet
   if (DEV) {
@@ -99,19 +124,23 @@ export async function fetchCabinet(): Promise<Cabinet> {
 }
 
 export async function fetchSlots(): Promise<IndivSlots> {
+  let s: IndivSlots
   if (DEV) {
     await delay(250)
-    return MOCK_SLOTS
+    s = MOCK_SLOTS
+  } else {
+    const raw = await api<RawSlots>('action=indivSlots')
+    if (!raw.ok) throw new ApiError(raw.error || 'server')
+    s = {
+      trainer: raw.trainer,
+      canOffline: raw.canOffline,
+      canOnline: raw.canOnline,
+      remaining: raw.remaining,
+      days: raw.days,
+    }
   }
-  const raw = await api<RawSlots>('action=indivSlots')
-  if (!raw.ok) throw new ApiError(raw.error || 'server')
-  return {
-    trainer: raw.trainer,
-    canOffline: raw.canOffline,
-    canOnline: raw.canOnline,
-    remaining: raw.remaining,
-    days: raw.days,
-  }
+  saveSlotsCache(s)
+  return s
 }
 
 export async function bookIndiv(date: string, time: string, format: 'offline' | 'online'): Promise<ActionResult> {

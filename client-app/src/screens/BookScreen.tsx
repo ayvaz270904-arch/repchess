@@ -1,29 +1,39 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { List, Section, Cell, Button, SegmentedControl, Spinner } from '@telegram-apps/telegram-ui'
 import type { Cabinet, GroupLesson, IndivSlots } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
-import { fetchSlots, bookIndiv, joinGroup, leaveGroup, confirmDialog, track, ApiError } from '../data'
+import { fetchSlots, getCachedSlots, bookIndiv, joinGroup, leaveGroup, confirmDialog, track, ApiError } from '../data'
 import { errText } from '../errors'
 
 export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => void }) {
-  const [slots, setSlots] = useState<IndivSlots | null>(null)
+  // Стартуем из кэша (мгновенно, без спиннера), свежие слоты подтянем фоном.
+  const [slots, setSlots] = useState<IndivSlots | null>(() => getCachedSlots())
+  const slotsRef = useRef(slots)
   const [slotsErr, setSlotsErr] = useState('')
-  const [fmt, setFmt] = useState<'offline' | 'online'>('offline')
-  const [dayDate, setDayDate] = useState('')
+  const [fmt, setFmt] = useState<'offline' | 'online'>(() => {
+    const c = getCachedSlots()
+    return c && !c.canOffline && c.canOnline ? 'online' : 'offline'
+  })
+  const [dayDate, setDayDate] = useState<string>(() => getCachedSlots()?.days[0]?.date ?? '')
   const [bookMsg, setBookMsg] = useState('')
   const [grpMsg, setGrpMsg] = useState('')
 
+  useEffect(() => {
+    slotsRef.current = slots
+  }, [slots])
+
   const loadSlotsData = useCallback(async () => {
-    setSlots(null)
-    setSlotsErr('')
     try {
       const s = await fetchSlots()
       setSlots(s)
-      setFmt(s.canOffline ? 'offline' : 'online')
-      setDayDate(s.days[0]?.date ?? '')
+      setSlotsErr('')
+      // не сбрасываем выбранный формат/день, если они всё ещё валидны
+      setFmt((p) => ((p === 'offline' && s.canOffline) || (p === 'online' && s.canOnline) ? p : s.canOffline ? 'offline' : 'online'))
+      setDayDate((p) => (s.days.some((d) => d.date === p) ? p : s.days[0]?.date ?? ''))
     } catch (e) {
-      setSlotsErr(e instanceof ApiError ? e.code : 'server')
+      // фон упал, но есть кэш — оставляем прошлые слоты; ошибку показываем, только если данных нет вовсе
+      if (!slotsRef.current) setSlotsErr(e instanceof ApiError ? e.code : 'server')
     }
   }, [])
 
