@@ -354,13 +354,18 @@ body {
 /* ── Сертификат ── */
 .cert-row {
   display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 6px 8px;
+  gap: 10px;
+  align-items: stretch;
+  padding: 8px 12px 4px;
 }
 .cert-inp {
   flex: 1;
   min-width: 0;
+}
+/* Кнопка OK одной высоты с полем ввода */
+.cert-row > button {
+  align-self: stretch;
+  min-width: 64px;
 }
 
 @media (prefers-reduced-motion: reduce) {

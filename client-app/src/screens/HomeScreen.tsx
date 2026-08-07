@@ -105,6 +105,18 @@ export function HomeScreen({
         ))}
       </Section>
 
+      {data.buyLinks.length > 0 && (
+        <Section header="Купить занятия">
+          <div className="section-foot">
+            {data.buyLinks.map((b, i) => (
+              <Button key={i} stretched size="l" onClick={() => { haptic(); track('link', b[1]); openUrl(b[1]) }}>
+                {b[0]}
+              </Button>
+            ))}
+          </div>
+        </Section>
+      )}
+
       <Section header="Ближайшее">
         {data.upcoming.length ? (
           data.upcoming.map((u) => (
@@ -152,22 +164,12 @@ export function HomeScreen({
             onChange={(e) => setCert(e.currentTarget.value.toUpperCase())}
             placeholder="REP-XXXX-XX"
           />
-          <Button size="m" loading={certBusy} onClick={redeem}>
+          <Button size="l" loading={certBusy} onClick={redeem}>
             OK
           </Button>
         </div>
         {certMsg && <div className="section-note">{certMsg}</div>}
       </Section>
-
-      {data.buyLinks.length > 0 && (
-        <div className="screen-foot">
-          {data.buyLinks.map((b, i) => (
-            <Button key={i} stretched size="l" mode="bezeled" onClick={() => { track('link', b[1]); openUrl(b[1]) }}>
-              {b[0]}
-            </Button>
-          ))}
-        </div>
-      )}
     </List>
   )
 }
