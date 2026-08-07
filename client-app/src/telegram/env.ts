@@ -147,6 +147,15 @@ export function bootstrapTelegram(): void {
           } catch {
             /* noop */
           }
+          // Полноэкранный режим (Bot API 8.0+). Где не поддержано (десктоп/старый клиент) —
+          // тихо игнорируем. Контент под бровью закрывают safe-area инсеты в styles.css.
+          try {
+            if (viewport.requestFullscreen.isAvailable()) {
+              viewport.requestFullscreen().catch(() => {})
+            }
+          } catch {
+            /* noop */
+          }
         })
         .catch(() => {})
     }
