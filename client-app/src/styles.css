@@ -362,6 +362,23 @@ body {
   color: var(--rc-red, #c94a42);
 }
 
+/* Заголовок экрана (Запись/Афиша/История/Профиль) — в стиле Главной */
+.screen-title {
+  padding: 10px 20px 6px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
+  color: var(--tgui--text_color, #f4f4f5);
+}
+.screen-title .st-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--tgui--hint_color, #8b8b92);
+}
+
 .seg-wrap {
   padding: 14px 16px 2px;
 }

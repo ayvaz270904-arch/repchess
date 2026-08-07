@@ -1,4 +1,4 @@
-import { List, Section, Cell, LargeTitle } from '@telegram-apps/telegram-ui'
+import { List, Section, Cell } from '@telegram-apps/telegram-ui'
 import type { Cabinet } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 
@@ -9,11 +9,10 @@ function money(n: number): string {
 export function HistoryScreen({ data }: { data: Cabinet }) {
   return (
     <List>
-      <div className="screen-head">
-        <LargeTitle weight="1">История</LargeTitle>
-      </div>
+      <div className="screen-title">История</div>
 
-      <Section header="Занятия">
+      <div className="home-sec-title">Занятия</div>
+      <Section>
         {data.lessonHistory.length ? (
           data.lessonHistory.map((h) => (
             <Cell
@@ -41,7 +40,8 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
         )}
       </Section>
 
-      <Section header="Покупки">
+      <div className="home-sec-title">Покупки</div>
+      <Section>
         {data.purchaseHistory.length ? (
           data.purchaseHistory.map((p) => (
             <Cell

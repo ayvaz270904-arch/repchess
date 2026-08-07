@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { List, Section, Input, Button, LargeTitle, Caption, SegmentedControl } from '@telegram-apps/telegram-ui'
+import { List, Section, Input, Button, Caption, SegmentedControl } from '@telegram-apps/telegram-ui'
 import type { Cabinet } from '../types'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
 import { saveProfile } from '../data'
@@ -85,9 +85,7 @@ export function ProfileScreen({
     <List>
       {gate ? (
         <>
-          <div className="screen-head">
-            <LargeTitle weight="1">Знакомимся 👋</LargeTitle>
-          </div>
+          <div className="screen-title">Знакомимся 👋</div>
           <div className="gate-intro">
             Заполните короткую анкету — и кабинет откроется: расписание недели, запись на занятия и баланс.
             {data.promoAvailable && (
@@ -96,9 +94,7 @@ export function ProfileScreen({
           </div>
         </>
       ) : (
-        <div className="screen-head">
-          <LargeTitle weight="1">Профиль</LargeTitle>
-        </div>
+        <div className="screen-title">Профиль</div>
       )}
 
       <Section footer="Анкета помогает подбирать занятия под уровень. Если ученику меньше 18 лет — анкету заполняет родитель или законный представитель, укажите данные ученика.">

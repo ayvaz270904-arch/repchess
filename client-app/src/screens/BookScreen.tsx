@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { List, Section, Cell, Button, LargeTitle, SegmentedControl, Spinner } from '@telegram-apps/telegram-ui'
+import { List, Section, Cell, Button, SegmentedControl, Spinner } from '@telegram-apps/telegram-ui'
 import type { Cabinet, GroupLesson, IndivSlots } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
@@ -80,11 +80,10 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
 
   return (
     <List>
-      <div className="screen-head">
-        <LargeTitle weight="1">Запись</LargeTitle>
-      </div>
+      <div className="screen-title">Запись</div>
 
-      <Section header="Индивидуальное занятие" footer={slots?.trainer ? `Тренер: ${slots.trainer}` : undefined}>
+      <div className="home-sec-title">Индивидуальное занятие</div>
+      <Section footer={slots?.trainer ? `Тренер: ${slots.trainer}` : undefined}>
         {slotsErr ? (
           <Cell multiline>{errText(slotsErr)}</Cell>
         ) : !slots ? (
@@ -96,7 +95,8 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
         )}
       </Section>
 
-      <Section header="Групповые занятия">
+      <div className="home-sec-title">Групповые занятия</div>
+      <Section>
         {data.openGroups.length ? (
           data.openGroups.map((g) => <GroupRow key={g.id} g={g} onJoin={join} onLeave={leave} />)
         ) : (

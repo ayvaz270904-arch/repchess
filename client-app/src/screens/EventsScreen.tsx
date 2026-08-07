@@ -1,4 +1,4 @@
-import { List, Section, Cell, Button, LargeTitle, Placeholder } from '@telegram-apps/telegram-ui'
+import { List, Section, Cell, Button, Placeholder } from '@telegram-apps/telegram-ui'
 import type { Cabinet } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { openUrl, haptic } from '../telegram/ui'
@@ -9,9 +9,7 @@ export function EventsScreen({ data }: { data: Cabinet }) {
   if (!s || !s.days.length) {
     return (
       <List>
-        <div className="screen-head">
-          <LargeTitle weight="1">Афиша</LargeTitle>
-        </div>
+        <div className="screen-title">Афиша</div>
         <Placeholder header="Скоро" description="Расписание на неделю появится здесь, как только выйдет в канале.">
           <div style={{ fontSize: 48 }}>📅</div>
         </Placeholder>
@@ -21,9 +19,7 @@ export function EventsScreen({ data }: { data: Cabinet }) {
 
   return (
     <List>
-      <div className="screen-head">
-        <LargeTitle weight="1">Афиша</LargeTitle>
-      </div>
+      <div className="screen-title">Афиша</div>
 
       {s.days.map((d) => (
         <Section key={d.date} header={d.label}>
