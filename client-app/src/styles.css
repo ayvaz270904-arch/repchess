@@ -22,14 +22,58 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ── Фирменный цвет Rep Chess (#C94A42) как акцент telegram-ui ──
-   Перекрываем accent-переменные прямо на AppRoot (.app-brand), !important — чтобы
-   победить собственные значения библиотеки (которые по умолчанию телеграмный синий). */
+/* ══ Тема «Шахматный набор»: чёрно-белый базис + красный акцент + узор доски ══
+   Перекрываем токены telegram-ui прямо на AppRoot (.app-brand), !important — чтобы
+   победить дефолтные (телеграмный сине-серый). Базис отдельно для тёмной/светлой. */
 .app-brand {
-  --tgui--link_color: #c94a42 !important;
-  --tgui--button_color: #c94a42 !important;
-  --tgui--accent_text_color: #c94a42 !important;
-  --tgui--primary_code_highlight: #c94a42 !important;
+  --rc-red: #e23a3a;
+  --tgui--link_color: var(--rc-red) !important;
+  --tgui--button_color: var(--rc-red) !important;
+  --tgui--accent_text_color: var(--rc-red) !important;
+  --tgui--primary_code_highlight: var(--rc-red) !important;
+  --tgui--button_text_color: #ffffff !important;
+}
+
+/* Тёмная — чёрный базис, белый текст (белые фигуры на чёрном) */
+.app-brand.app-dark {
+  --tgui--bg_color: #0c0c0e !important;
+  --tgui--secondary_bg_color: #0c0c0e !important;
+  --tgui--header_bg_color: #0c0c0e !important;
+  --tgui--section_bg_color: #17171a !important;
+  --tgui--tertiary_bg_color: #17171a !important;
+  --tgui--surface_primary: #17171a !important;
+  --tgui--card_bg_color: #17171a !important;
+  --tgui--text_color: #f4f4f5 !important;
+  --tgui--hint_color: #8b8b92 !important;
+  --tgui--subtitle_text_color: #8b8b92 !important;
+  --tgui--section_header_text_color: #8b8b92 !important;
+  --tgui--section_separator_color: rgba(255, 255, 255, 0.07) !important;
+  --tgui--divider: rgba(255, 255, 255, 0.07) !important;
+  --tgui--secondary_fill: rgba(255, 255, 255, 0.06) !important;
+  --rc-board-sq: rgba(255, 255, 255, 0.05);
+  --rc-chip-bg: rgba(255, 255, 255, 0.09);
+  --rc-chip-fg: #eaeaec;
+}
+
+/* Светлая — белый базис, чёрный текст (чёрные фигуры на белом) */
+.app-brand.app-light {
+  --tgui--bg_color: #f2f2f3 !important;
+  --tgui--secondary_bg_color: #f2f2f3 !important;
+  --tgui--header_bg_color: #f2f2f3 !important;
+  --tgui--section_bg_color: #ffffff !important;
+  --tgui--tertiary_bg_color: #ffffff !important;
+  --tgui--surface_primary: #ffffff !important;
+  --tgui--card_bg_color: #ffffff !important;
+  --tgui--text_color: #141416 !important;
+  --tgui--hint_color: #76767c !important;
+  --tgui--subtitle_text_color: #76767c !important;
+  --tgui--section_header_text_color: #76767c !important;
+  --tgui--section_separator_color: rgba(0, 0, 0, 0.08) !important;
+  --tgui--divider: rgba(0, 0, 0, 0.08) !important;
+  --tgui--secondary_fill: rgba(0, 0, 0, 0.05) !important;
+  --rc-board-sq: rgba(0, 0, 0, 0.05);
+  --rc-chip-bg: rgba(0, 0, 0, 0.06);
+  --rc-chip-fg: #33333a;
 }
 
 html,
@@ -78,14 +122,35 @@ body {
 }
 
 .balance-hero {
-  padding: 12px 22px 4px;
+  position: relative;
+  overflow: hidden;
+  padding: 16px 22px 8px;
+}
+/* Тонкий узор шахматной доски за балансом, мягко угасающий */
+.balance-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: conic-gradient(
+    var(--rc-board-sq, rgba(255, 255, 255, 0.05)) 25%,
+    transparent 0 50%,
+    var(--rc-board-sq, rgba(255, 255, 255, 0.05)) 0 75%,
+    transparent 0
+  );
+  background-size: 34px 34px;
+  -webkit-mask-image: radial-gradient(115% 90% at 22% 42%, #000 0%, transparent 68%);
+  mask-image: radial-gradient(115% 90% at 22% 42%, #000 0%, transparent 68%);
+  pointer-events: none;
+}
+.balance-hero > * {
+  position: relative;
 }
 .balance-num {
-  font-size: 46px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
   line-height: 1;
-  color: var(--tgui--link_color, #c94a42);
+  color: var(--rc-red, #e23a3a);
   font-variant-numeric: tabular-nums;
 }
 .balance-cap {
@@ -106,9 +171,13 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
-  color: #fff;
   flex-shrink: 0;
+  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.1));
+  color: var(--rc-chip-fg, #eaeaec);
+}
+.cell-icon-red {
+  background: color-mix(in srgb, var(--rc-red, #e23a3a) 15%, transparent);
+  color: var(--rc-red, #e23a3a);
 }
 .cell-count {
   font-size: 16px;
@@ -285,12 +354,12 @@ body {
   white-space: nowrap;
 }
 .pill-ok {
-  color: #1f9d55;
-  background: rgba(34, 197, 94, 0.14);
+  color: var(--tgui--hint_color, #8b8b92);
+  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.08));
 }
 .pill-warn {
-  color: #d1852f;
-  background: rgba(249, 115, 22, 0.14);
+  color: var(--rc-red, #e23a3a);
+  background: color-mix(in srgb, var(--rc-red, #e23a3a) 15%, transparent);
 }
 .cell-price {
   font-size: 14px;

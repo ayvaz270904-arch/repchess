@@ -60,15 +60,15 @@ const PATHS: Record<IconName, ReactElement> = {
   ),
 }
 
-export function CellIcon({ name, color }: { name: IconName; color: string }) {
+export function CellIcon({ name, tone = 'neutral' }: { name: IconName; tone?: 'neutral' | 'red' }) {
   return (
-    <span className="cell-icon" style={{ background: color }}>
+    <span className={'cell-icon' + (tone === 'red' ? ' cell-icon-red' : '')}>
       <svg
         width="17"
         height="17"
         viewBox="0 0 24 24"
         fill="none"
-        stroke="#fff"
+        stroke="currentColor"
         strokeWidth="1.9"
         strokeLinecap="round"
         strokeLinejoin="round"

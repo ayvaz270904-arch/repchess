@@ -68,7 +68,7 @@ export default function App({
   }
 
   const shell = (children: ReactNode) => (
-    <AppRoot className="app-brand" platform={platform} appearance={appearance}>
+    <AppRoot className={`app-brand app-${appearance}`} platform={platform} appearance={appearance}>
       {children}
     </AppRoot>
   )

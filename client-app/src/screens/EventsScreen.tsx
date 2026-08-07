@@ -53,7 +53,7 @@ export function EventsScreen({ data }: { data: Cabinet }) {
         <Section>
           <Cell
             multiline
-            before={<CellIcon name="gift" color="#e8a13a" />}
+            before={<CellIcon name="gift" tone="red" />}
             onClick={s.note.url ? () => openUrl(s.note!.url!) : undefined}
             after={s.note.url ? <span className="chev">›</span> : undefined}
           >

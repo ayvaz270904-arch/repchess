@@ -187,7 +187,6 @@ function GroupRow({
   onLeave: (g: GroupLesson) => void
 }) {
   const iconName = g.format === 'online' ? 'globe' : 'pin'
-  const color = g.format === 'online' ? '#a98bff' : '#e8a13a'
   const spots = g.max ? `${g.count}/${g.max} чел.` : `${g.count} чел.`
   const sub = [g.venue, g.trainerName, spots].filter(Boolean).join(' · ')
   const full = !!g.max && g.count >= g.max
@@ -218,7 +217,7 @@ function GroupRow({
 
   return (
     <>
-      <Cell multiline before={<CellIcon name={iconName} color={color} />} subtitle={sub} after={after}>
+      <Cell multiline before={<CellIcon name={iconName} />} subtitle={sub} after={after}>
         {g.date}
         {g.time ? ` · ${g.time}` : ''} · {g.format === 'online' ? 'онлайн' : 'офлайн'}
       </Cell>

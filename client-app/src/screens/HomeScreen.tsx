@@ -96,7 +96,7 @@ export function HomeScreen({
         {cats.map((c) => (
           <Cell
             key={c.key}
-            before={<CellIcon name={c.icon} color={c.color} />}
+            before={<CellIcon name={c.icon} />}
             subtitle={c.until}
             after={<span className={'cell-count' + (c.count === 0 ? ' zero' : '')}>{c.count}</span>}
           >
@@ -123,7 +123,7 @@ export function HomeScreen({
             <Cell
               key={u.id}
               multiline
-              before={<CellIcon name="calendar" color="#e8a13a" />}
+              before={<CellIcon name="calendar" />}
               subtitle={[u.type, u.trainerName].filter(Boolean).join(' · ')}
               after={
                 u.cancellable ? (
@@ -145,7 +145,7 @@ export function HomeScreen({
 
       {data.refLink && (
         <Section header="Приведи друга">
-          <Cell multiline before={<CellIcon name="gift" color="#c94a42" />}>
+          <Cell multiline before={<CellIcon name="gift" tone="red" />}>
             Друг перейдёт по твоей ссылке и оплатит первое занятие — тебе бесплатное групповое онлайн-занятие на баланс.
           </Cell>
           <div className="section-foot">

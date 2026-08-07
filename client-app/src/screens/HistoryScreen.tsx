@@ -22,7 +22,7 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
               before={
                 <CellIcon
                   name={h.status === 'absent' ? 'clock' : 'check'}
-                  color={h.status === 'absent' ? '#8a8f9c' : '#22c55e'}
+                  tone={h.status === 'absent' ? 'red' : 'neutral'}
                 />
               }
               subtitle={h.notes}
@@ -47,7 +47,7 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
             <Cell
               key={p.id}
               multiline
-              before={<CellIcon name="card" color={p.expired ? '#8a8f9c' : '#2ea6ff'} />}
+              before={<CellIcon name="card" />}
               subtitle={p.date + (p.expired ? ' · истёк' : '')}
               after={<span className="cell-price">{money(p.price)}</span>}
             >
