@@ -177,12 +177,11 @@ body {
 }
 .hero-mascot {
   position: absolute;
-  right: -46px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 150px;
+  top: 14px;
+  right: 14px;
+  width: 82px;
   height: auto;
-  opacity: 0.22;
+  opacity: 0.6;
   z-index: 0;
   pointer-events: none;
 }
