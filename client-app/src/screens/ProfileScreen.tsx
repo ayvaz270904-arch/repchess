@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { List, Section, Input, Button, Caption, SegmentedControl } from '@telegram-apps/telegram-ui'
 import type { Cabinet } from '../types'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
-import { saveProfile } from '../data'
+import { saveProfile, userPhoto } from '../data'
 import { errText } from '../errors'
 import { POLICY_URL, OFFER_URL, HELPER_URL } from '../config'
 import mascot from '../assets/mascot.svg'
@@ -136,6 +136,7 @@ export function ProfileScreen({
     { pc: '♜', label: 'Командный', earned: groupDone >= 1 },
     { pc: '♛', label: 'Мастер', earned: doneCount >= 25 },
   ]
+  const photo = userPhoto()
 
   return (
     <List>
@@ -157,7 +158,11 @@ export function ProfileScreen({
         <>
           <div className="prof-header">
             <div className="prof-ava">
-              <img src={mascot} alt="" aria-hidden="true" />
+              {photo ? (
+                <img className="ava-photo" src={photo} alt="" />
+              ) : (
+                <img src={mascot} alt="" aria-hidden="true" />
+              )}
             </div>
             <div className="prof-info">
               <div className="prof-name">{p.fio || data.name}</div>

@@ -3,7 +3,7 @@ import { Button, Input } from '@telegram-apps/telegram-ui'
 import type { Cabinet, BalanceCategory, UpcomingLesson } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { haptic, openUrl, shareReferral } from '../telegram/ui'
-import { redeemCert, cancelIndiv, confirmDialog, track } from '../data'
+import { redeemCert, cancelIndiv, confirmDialog, track, userPhoto } from '../data'
 import { errText } from '../errors'
 import mascot from '../assets/mascot.svg'
 
@@ -24,6 +24,7 @@ export function HomeScreen({
 
   const buy = data.buyLinks[0]
   const initial = (data.name || '?').trim().charAt(0).toUpperCase() || '?'
+  const photo = userPhoto()
 
   function catLabel(c: BalanceCategory): string {
     const g = c.group === 'indiv' ? 'Индив.' : 'Групп.'
@@ -73,7 +74,7 @@ export function HomeScreen({
           <div className="sub2">Личный кабинет</div>
         </div>
         <div className="ava" aria-hidden="true">
-          {initial}
+          {photo ? <img className="ava-photo" src={photo} alt="" /> : initial}
         </div>
       </div>
 

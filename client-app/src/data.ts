@@ -63,6 +63,20 @@ function userKey(): string {
   return 'anon'
 }
 
+// Фото профиля из Telegram (если пользователь его открыл боту) — иначе '' и покажем маскот.
+export function userPhoto(): string {
+  try {
+    const u = new URLSearchParams(rawInitData()).get('user')
+    if (u) {
+      const p = JSON.parse(u).photo_url
+      if (p) return String(p)
+    }
+  } catch {
+    /* noop */
+  }
+  return ''
+}
+
 function cabinetCacheKey(): string {
   return 'rc_cabinet_v1_' + userKey()
 }
