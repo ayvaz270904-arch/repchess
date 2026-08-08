@@ -565,6 +565,21 @@ body {
   color: var(--tgui--text_color, #fff);
   font-variant-numeric: tabular-nums;
 }
+/* Подсветка сегодняшних событий */
+.ev-time.ev-today {
+  color: var(--rc-red, #c94a42);
+}
+.ev-badge-today {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rc-red, #c94a42);
+  background: color-mix(in srgb, var(--rc-red, #c94a42) 14%, transparent);
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin-left: 6px;
+  text-transform: none;
+  letter-spacing: 0;
+}
 
 /* ── История: пилюли статуса и цена ── */
 .pill {
@@ -661,6 +676,170 @@ body {
 .cert-row > button {
   align-self: stretch;
   min-width: 64px;
+}
+
+/* ── Наполнение: стат-карточки (История) ── */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 6px 16px 6px;
+}
+.stat-card {
+  background: var(--tgui--card_bg_color, #17171a);
+  border: 1px solid rgba(128, 128, 128, 0.14);
+  border-radius: 14px;
+  padding: 14px 8px;
+  text-align: center;
+}
+.stat-num {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--tgui--text_color, #f4f4f5);
+  font-variant-numeric: tabular-nums;
+}
+.stat-lbl {
+  font-size: 11.5px;
+  color: var(--tgui--hint_color, #8b8b92);
+  margin-top: 6px;
+}
+
+/* ── Пустое состояние с маскотом ── */
+.mascot-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 26px 20px 30px;
+  text-align: center;
+}
+.mascot-empty img {
+  width: 96px;
+  height: auto;
+  opacity: 0.5;
+}
+.mascot-empty-txt {
+  font-size: 14px;
+  color: var(--tgui--hint_color, #8b8b92);
+  max-width: 260px;
+  line-height: 1.45;
+}
+
+/* ── Профиль: шапка + ачивки ── */
+.prof-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 4px 16px 8px;
+  padding: 16px;
+  background: var(--tgui--card_bg_color, #17171a);
+  border: 1px solid rgba(128, 128, 128, 0.14);
+  border-radius: 16px;
+}
+.prof-ava {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.09));
+  overflow: hidden;
+}
+.prof-ava img {
+  width: 46px;
+  height: auto;
+  opacity: 0.9;
+}
+.prof-info {
+  min-width: 0;
+}
+.prof-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--tgui--text_color, #f4f4f5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prof-badge {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rc-red, #c94a42);
+  background: color-mix(in srgb, var(--rc-red, #c94a42) 14%, transparent);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.ach-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 16px 10px;
+}
+.ach {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  color: var(--tgui--text_color, #f4f4f5);
+  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.06));
+}
+.ach .pc {
+  font-size: 15px;
+  line-height: 1;
+}
+.ach.locked {
+  color: var(--tgui--hint_color, #8b8b92);
+  background: transparent;
+  opacity: 0.6;
+}
+.ach.earned {
+  border-color: color-mix(in srgb, var(--rc-red, #c94a42) 45%, transparent);
+  background: color-mix(in srgb, var(--rc-red, #c94a42) 12%, transparent);
+  color: var(--rc-red, #c94a42);
+}
+
+/* ── Запись: карточка тренера ── */
+.trainer-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 16px 10px;
+  padding: 12px 14px;
+  background: var(--tgui--card_bg_color, #17171a);
+  border: 1px solid rgba(128, 128, 128, 0.14);
+  border-radius: 14px;
+}
+.trainer-ava {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.09));
+  color: var(--rc-chip-fg, #eaeaec);
+  font-weight: 700;
+  font-size: 16px;
+}
+.trainer-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--tgui--text_color, #f4f4f5);
+}
+.trainer-role {
+  font-size: 12.5px;
+  color: var(--tgui--hint_color, #8b8b92);
+  margin-top: 1px;
 }
 
 @media (prefers-reduced-motion: reduce) {

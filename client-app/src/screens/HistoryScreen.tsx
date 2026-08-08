@@ -1,20 +1,42 @@
 import { List, Section, Cell } from '@telegram-apps/telegram-ui'
 import type { Cabinet } from '../types'
 import { CellIcon } from '../ui/CellIcon'
+import { MascotEmpty } from '../ui/MascotEmpty'
 
 function money(n: number): string {
   return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' ₽'
 }
 
 export function HistoryScreen({ data }: { data: Cabinet }) {
+  const done = data.lessonHistory.filter((h) => h.status === 'done').length
+  const absent = data.lessonHistory.filter((h) => h.status === 'absent').length
+  const purchases = data.purchaseHistory.length
+
   return (
     <List>
       <div className="screen-title">История</div>
 
+      {data.lessonHistory.length > 0 && (
+        <div className="stat-strip">
+          <div className="stat-card">
+            <div className="stat-num">{done}</div>
+            <div className="stat-lbl">Пройдено</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-num">{absent}</div>
+            <div className="stat-lbl">Пропущено</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-num">{purchases}</div>
+            <div className="stat-lbl">Покупок</div>
+          </div>
+        </div>
+      )}
+
       <div className="home-sec-title">Занятия</div>
-      <Section>
-        {data.lessonHistory.length ? (
-          data.lessonHistory.map((h) => (
+      {data.lessonHistory.length ? (
+        <Section>
+          {data.lessonHistory.map((h) => (
             <Cell
               key={h.id}
               multiline
@@ -34,16 +56,16 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
               {h.date}
               {h.time ? ` · ${h.time}` : ''} · {h.type}
             </Cell>
-          ))
-        ) : (
-          <Cell>занятий пока не было</Cell>
-        )}
-      </Section>
+          ))}
+        </Section>
+      ) : (
+        <MascotEmpty text="Занятий пока не было — запишись на первое!" />
+      )}
 
       <div className="home-sec-title">Покупки</div>
-      <Section>
-        {data.purchaseHistory.length ? (
-          data.purchaseHistory.map((p) => (
+      {data.purchaseHistory.length ? (
+        <Section>
+          {data.purchaseHistory.map((p) => (
             <Cell
               key={p.id}
               multiline
@@ -53,11 +75,11 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
             >
               {p.label}
             </Cell>
-          ))
-        ) : (
-          <Cell>покупок пока нет</Cell>
-        )}
-      </Section>
+          ))}
+        </Section>
+      ) : (
+        <MascotEmpty text="Покупок пока нет" />
+      )}
     </List>
   )
 }

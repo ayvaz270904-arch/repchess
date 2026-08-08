@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { List, Section, Cell, Button, SegmentedControl, Spinner } from '@telegram-apps/telegram-ui'
 import type { Cabinet, GroupLesson, IndivSlots } from '../types'
 import { CellIcon } from '../ui/CellIcon'
+import { MascotEmpty } from '../ui/MascotEmpty'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
 import { fetchSlots, getCachedSlots, bookIndiv, joinGroup, leaveGroup, confirmDialog, track, ApiError } from '../data'
 import { errText } from '../errors'
@@ -93,7 +94,16 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
       <div className="screen-title">Запись</div>
 
       <div className="home-sec-title">Индивидуальное занятие</div>
-      <Section footer={slots?.trainer ? `Тренер: ${slots.trainer}` : undefined}>
+      {slots?.trainer && (
+        <div className="trainer-card">
+          <div className="trainer-ava">{slots.trainer.trim().charAt(0).toUpperCase()}</div>
+          <div>
+            <div className="trainer-name">{slots.trainer}</div>
+            <div className="trainer-role">Ваш тренер · индивидуальные занятия</div>
+          </div>
+        </div>
+      )}
+      <Section>
         {slotsErr ? (
           <Cell multiline>{errText(slotsErr)}</Cell>
         ) : !slots ? (
@@ -106,13 +116,13 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
       </Section>
 
       <div className="home-sec-title">Групповые занятия</div>
-      <Section>
-        {data.openGroups.length ? (
-          data.openGroups.map((g) => <GroupRow key={g.id} g={g} onJoin={join} onLeave={leave} />)
-        ) : (
-          <Cell multiline>Сейчас открытых занятий нет.</Cell>
-        )}
-      </Section>
+      {data.openGroups.length ? (
+        <Section>
+          {data.openGroups.map((g) => <GroupRow key={g.id} g={g} onJoin={join} onLeave={leave} />)}
+        </Section>
+      ) : (
+        <MascotEmpty text="Сейчас открытых групповых занятий нет — заглядывай позже." />
+      )}
       {grpMsg && <div className="book-msg" style={{ padding: '0 22px' }}>{grpMsg}</div>}
     </List>
   )

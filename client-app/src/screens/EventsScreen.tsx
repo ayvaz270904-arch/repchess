@@ -1,18 +1,29 @@
-import { List, Section, Cell, Button, Placeholder } from '@telegram-apps/telegram-ui'
-import type { Cabinet } from '../types'
+import { List, Section, Cell, Button } from '@telegram-apps/telegram-ui'
+import type { Cabinet, IconName } from '../types'
 import { CellIcon } from '../ui/CellIcon'
+import { MascotEmpty } from '../ui/MascotEmpty'
 import { openUrl, haptic } from '../telegram/ui'
+
+// Иконка категории события по ключевым словам в названии
+function eventIcon(title: string): IconName {
+  const t = (title || '').toLowerCase()
+  if (/турнир|блиц|рапид|матч/.test(t)) return 'ticket'
+  if (/лекц|разбор|вебинар|онлайн/.test(t)) return 'globe'
+  if (/групп/.test(t)) return 'users'
+  if (/индивид/.test(t)) return 'user'
+  return 'calendar'
+}
 
 export function EventsScreen({ data }: { data: Cabinet }) {
   const s = data.schedule
+  // Сегодняшняя дата в формате YYYY-MM-DD по МСК — совпадает с d.date из расписания
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date())
 
   if (!s || !s.days.length) {
     return (
       <List>
         <div className="screen-title">Афиша</div>
-        <Placeholder header="Скоро" description="Расписание на неделю появится здесь, как только выйдет в канале.">
-          <div style={{ fontSize: 48 }}>📅</div>
-        </Placeholder>
+        <MascotEmpty text="Расписание на неделю появится здесь, как только выйдет в канале." />
       </List>
     )
   }
@@ -21,29 +32,35 @@ export function EventsScreen({ data }: { data: Cabinet }) {
     <List>
       <div className="screen-title">Афиша</div>
 
-      {s.days.map((d) => (
-        <Section key={d.date} header={d.label}>
-          {d.items.map((it, i) => (
-            <Cell
-              key={i}
-              multiline
-              before={<span className="ev-time">{it.time}</span>}
-              onClick={it.url ? () => { haptic(); openUrl(it.url!) } : undefined}
-              after={
-                it.ticketUrl ? (
-                  <Button size="s" mode="bezeled" onClick={() => { haptic(); openUrl(it.ticketUrl!) }}>
-                    {it.ticketLabel === 'Регистрация' ? 'Регистрация' : 'Билеты'}
-                  </Button>
-                ) : it.url ? (
-                  <span className="chev">›</span>
-                ) : undefined
-              }
-            >
-              {it.title}
-            </Cell>
-          ))}
-        </Section>
-      ))}
+      {s.days.map((d) => {
+        const isToday = d.date === today
+        return (
+          <Section
+            key={d.date}
+            header={isToday ? <span>{d.label} <span className="ev-badge-today">сегодня</span></span> : d.label}
+          >
+            {d.items.map((it, i) => (
+              <Cell
+                key={i}
+                multiline
+                before={<CellIcon name={eventIcon(it.title)} tone={isToday ? 'red' : 'neutral'} />}
+                onClick={it.url ? () => { haptic(); openUrl(it.url!) } : undefined}
+                after={
+                  it.ticketUrl ? (
+                    <Button size="s" mode="bezeled" onClick={() => { haptic(); openUrl(it.ticketUrl!) }}>
+                      {it.ticketLabel === 'Регистрация' ? 'Регистрация' : 'Билеты'}
+                    </Button>
+                  ) : it.url ? (
+                    <span className="chev">›</span>
+                  ) : undefined
+                }
+              >
+                <span className={'ev-time' + (isToday ? ' ev-today' : '')}>{it.time}</span> {it.title}
+              </Cell>
+            ))}
+          </Section>
+        )
+      })}
 
       {s.note && (
         <Section>

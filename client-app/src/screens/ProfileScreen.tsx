@@ -5,6 +5,7 @@ import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
 import { saveProfile } from '../data'
 import { errText } from '../errors'
 import { POLICY_URL, OFFER_URL, HELPER_URL } from '../config'
+import mascot from '../assets/mascot.svg'
 
 // Маска ввода даты рождения: цифры → дд.мм.гггг
 function maskBdate(v: string): string {
@@ -126,6 +127,16 @@ export function ProfileScreen({
 
   const cta = gate ? 'Открыть кабинет' : 'Сохранить'
 
+  // Ачивки — вехи из реальной истории занятий (фишки: пешка/конь/ладья/ферзь)
+  const doneCount = data.lessonHistory.filter((h) => h.status === 'done').length
+  const groupDone = data.lessonHistory.filter((h) => h.status === 'done' && /групп/i.test(h.type)).length
+  const achievements = [
+    { pc: '♟', label: 'Дебют', earned: doneCount >= 1 },
+    { pc: '♞', label: '10 партий', earned: doneCount >= 10 },
+    { pc: '♜', label: 'Командный', earned: groupDone >= 1 },
+    { pc: '♛', label: 'Мастер', earned: doneCount >= 25 },
+  ]
+
   return (
     <List>
       {gate ? (
@@ -140,6 +151,28 @@ export function ProfileScreen({
         </>
       ) : (
         <div className="screen-title">Профиль</div>
+      )}
+
+      {!gate && (
+        <>
+          <div className="prof-header">
+            <div className="prof-ava">
+              <img src={mascot} alt="" aria-hidden="true" />
+            </div>
+            <div className="prof-info">
+              <div className="prof-name">{p.fio || data.name}</div>
+              {p.level && <span className="prof-badge">{p.level}</span>}
+            </div>
+          </div>
+          <div className="ach-row">
+            {achievements.map((a) => (
+              <span key={a.label} className={'ach ' + (a.earned ? 'earned' : 'locked')}>
+                <span className="pc">{a.pc}</span>
+                {a.label}
+              </span>
+            ))}
+          </div>
+        </>
       )}
 
       <Section footer="Анкета помогает подбирать занятия под уровень. Если ученику меньше 18 лет — анкету заполняет родитель или законный представитель, укажите данные ученика.">
