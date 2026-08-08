@@ -619,6 +619,11 @@ body {
   margin-top: 5px;
   padding-left: 2px;
 }
+.field-hint a {
+  color: var(--rc-red, #c94a42);
+  text-decoration: underline;
+  cursor: pointer;
+}
 .field-row {
   display: flex;
   gap: 6px;

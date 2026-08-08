@@ -4,6 +4,7 @@ export const BACKEND =
 
 export const POLICY_URL = 'https://repchess.ru/policy'
 export const OFFER_URL = 'https://repchess.ru/offer'
+export const HELPER_URL = 'https://t.me/RepChess_Edu_Helper'
 
 // Кнопки покупки на Главной. UTM — чтобы аналитика сайта видела переходы из бота.
 export const BUY_LINKS: [string, string][] = [

@@ -4,7 +4,7 @@ import type { Cabinet } from '../types'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
 import { saveProfile } from '../data'
 import { errText } from '../errors'
-import { POLICY_URL, OFFER_URL } from '../config'
+import { POLICY_URL, OFFER_URL, HELPER_URL } from '../config'
 
 // Маска ввода даты рождения: цифры → дд.мм.гггг
 function maskBdate(v: string): string {
@@ -40,7 +40,7 @@ function Field({
   children,
 }: {
   label: string
-  hint?: string
+  hint?: ReactNode
   className?: string
   children: ReactNode
 }) {
@@ -110,11 +110,19 @@ export function ProfileScreen({
     }
   }
 
-  const emailHint = emailLocked
-    ? data.email === email
-      ? '✅ подтверждена — изменить через администратора'
-      : '🔒 чтобы изменить почту — напишите нам'
-    : 'свяжет покупки, сделанные не с вашего номера'
+  const emailHint: ReactNode = emailLocked ? (
+    data.email === email ? (
+      <>
+        ✅ подтверждена — <a onClick={() => openUrl(HELPER_URL)}>изменить через поддержку</a>
+      </>
+    ) : (
+      <>
+        🔒 чтобы изменить почту — <a onClick={() => openUrl(HELPER_URL)}>напишите нам</a>
+      </>
+    )
+  ) : (
+    'свяжет покупки, сделанные не с вашего номера'
+  )
 
   const cta = gate ? 'Открыть кабинет' : 'Сохранить'
 
