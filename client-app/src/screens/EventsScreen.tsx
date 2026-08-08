@@ -1,5 +1,5 @@
 import { List, Section, Cell, Button } from '@telegram-apps/telegram-ui'
-import type { Cabinet, IconName } from '../types'
+import type { Cabinet, IconName, ScheduleItem } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { MascotEmpty } from '../ui/MascotEmpty'
 import { openUrl, haptic } from '../telegram/ui'
@@ -28,18 +28,44 @@ export function EventsScreen({ data }: { data: Cabinet }) {
     )
   }
 
+  // Главное событие для баннера — первое с регистрацией/билетом
+  let featured: ScheduleItem | null = null
+  let featuredLabel = ''
+  for (const d of s.days) {
+    const it = d.items.find((x) => x.ticketUrl)
+    if (it) {
+      featured = it
+      featuredLabel = d.label
+      break
+    }
+  }
+
   return (
     <List>
       <div className="screen-title">Афиша</div>
 
+      {featured && (
+        <div className="ev-banner">
+          <span className="ev-banner-chip">
+            {featuredLabel} · {featured.time}
+          </span>
+          <div className="ev-banner-title">{featured.title}</div>
+          <button className="ev-banner-btn" onClick={() => { haptic(); openUrl(featured!.ticketUrl!) }}>
+            {featured.ticketLabel || 'Регистрация'}
+          </button>
+        </div>
+      )}
+
       {s.days.map((d) => {
         const isToday = d.date === today
+        const items = d.items.filter((it) => it !== featured)
+        if (!items.length) return null
         return (
           <Section
             key={d.date}
             header={isToday ? <span>{d.label} <span className="ev-badge-today">сегодня</span></span> : d.label}
           >
-            {d.items.map((it, i) => (
+            {items.map((it, i) => (
               <Cell
                 key={i}
                 multiline

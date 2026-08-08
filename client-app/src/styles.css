@@ -580,6 +580,64 @@ body {
   text-transform: none;
   letter-spacing: 0;
 }
+/* Баннер главного события (Афиша) */
+.ev-banner {
+  position: relative;
+  overflow: hidden;
+  margin: 4px 16px 10px;
+  padding: 18px;
+  border-radius: 16px;
+  background: var(--tgui--card_bg_color, #17171a);
+  border: 1px solid rgba(128, 128, 128, 0.16);
+}
+.ev-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: conic-gradient(
+    var(--rc-board-sq, rgba(255, 255, 255, 0.05)) 25%,
+    transparent 0 50%,
+    var(--rc-board-sq, rgba(255, 255, 255, 0.05)) 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+  -webkit-mask-image: radial-gradient(120% 90% at 85% 20%, #000 6%, transparent 70%);
+  mask-image: radial-gradient(120% 90% at 85% 20%, #000 6%, transparent 70%);
+  pointer-events: none;
+}
+.ev-banner > * {
+  position: relative;
+  z-index: 1;
+}
+.ev-banner-chip {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--rc-red, #c94a42);
+  background: color-mix(in srgb, var(--rc-red, #c94a42) 14%, transparent);
+  border-radius: 999px;
+  padding: 4px 11px;
+}
+.ev-banner-title {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--tgui--text_color, #f4f4f5);
+  margin-top: 10px;
+}
+.ev-banner-btn {
+  margin-top: 14px;
+  width: 100%;
+  height: 46px;
+  border: none;
+  border-radius: 12px;
+  background: var(--rc-red, #c94a42);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+}
 
 /* ── История: пилюли статуса и цена ── */
 .pill {
@@ -703,6 +761,25 @@ body {
   font-size: 11.5px;
   color: var(--tgui--hint_color, #8b8b92);
   margin-top: 6px;
+}
+/* Полоса посещаемости: квадрат на занятие (красный — пройдено, пустой — пропуск) */
+.prog-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 2px 16px 10px;
+}
+.prog-sq {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  flex: none;
+  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid rgba(128, 128, 128, 0.16);
+}
+.prog-sq.done {
+  background: var(--rc-red, #c94a42);
+  border-color: var(--rc-red, #c94a42);
 }
 
 /* ── Пустое состояние с маскотом ── */

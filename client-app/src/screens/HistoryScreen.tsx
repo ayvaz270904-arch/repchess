@@ -33,6 +33,17 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
         </div>
       )}
 
+      {data.lessonHistory.length > 0 && (
+        <div className="prog-strip">
+          {data.lessonHistory
+            .slice(0, 12)
+            .reverse()
+            .map((h) => (
+              <span key={h.id} className={'prog-sq' + (h.status === 'done' ? ' done' : '')} />
+            ))}
+        </div>
+      )}
+
       <div className="home-sec-title">Занятия</div>
       {data.lessonHistory.length ? (
         <Section>
