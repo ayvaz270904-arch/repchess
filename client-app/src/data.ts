@@ -123,6 +123,16 @@ function saveSlotsCache(s: IndivSlots): void {
   }
 }
 
+// Стереть кэш кабинета и слотов (например при not_linked/auth — личность не подтверждена).
+export function clearCachedCabinet(): void {
+  try {
+    localStorage.removeItem(cabinetCacheKey())
+    localStorage.removeItem(slotsCacheKey())
+  } catch {
+    /* noop */
+  }
+}
+
 export async function fetchCabinet(): Promise<Cabinet> {
   let c: Cabinet
   if (DEV) {

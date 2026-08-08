@@ -3,7 +3,7 @@ import { AppRoot, Tabbar, Spinner, Placeholder, Button } from '@telegram-apps/te
 import { subscribeAppearance } from './telegram/env'
 import { haptic } from './telegram/ui'
 import { tabIcons } from './ui/icons'
-import { fetchCabinet, getCachedCabinet, track, ApiError } from './data'
+import { fetchCabinet, getCachedCabinet, clearCachedCabinet, track, ApiError } from './data'
 import { errText } from './errors'
 import type { Cabinet } from './types'
 import { HomeScreen } from './screens/HomeScreen'
@@ -51,8 +51,15 @@ export default function App({
       setState({ status: 'ready', data })
     } catch (e) {
       const code = e instanceof ApiError ? e.code : 'server'
-      // фоновое обновление после действия не должно рушить уже показанный экран
-      setState((prev) => (prev.status === 'ready' ? prev : { status: 'error', code }))
+      if (code === 'not_linked' || code === 'auth') {
+        // личность не подтверждена (например после /reset или до привязки номера) —
+        // показывать старый кэш нельзя: чистим его и показываем гейт «вернись в бота».
+        clearCachedCabinet()
+        setState({ status: 'error', code })
+      } else {
+        // транзиентная ошибка (сеть/сервер) — не рушим уже показанный экран
+        setState((prev) => (prev.status === 'ready' ? prev : { status: 'error', code }))
+      }
     }
   }, [])
 
