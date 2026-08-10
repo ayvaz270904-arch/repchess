@@ -549,13 +549,13 @@ function getBalance(key) {
   const s = students[key];
   if (!s) return null;
   const now = new Date();
-  // Ручной баланс имеет приоритет над сайтом по своим категориям (не истекает).
-  const override = {};
-  (s.overrides||[]).forEach(o => { override[o.cat] = o.lessons; });
+  // Ручная правка ПРИБАВЛЯЕТСЯ к оплатам с сайта (знак учитывается — своп); по категории не ниже нуля.
+  const override = {};   // cat -> { delta, date }
+  (s.overrides||[]).forEach(o => { override[o.cat] = { delta: (override[o.cat]?override[o.cat].delta:0) + o.lessons, date: o.date }; });
   let purchased = 0, expiredPurchased = 0;
   let nextExpiry = null;
+  const siteByCat = {}, siteAfter = {};
   for (const p of s.payments) {
-    if (p.prod && override.hasOwnProperty(p.prod.cat)) continue;   // категория задана вручную — оплату с сайта игнорируем
     const cnt = p.prod?.lessons || 1;
     const expiryMonths = cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1;
     let expiry = null;
@@ -565,10 +565,19 @@ function getBalance(key) {
       expiredPurchased += cnt;
     } else {
       purchased += cnt;
+      const cat = p.prod?.cat;
+      if (cat) {
+        siteByCat[cat] = (siteByCat[cat] || 0) + cnt;
+        if (override[cat] && override[cat].date && p.date && p.date > override[cat].date) siteAfter[cat] = (siteAfter[cat] || 0) + cnt;
+      }
       if (expiry && (!nextExpiry || expiry < nextExpiry)) nextExpiry = expiry;
     }
   }
-  for (const c in override) purchased += override[c];   // применяем ручной баланс
+  for (const c in override) {   // кламп ≥0; минус применяем только к покупкам ДО даты правки (date-scoping)
+    const sa = siteAfter[c] || 0;
+    const sb = (siteByCat[c] || 0) - sa;
+    purchased += (Math.max(0, sb + override[c].delta) + sa) - (siteByCat[c] || 0);
+  }
   // Сначала ищем точное совпадение email+имя, потом только по email
   const used = usedLessonsMap[key] ?? usedLessonsMap[s.email.toLowerCase()] ?? 0;
   // FIFO: проведённые сначала гасят истёкшие пакеты, и только остаток — активные
@@ -769,9 +778,10 @@ function processCSV(txt) {
     if(!s.phone&&row['Phone'])s.phone=row['Phone'];
 
     if((row['paymentid']||'').trim()==='manual:override'){
-      // Ручной баланс: приоритет над сайтом. Держим отдельно от s.payments (не пачкаем статистику).
+      // Ручная правка (может быть отрицательной — своп). Держим отдельно от s.payments.
       const _op=identifyProduct(row['products']||'',0,null);
-      (s.overrides=s.overrides||[]).push({cat:_op.cat, lessons:_op.lessons});
+      const _sm=String(row['products']||'').match(/(-?\d+)\s*занят/i);
+      (s.overrides=s.overrides||[]).push({cat:_op.cat, lessons:_sm?parseInt(_sm[1],10):_op.lessons, date:parseDate(row['sent'])});
     }else if(isPaid(row)){
       const price=parsePrice(row['price']);
       const _prodStr=row['products']||'';
