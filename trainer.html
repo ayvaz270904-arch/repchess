@@ -887,6 +887,23 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
   </div>
 </div>
 
+<!-- BALANCE MODAL (ручной баланс — приоритет над сайтом) -->
+<div class="overlay" id="balance-modal" style="display:none" onclick="if(event.target===this)_closeModal('balance-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ Ручной баланс</div>
+    <div style="font-size:.85rem;color:var(--text);margin-bottom:2px" id="bal-stud-name"></div>
+    <div style="font-size:.74rem;color:var(--text2);margin-bottom:12px">Пусто — берётся с сайта. Число — приоритет над сайтом. 0 — обнулить категорию. Проведённые занятия вычитаются как обычно.</div>
+    <div class="form-row"><div class="form-label">Индивидуальные · онлайн</div><input class="form-inp" id="bal-io" type="number" min="0" max="200" placeholder="с сайта"></div>
+    <div class="form-row"><div class="form-label">Индивидуальные · офлайн</div><input class="form-inp" id="bal-if" type="number" min="0" max="200" placeholder="с сайта"></div>
+    <div class="form-row"><div class="form-label">Групповые · онлайн</div><input class="form-inp" id="bal-go" type="number" min="0" max="200" placeholder="с сайта"></div>
+    <div class="form-row"><div class="form-label">Групповые · офлайн</div><input class="form-inp" id="bal-gf" type="number" min="0" max="200" placeholder="с сайта"></div>
+    <button class="btn-full btn-gold" onclick="submitBalance()" id="bal-submit">Сохранить</button>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('balance-modal')">Отмена</button>
+  </div>
+</div>
+
 <!-- ADD TRAINER MODAL -->
 <div class="overlay" id="add-trainer-modal" style="display:none" onclick="if(event.target===this)_closeModal('add-trainer-modal')">
   <div class="modal" onclick="event.stopPropagation()">
@@ -1515,6 +1532,16 @@ async function loadStudents() {
 
     // Group by email, compute purchased lessons
     const map = {};
+    // Ручной баланс (paymentid=manual:override) — приоритет над сайтом; собираем заранее по ключу email+имя.
+    const overridesByKey = {};
+    for (const row of rows) {
+      if (String(row['paymentid']||'').trim() !== 'manual:override') continue;
+      const oemail = (row['Email']||'').toLowerCase().trim();
+      if (!oemail || oemail === 'test@mail.ru') continue;
+      const okey = oemail + '||' + (row['Name']||'').toLowerCase().trim();
+      const op = identifyProduct(row['products']||'', 0, null);
+      (overridesByKey[okey] = overridesByKey[okey] || {})[op.cat] = op.lessons;
+    }
     for (const row of rows) {
       const email = (row['Email']||'').toLowerCase().trim();
       if (!email || email === 'test@mail.ru') continue;
@@ -1533,6 +1560,8 @@ async function loadStudents() {
         const prodStr = row['products'] || '';
         if (price > 0 || prodStr) {   // промо (цена 0) тоже учитываем, если есть товар
           const cls = classifyPayment(prodStr, price, date);
+          const _ov = overridesByKey[key];
+          if (_ov && _ov.hasOwnProperty(cls.cat)) continue;   // категория задана вручную — оплату с сайта игнорируем
           const cnt = cls.lessons;
           const isGrp = cls.group;
           // Фиксируем неизвестные тарифы для ручной классификации (только платные)
@@ -1561,6 +1590,19 @@ async function loadStudents() {
           }
         }
       }
+    }
+
+    // Применяем ручной баланс: заменяет сайт по своим категориям (не истекает).
+    for (const okey in overridesByKey) {
+      const m = map[okey]; if (!m) continue;
+      const ov = overridesByKey[okey];
+      for (const cat in ov) {
+        const n = ov[cat];
+        m.byCat[cat] = n;
+        m.purchased += n;
+        if (cat.indexOf('Групп') === 0) m.purchasedGroup += n; else m.purchasedIndiv += n;
+      }
+      m.overrideByCat = Object.assign({}, ov);
     }
 
     // Assign IDs (RC-XXXX) sorted by first payment date
@@ -4384,6 +4426,8 @@ async function openStudentInfoModal(email) {
       <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">🎯 Тренер: ${trainerStr}</div>
       <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📦 Куплено: <span style="color:var(--text)">${s.purchased} занятий</span></div>
       ${Object.keys(s.byCat||{}).length ? `<div style="font-size:.78rem;color:var(--text2);margin:-2px 0 6px 22px">${Object.keys(s.byCat).map(k=>`${esc(k)} — <b style="color:var(--text)">${s.byCat[k]}</b>`).join('<br>')}</div>` : ''}
+      ${(s.overrideByCat && Object.keys(s.overrideByCat).length) ? `<div style="font-size:.75rem;color:var(--accent2);margin:2px 0 6px 22px">✏️ Ручной баланс активен</div>` : ''}
+      ${currentTrainer?.role==='admin' ? `<button class="btn-full btn-ghost" style="margin-top:10px" onclick="openBalanceModal('${escJs(email)}')">✏️ Задать баланс вручную</button>` : ''}
       ${expiryStr ? `<div style="font-size:.82rem;margin-bottom:6px">${expiryStr}</div>` : ''}
       ${_stuNick(s) ? `<div style="font-size:.82rem;color:var(--text2);margin-top:8px">✈️ Telegram: @${esc(_stuNick(s))}</div>` : ''}
       ${s.phone ? `<div style="margin-top:10px;display:flex;gap:8px;align-items:center">
@@ -5506,6 +5550,49 @@ async function submitAddStudent() {
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false; btn.textContent = 'Добавить в базу';
+  }
+}
+
+// ── Ручной баланс: приоритет над сайтом. Пишет override-строки в Table 2 через CRM-прокси. ──
+const _BAL_CATS = [['bal-io','Индив. онлайн'],['bal-if','Индив. офлайн'],['bal-go','Групп. онлайн'],['bal-gf','Групп. офлайн']];
+let _balEmail = null;
+function openBalanceModal(email) {
+  if (currentTrainer?.role !== 'admin') { toast('Задавать баланс может только администратор', 'err'); return; }
+  const s = students.find(x => x.email === email);
+  if (!s) { toast('Ученик не найден', 'err'); return; }
+  _balEmail = email;
+  const ov = s.overrideByCat || {};
+  _BAL_CATS.forEach(([id, cat]) => { document.getElementById(id).value = (ov[cat] != null ? ov[cat] : ''); });
+  document.getElementById('bal-stud-name').textContent = '👤 ' + s.name;
+  const btn = document.getElementById('bal-submit'); btn.disabled = false; btn.textContent = 'Сохранить';
+  _openModal('balance-modal');
+}
+async function submitBalance() {
+  const s = students.find(x => x.email === _balEmail);
+  if (!s) { toast('Ученик не найден', 'err'); return; }
+  const balances = {};
+  _BAL_CATS.forEach(([id, cat]) => {
+    const v = document.getElementById(id).value.trim();
+    balances[cat] = (v === '' ? null : Math.max(0, parseInt(v, 10) || 0));
+  });
+  const btn = document.getElementById('bal-submit'); btn.disabled = true; btn.textContent = 'Сохранение...';
+  try {
+    const token = await firebase.auth().currentUser.getIdToken();
+    // Content-Type не задаём (text/plain) — иначе браузер шлёт preflight, который GAS не умеет
+    const res = await fetch(_CSV, { method: 'POST', body: JSON.stringify({ action: 'setBalance', token, name: s.name, email: s.email, phone: s.phone || '', balances }) });
+    const txt = await res.text();
+    let ok = false; try { ok = !!JSON.parse(txt).ok; } catch(e) {}
+    if (!ok) throw new Error(txt.slice(0, 150) || 'пустой ответ сервера');
+    toast('Баланс сохранён ✓', 'ok');
+    _closeModal('balance-modal');
+    try { sessionStorage.removeItem(_CACHE_KEY); } catch(e) {}
+    await loadStudents();
+    await _enrichStudentsWithRemaining();
+    renderStudentDB(document.getElementById('sdb-search')?.value || '');
+    openStudentInfoModal(_balEmail);   // переоткрываем карточку со свежими числами
+  } catch(e) {
+    toast('Ошибка: ' + e.message, 'err');
+    btn.disabled = false; btn.textContent = 'Сохранить';
   }
 }
 

@@ -549,9 +549,13 @@ function getBalance(key) {
   const s = students[key];
   if (!s) return null;
   const now = new Date();
+  // Ручной баланс имеет приоритет над сайтом по своим категориям (не истекает).
+  const override = {};
+  (s.overrides||[]).forEach(o => { override[o.cat] = o.lessons; });
   let purchased = 0, expiredPurchased = 0;
   let nextExpiry = null;
   for (const p of s.payments) {
+    if (p.prod && override.hasOwnProperty(p.prod.cat)) continue;   // категория задана вручную — оплату с сайта игнорируем
     const cnt = p.prod?.lessons || 1;
     const expiryMonths = cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1;
     let expiry = null;
@@ -564,6 +568,7 @@ function getBalance(key) {
       if (expiry && (!nextExpiry || expiry < nextExpiry)) nextExpiry = expiry;
     }
   }
+  for (const c in override) purchased += override[c];   // применяем ручной баланс
   // Сначала ищем точное совпадение email+имя, потом только по email
   const used = usedLessonsMap[key] ?? usedLessonsMap[s.email.toLowerCase()] ?? 0;
   // FIFO: проведённые сначала гасят истёкшие пакеты, и только остаток — активные
@@ -763,7 +768,11 @@ function processCSV(txt) {
     if(!s.telegram)s.telegram=getTg(row);
     if(!s.phone&&row['Phone'])s.phone=row['Phone'];
 
-    if(isPaid(row)){
+    if((row['paymentid']||'').trim()==='manual:override'){
+      // Ручной баланс: приоритет над сайтом. Держим отдельно от s.payments (не пачкаем статистику).
+      const _op=identifyProduct(row['products']||'',0,null);
+      (s.overrides=s.overrides||[]).push({cat:_op.cat, lessons:_op.lessons});
+    }else if(isPaid(row)){
       const price=parsePrice(row['price']);
       const _prodStr=row['products']||'';
       if(price>0 || _prodStr){   // промо (цена 0) тоже учитываем, если есть товар
