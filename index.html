@@ -447,7 +447,14 @@ let charts_={};
 let _tab='all', _sSort={key:'lastPay',dir:-1}, _aSort={key:'totalSpent',dir:-1};
 let _lastRefresh=0, _timer=null;
 let _dateFrom=null, _dateTo=null;
-let usedLessonsMap={};  // email → кол-во проведённых занятий
+let usedLessonsMap={};  // representative-email → кол-во проведённых занятий
+let _emailAlias={};     // email → представительский email того же человека (склейка по телефону)
+// ЕДИНЫЙ КЛЮЧ ЛИЧНОСТИ (одна логика с тренеркой, ботом, клиентом): телефон (последние 10 цифр), иначе email.
+function personKey(email, phone){
+  const d = String(phone==null?'':phone).replace(/\D/g,'');
+  if (d.length >= 10) return 'p:' + d.slice(-10);
+  return 'e:' + String(email==null?'':email).toLowerCase().trim();
+}
 
 // ══════════════════════════════════════════
 //  FIREBASE (читаем посещения из Firestore)
@@ -533,12 +540,9 @@ async function loadUsedLessons() {
       if (d.status && d.status !== 'done') return;
       const email = (d.studentEmail||'').toLowerCase().trim();
       if (!email) return;
-      const nameLower = (d.studentName||'').toLowerCase().trim();
-      // Составной ключ — для точного совпадения по имени+email
-      const cKey = email + '||' + nameLower;
-      usedLessonsMap[cKey] = (usedLessonsMap[cKey]||0) + 1;
-      // Запасной ключ только по email — для обратной совместимости
-      usedLessonsMap[email] = (usedLessonsMap[email]||0) + 1;
+      // Фолдим все email человека к его представительскому (карточки склеены по телефону)
+      const rep = _emailAlias[email] || email;
+      usedLessonsMap[rep] = (usedLessonsMap[rep]||0) + 1;
     });
     // Групповые занятия отдельно НЕ считаем: у каждого участника группы и так
     // создаётся индивидуальная запись в lessons — иначе был бы двойной счёт
@@ -764,18 +768,19 @@ function getTg(r){
 // ══════════════════════════════════════════
 function processCSV(txt) {
   const rows=parseCSV(txt);
-  allPaidRows=[]; students={};
+  allPaidRows=[]; students={}; _emailAlias={};
 
   for(const row of rows){
     const email=(row['Email']||'').toLowerCase().trim();
-    const _nameLower=(row['Name']||'').toLowerCase().trim();
     if(!email||email==='test@mail.ru')continue;
-    const sKey=email+'||'+_nameLower;
+    // Ключ = телефон (последние 10 цифр), иначе email: один человек = одна карточка независимо от написания имени/опечатки в почте.
+    const sKey=personKey(email,row['Phone']);
     if(!students[sKey])students[sKey]={name:row['Name']||'',email,phone:row['Phone']||'',telegram:getTg(row),payments:[],freeCnt:0,key:sKey};
     const s=students[sKey];
     if((row['Name']||'').length>s.name.length)s.name=row['Name'];
     if(!s.telegram)s.telegram=getTg(row);
     if(!s.phone&&row['Phone'])s.phone=row['Phone'];
+    _emailAlias[email]=s.email;   // все email человека → его представительский email (для проведённых занятий)
 
     if((row['paymentid']||'').trim()==='manual:override'){
       // Ручная правка (может быть отрицательной — своп). Держим отдельно от s.payments.
@@ -831,7 +836,7 @@ function renderKPIs(){
 
   // Period stats from filteredRows
   const periodRev=filteredRows.reduce((t,r)=>t+r._price,0);
-  const periodBuyers=new Set(filteredRows.map(r=>(r['Email']||'').toLowerCase()+'||'+(r['Name']||'').toLowerCase().trim())).size;
+  const periodBuyers=new Set(filteredRows.map(r=>personKey((r['Email']||''),r['Phone']))).size;
   const periodLessons=filteredRows.reduce((t,r)=>t+(r._prod?.lessons||1),0);
 
   // Total (all time)
@@ -897,7 +902,7 @@ function renderStudents(){
   // Build per-student period stats
   const periodMap={};
   for(const r of filteredRows){
-    const _rKey=(r['Email']||'').toLowerCase()+'||'+(r['Name']||'').toLowerCase().trim();
+    const _rKey=personKey((r['Email']||''),r['Phone']);   // тот же ключ, что и s.key (телефон)
     if(!periodMap[_rKey])periodMap[_rKey]={cnt:0,sum:0};
     periodMap[_rKey].cnt++;
     periodMap[_rKey].sum+=r._price;
@@ -965,7 +970,7 @@ function openModal(key){
       <div><div class="kpi-label">Всего оплачено</div><div style="margin-top:4px;font-size:1.1rem;font-weight:700;color:var(--accent)">${s.hasPaid?fmtM(total):'—'}</div></div>
       <div><div class="kpi-label">Занятий куплено</div><div style="margin-top:4px;font-weight:700">${lessons}</div></div>
       <div><div class="kpi-label">Покупок</div><div style="margin-top:4px;font-weight:700">${s.payCount}</div></div>
-      ${(()=>{const b=getBalance(s.email);if(!b||!b.purchased)return'';const c=b.remaining<=0?'var(--red)':b.remaining<=2?'var(--orange)':'var(--green)';return`<div><div class="kpi-label">Проведено занятий</div><div style="margin-top:4px;font-weight:700">${b.used}</div></div><div><div class="kpi-label">Остаток занятий</div><div style="margin-top:4px;font-size:1.2rem;font-weight:800;color:${c}">${b.remaining}</div></div>`;})()}
+      ${(()=>{const b=getBalance(s.key);if(!b||!b.purchased)return'';const c=b.remaining<=0?'var(--red)':b.remaining<=2?'var(--orange)':'var(--green)';return`<div><div class="kpi-label">Проведено занятий</div><div style="margin-top:4px;font-weight:700">${b.used}</div></div><div><div class="kpi-label">Остаток занятий</div><div style="margin-top:4px;font-size:1.2rem;font-weight:800;color:${c}">${b.remaining}</div></div>`;})()}
     </div>
     ${pays.length?`<div class="kpi-label" style="margin-bottom:10px">История оплат (${pays.length})</div>
     <table class="tbl" style="font-size:.8rem">

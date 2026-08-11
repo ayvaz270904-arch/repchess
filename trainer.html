@@ -1264,6 +1264,14 @@ let students = [];          // from  CSV
 let _nickByEmail = {}, _nickByPhone = {};   // ник ТГ из «Лиды»/«Профили» для поиска учеников по нику
 let _nameByEmail = {};   // реальное ФИО из «Профили» по почте (в т.ч. служебной cert-*@repchess.local)
 let _chatByEmail = {};   // Chat ID из «Профили» по почте — надёжный якорь для бот-гостей
+let _emailAlias = {};    // email → представительский email того же человека (склейка по телефону, для проведённых занятий)
+// ЕДИНЫЙ КЛЮЧ ЛИЧНОСТИ (одна логика с CRM, ботом, клиентом): телефон (последние 10 цифр), иначе email.
+// Телефон склеивает варианты имени и опечатки в почте одного человека и не смешивает разных людей.
+function personKey(email, phone){
+  const d = String(phone == null ? '' : phone).replace(/\D/g, '');
+  if (d.length >= 10) return 'p:' + d.slice(-10);
+  return 'e:' + String(email == null ? '' : email).toLowerCase().trim();
+}
 let _trainersCache = [];    // all trainers from Firestore
 let grpSelectedStudents = []; // for group lesson modal
 let editingGroupId = null;
@@ -1480,7 +1488,7 @@ async function showApp() {
 // ══════════════════════════════════════════════
 //  LOAD STUDENTS FROM 
 // ══════════════════════════════════════════════
-const _CACHE_KEY = 'repchess__v4';   // v4: + tgNick из заявки (сброс старого кэша без ника)
+const _CACHE_KEY = 'repchess__v5';   // v5: склейка карточек по телефону (сброс старого кэша с ключом email+имя)
 const _CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
 async function loadStudents() {
@@ -1524,7 +1532,7 @@ async function loadStudents() {
       if (String(row['paymentid']||'').trim() !== 'manual:override') continue;
       const oemail = (row['Email']||'').toLowerCase().trim();
       if (!oemail || oemail === 'test@mail.ru') continue;
-      const okey = oemail + '||' + (row['Name']||'').toLowerCase().trim();
+      const okey = personKey(oemail, row['Phone']);   // тот же ключ, что и у карточки ученика (телефон)
       const op = identifyProduct(row['products']||'', 0, null);   // категория
       const sm = String(row['products']||'').match(/(-?\d+)\s*занят/i);   // число со знаком (своп)
       const dn = sm ? parseInt(sm[1],10) : op.lessons;
@@ -1534,12 +1542,14 @@ async function loadStudents() {
     for (const row of rows) {
       const email = (row['Email']||'').toLowerCase().trim();
       if (!email || email === 'test@mail.ru') continue;
-      // Составной ключ email+имя — как в CRM, чтобы подарочные покупки (один email, разные люди) не схлопывались
-      const nameLower = (row['Name']||'').toLowerCase().trim();
-      const key = email + '||' + nameLower;
+      // Ключ = телефон (последние 10 цифр), иначе email. Один человек = одна карточка,
+      // даже если писал имя по-разному или сделал опечатку в почте; разных людей (разные телефоны) не смешиваем.
+      const key = personKey(email, row['Phone']);
       if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', tgNick: '', purchased: 0, purchasedExpired: 0, purchasedGroup: 0, purchasedIndiv: 0, byCat: {}, firstDate: null, nextExpiry: null };
       const m = map[key];
       if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
+      if (!m.phone && row['Phone']) m.phone = row['Phone'];
+      _emailAlias[email] = m.email;   // все email этого человека → его представительский email (склейка проведённых занятий)
       if (_nickKey) { const _nk = String(row[_nickKey]||'').trim(); if (_nk) m.tgNick = _nk.replace(/^@/, ''); }
 
       // Check if paid
@@ -1655,7 +1665,7 @@ function populateTrainerSelect(selId) {
 // Одним запросом к Firestore считает использованные занятия для всех учеников.
 // Результат: s.used и s.remaining = s.purchased - used (не меньше 0).
 let _enrichedAt = 0;
-const _USED_CACHE_KEY = 'repchess_used_v1';   // кэш usedMap — переживает перезагрузки страницы
+const _USED_CACHE_KEY = 'repchess_used_v2';   // v2: usedMap склеен по представительскому email (телефонная группировка)
 
 function _applyUsedMap(usedMap) {
   students.forEach(s => {
@@ -1693,7 +1703,9 @@ async function _enrichStudentsWithRemaining() {
       // pending/rescheduled/cancelled/absent НЕ списывают (единое правило CRM/тренер/бот)
       if (data.status && data.status !== 'done') return;
       if (data.studentEmail) {
-        usedMap[data.studentEmail] = (usedMap[data.studentEmail] || 0) + 1;
+        const _em = String(data.studentEmail).toLowerCase().trim();
+        const _rep = _emailAlias[_em] || _em;   // фолдим все email человека к его представительскому
+        usedMap[_rep] = (usedMap[_rep] || 0) + 1;
       }
     });
     _applyUsedMap(usedMap);
@@ -1778,7 +1790,7 @@ async function loadHomePage(fromCache) {
   // Строим карту использованных занятий по ученикам (для напоминаний)
   const usedMap = {};
   indivAll.filter(l => !l.status || l.status === 'done').forEach(l => {
-    if (l.studentEmail) usedMap[l.studentEmail] = (usedMap[l.studentEmail]||0) + 1;
+    if (l.studentEmail) { const _e = _emailAlias[String(l.studentEmail).toLowerCase().trim()] || String(l.studentEmail).toLowerCase().trim(); usedMap[_e] = (usedMap[_e]||0) + 1; }
   });
   loadHomeReminders(); // async, не блокирует рендер
 
@@ -3074,7 +3086,8 @@ async function loadBalanceAlerts() {
   const snap = await db.collection('lessons').get();
   const usedMap = {};
   snap.docs.forEach(d => {
-    const email = d.data().studentEmail;
+    const _raw = String(d.data().studentEmail || '').toLowerCase().trim();
+    const email = _emailAlias[_raw] || _raw;   // фолдим к представительскому email (склейка по телефону)
     usedMap[email] = (usedMap[email]||0) + 1;
   });
 
