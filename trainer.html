@@ -1106,6 +1106,11 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         <div id="attend-extra-list" style="margin-bottom:8px"></div>
         <button class="btn-sm" onclick="addExtraAttendeeRow()" style="font-size:.8rem">+ Добавить</button>
       </div>
+      <div class="form-row">
+        <div class="form-label">Гости — списать с ученика <span style="color:var(--text2);text-transform:none;font-size:.72rem">(пришёл с учеником по его билету — спишется его занятие)</span></div>
+        <div id="attend-guest-list" style="margin-bottom:8px"></div>
+        <button class="btn-sm" onclick="addGuestRow()" style="font-size:.8rem">+ Гость</button>
+      </div>
       <button class="btn-full btn-gold" id="attend-submit-btn" onclick="submitAttendance()" style="margin-bottom:8px">Отправить отметки администратору</button>
     </div>
 
@@ -1118,6 +1123,10 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <div class="form-row" id="attend-readonly-extra-row" style="display:none">
         <div class="form-label">Дополнительно (вписанные)</div>
         <div id="attend-readonly-extra" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+      <div class="form-row" id="attend-readonly-guest-row" style="display:none">
+        <div class="form-label">Гости (списаны с учеников)</div>
+        <div id="attend-readonly-guest" style="display:flex;flex-wrap:wrap;gap:6px"></div>
       </div>
     </div>
 
@@ -2957,7 +2966,7 @@ function admLessonRowHTML(item){
   const dt = item._date ? new Date(item._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
   if (item._rowType === 'group') {
     const attendCount = item.attendanceMarked
-      ? (item.attendedEmails||[]).length + (item.extraAttendees||[]).length
+      ? (item.attendedEmails||[]).length + (item.extraAttendees||[]).length + (item.guestCharges||[]).length
       : (item.count || 0);
     const mismatchTag = _groupHasMismatch(item) ? `<span class="tag tag-mismatch" style="padding:1px 5px;font-size:.68rem">⚠️</span>` : '';
     const attendTag = item.attendanceMarked ? `<span class="tag tag-attendance-ok" style="padding:1px 5px;font-size:.68rem">✅</span>` : '';
@@ -4506,7 +4515,7 @@ function openFinDrill(trainerId, type, trainerName) {
       ? groups.map(g => {
           const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
           const cnt = g.attendanceMarked
-            ? (g.attendedEmails||[]).length + (g.extraAttendees||[]).length
+            ? (g.attendedEmails||[]).length + (g.extraAttendees||[]).length + (g.guestCharges||[]).length
             : (g.count||0);
           return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(45,49,66,.4)">
             <div>
@@ -4711,6 +4720,7 @@ async function openAttendModal(groupId) {
   document.getElementById('attend-group-id').value = groupId;
   const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long'}) : '';
   document.getElementById('attend-modal-title').textContent = `📋 Посещаемость — ${esc(g.venue||'Группа')} ${dt}`;
+  const _guestEl0 = document.getElementById('attend-guest-list'); if (_guestEl0) _guestEl0.innerHTML = '';   // сброс гостей при открытии
 
   const expectedEmails = g.studentEmails || [];
   const expectedNames  = g.studentNames  || [];
@@ -4766,6 +4776,15 @@ async function openAttendModal(groupId) {
       extraRow.style.display = 'none';
     }
 
+    // Гости (только просмотр)
+    const guestRowR = document.getElementById('attend-readonly-guest-row');
+    const guestsR = g.guestCharges || [];
+    if (guestsR.length) {
+      guestRowR.style.display = '';
+      document.getElementById('attend-readonly-guest').innerHTML = guestsR.map(gc =>
+        `<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 10px;font-size:.82rem">${esc(gc.name||'Гость')} → ${esc(gc.studentName||gc.email)}</span>`).join('');
+    } else { guestRowR.style.display = 'none'; }
+
   } else if (!isAdmin && !submitted) {
     // ── ТРЕНЕР, ещё не отправил → форма с чекбоксами ──
     trainerForm.style.display   = '';
@@ -4791,6 +4810,7 @@ async function openAttendModal(groupId) {
     const extraEl = document.getElementById('attend-extra-list');
     extraEl.innerHTML = '';
     existingExtra.forEach(item => _appendExtraRow(typeof item === 'object' ? item.name : item));
+    (g.guestCharges||[]).forEach(gc => _appendGuestRow(gc.name||'', gc.email||'', gc.studentName||''));
 
     document.getElementById('attend-submit-btn').disabled = false;
     document.getElementById('attend-submit-btn').textContent = 'Отправить отметки администратору';
@@ -4849,6 +4869,7 @@ async function openAttendModal(groupId) {
       existingExtra.forEach(item => _appendExtraRow(typeof item === 'object' ? item.name : item));
     }
 
+    (g.guestCharges||[]).forEach(gc => _appendGuestRow(gc.name||'', gc.email||'', gc.studentName||''));
     document.getElementById('attend-add-inp').value = '';
     document.getElementById('attend-add-results').style.display = 'none';
 
@@ -4917,6 +4938,83 @@ function addExtraAttendeeRow() {
   _appendExtraRow('');
   const inputs = document.querySelectorAll('.extra-attend-inp');
   if (inputs.length) inputs[inputs.length-1].focus();
+}
+
+// ══ Гости: списать занятие с выбранного ученика (пришёл с ним по его билету) ══
+function addGuestRow() {
+  _appendGuestRow('', '', '');
+  const inputs = document.querySelectorAll('#attend-guest-list .guest-name-inp');
+  if (inputs.length) inputs[inputs.length-1].focus();
+}
+
+function _appendGuestRow(name, email, sname) {
+  const el = document.getElementById('attend-guest-list');
+  const div = document.createElement('div');
+  div.className = 'attend-row guest-row';
+  div.style.gap = '8px'; div.style.flexWrap = 'wrap';
+  div.dataset.chargeEmail = email || '';
+  div.dataset.chargeName  = sname || '';
+  div.innerHTML = `
+    <input class="form-inp guest-name-inp" type="text" placeholder="Имя гостя (необязательно)" value="${esc(name)}" style="flex:1;min-width:120px;padding:8px 12px;font-size:.85rem;margin-bottom:0">
+    <div class="guest-charge-wrap" style="position:relative;flex:1;min-width:170px"></div>
+    <button onclick="this.closest('.guest-row').remove()" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:1rem;padding:4px">✕</button>`;
+  el.appendChild(div);
+  _renderGuestCharge(div);
+}
+
+// Внутренность «списать с»: чип выбранного ученика ИЛИ поле поиска
+function _renderGuestCharge(row) {
+  const wrap = row.querySelector('.guest-charge-wrap');
+  const email = row.dataset.chargeEmail || '', sname = row.dataset.chargeName || '';
+  if (email) {
+    wrap.innerHTML = `<div style="display:flex;align-items:center;gap:6px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:6px 10px;font-size:.82rem">
+        <span style="color:var(--green);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">списать с: ${esc(sname||email)}</span>
+        <button onclick="_guestChargeClear(this)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:0 2px">✕</button>
+      </div>`;
+  } else {
+    wrap.innerHTML = `<input class="form-inp guest-charge-inp" type="text" placeholder="списать с: поиск ученика…" oninput="_guestChargeSearch(this)" onfocus="_guestChargeSearch(this)" autocomplete="off" style="width:100%;padding:8px 12px;font-size:.82rem;margin-bottom:0">
+      <div class="student-results guest-charge-results" style="display:none"></div>`;
+  }
+}
+
+function _guestChargeSearch(inp) {
+  const wrap = inp.closest('.guest-charge-wrap');
+  const resEl = wrap.querySelector('.guest-charge-results');
+  const q = inp.value.trim();
+  let matches = q.length > 0 ? students.filter(s => _stuMatch(s, q)) : students.slice(0, 15);
+  matches = matches.filter(s => s.email).slice(0, 8);
+  if (!matches.length) { resEl.style.display = 'none'; return; }
+  resEl.innerHTML = matches.map(s => `
+    <div class="student-result-item" onclick="_guestChargePick(this,'${escJs(s.email)}','${escJs(s.name)}')">
+      <div><div class="student-name">${esc(s.name)}</div><div class="student-meta">${s.id} · ${esc(s.email)}</div></div>
+      <div class="balance-badge ${_remBadgeClass(s)}">${_remBadgeText(s)}</div>
+    </div>`).join('');
+  resEl.style.display = '';
+}
+
+function _guestChargePick(el, email, name) {
+  const row = el.closest('.guest-row');
+  row.dataset.chargeEmail = email; row.dataset.chargeName = name;
+  _renderGuestCharge(row);
+}
+
+function _guestChargeClear(el) {
+  const row = el.closest('.guest-row');
+  row.dataset.chargeEmail = ''; row.dataset.chargeName = '';
+  _renderGuestCharge(row);
+}
+
+// Собрать гостей из формы: только строки с выбранным «списать с». name = метка гостя.
+function _gatherGuestCharges() {
+  const out = [];
+  document.querySelectorAll('#attend-guest-list .guest-row').forEach(row => {
+    const email = (row.dataset.chargeEmail || '').trim();
+    if (!email) return;   // без выбранного ученика — не с кого списывать, пропускаем
+    const nameInp = row.querySelector('.guest-name-inp');
+    const label = (nameInp && nameInp.value.trim()) || 'Гость';
+    out.push({ email: email, studentName: (row.dataset.chargeName || ''), name: label });
+  });
+  return out;
 }
 
 // ── Поиск учеников для добавления в список ожидаемых (только для администратора)
@@ -5029,6 +5127,7 @@ async function submitAttendance() {
   document.querySelectorAll('.extra-attend-inp').forEach(inp => {
     const v = inp.value.trim(); if (v) extraRaw.push(v);
   });
+  const guestCharges = _gatherGuestCharges();   // гости: списать занятие с выбранного ученика
 
   // Авто-матч: пробуем найти каждое имя в базе
   const extraMatched = extraRaw.map(name => {
@@ -5062,6 +5161,7 @@ async function submitAttendance() {
       extraRaw,         // сырые имена от тренера
       extraMatched,     // с результатами матча
       extraAttendees: extraRaw, // backward compat
+      guestCharges,             // гости, списанные с учеников
       mismatch: hasMismatch,
       mismatchNote: mismatchNote.join('; '),
     };
@@ -5079,7 +5179,7 @@ async function submitAttendance() {
     const _lessonsRef = db.collection('lessons').where('groupLessonId','==',groupId);
     const indSnap = await (isAdmin ? _lessonsRef : _lessonsRef.where('trainerId','==',currentUser.uid)).get();
     const existingByEmail = {};
-    indSnap.docs.forEach(doc => { existingByEmail[doc.data().studentEmail] = doc; });
+    indSnap.docs.forEach(doc => { if (doc.data().isGuestCharge) return; existingByEmail[doc.data().studentEmail] = doc; });   // гостевые записи не мешают учёту участников
     for (const email of expectedEmails) {
       const attended = attendedEmails.includes(email);
       const s = students.find(x => x.email === email);
@@ -5114,10 +5214,25 @@ async function submitAttendance() {
       }
     }
 
+    // Гости: пересобираем начисто — удаляем прежние гостевые записи и создаём по текущему списку.
+    // Каждая гостевая запись = «done» с email выбранного ученика → списывает его занятие.
+    indSnap.docs.filter(d => d.data().isGuestCharge).forEach(d => batch.delete(d.ref));
+    guestCharges.forEach(gc => {
+      const ref = db.collection('lessons').doc();
+      batch.set(ref, {
+        trainerId: g.trainerId, trainerName: g.trainerName,
+        studentEmail: gc.email, studentName: (gc.name ? gc.name + ' (гость)' : 'Гость'), studentId: '',
+        _date: g._date, format: g.format, type: 'group', notes: g.notes || '',
+        status: 'done', attended: true, groupLessonId: groupId,
+        isGuestCharge: true, guestOf: gc.studentName || '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
     await batch.commit();
 
     const updatedG = { ...g, attendanceMarked: true, attendedEmails, attendedNames,
-      extraRaw, extraMatched, extraAttendees: extraRaw, mismatch: hasMismatch,
+      extraRaw, extraMatched, extraAttendees: extraRaw, guestCharges, mismatch: hasMismatch,
       mismatchNote: mismatchNote.join('; '), studentEmails: expectedEmails, studentNames: expectedNames };
     if (isAdmin) updatedG.adminApproved = true;
     if (_attendNewExpected.length > 0) {
@@ -5175,6 +5290,7 @@ async function approveAttendance() {
   document.querySelectorAll('.extra-attend-inp').forEach(inp => {
     const v = inp.value.trim(); if (v) extraRawAll.push(v);
   });
+  const guestCharges = _gatherGuestCharges();   // гости: списать с выбранного ученика
   // Авто-матч заново по полной базе (у тренера матч шёл только по его ученикам)
   const extraMatchedAll = extraRawAll.map(name => {
     const found = _matchNameToStudent(name);
@@ -5221,12 +5337,13 @@ async function approveAttendance() {
     updateData.extraRaw = extraRaw;
     updateData.extraAttendees = extraRaw;
     updateData.extraMatched = extraMatchedLeft;
+    updateData.guestCharges = guestCharges;
     batch.update(db.collection('groupLessons').doc(groupId), updateData);
 
     // Обновляем balance-записи
     const indSnap = await db.collection('lessons').where('groupLessonId','==',groupId).get();
     const existingByEmail = {};
-    indSnap.docs.forEach(doc => { existingByEmail[doc.data().studentEmail] = doc; });
+    indSnap.docs.forEach(doc => { if (doc.data().isGuestCharge) return; existingByEmail[doc.data().studentEmail] = doc; });   // гостевые записи не мешают учёту участников
     for (const email of expectedEmails) {
       const attended = attendedEmails.includes(email);
       const s = students.find(x => x.email === email);
@@ -5266,6 +5383,20 @@ async function approveAttendance() {
       });
     });
 
+    // Гости: пересобираем начисто (удаляем прежние гостевые, создаём по текущему списку) → списывают выбранных учеников
+    indSnap.docs.filter(d => d.data().isGuestCharge).forEach(d => batch.delete(d.ref));
+    guestCharges.forEach(gc => {
+      const ref = db.collection('lessons').doc();
+      batch.set(ref, {
+        trainerId: g.trainerId, trainerName: g.trainerName,
+        studentEmail: gc.email, studentName: (gc.name ? gc.name + ' (гость)' : 'Гость'), studentId: '',
+        _date: g._date, format: g.format, type: 'group', notes: g.notes || '',
+        status: 'done', attended: true, groupLessonId: groupId,
+        isGuestCharge: true, guestOf: gc.studentName || '',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
     await batch.commit();
 
     const updatedG = { ...g, adminApproved: true, attendanceMarked: true,
@@ -5278,6 +5409,7 @@ async function approveAttendance() {
     updatedG.extraRaw = extraRaw;
     updatedG.extraAttendees = extraRaw;
     updatedG.extraMatched = extraMatchedLeft;
+    updatedG.guestCharges = guestCharges;
     _editGroupCache[groupId] = updatedG;
     _attendNewExpected = [];
 
