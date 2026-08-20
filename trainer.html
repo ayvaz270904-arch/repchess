@@ -170,6 +170,17 @@ input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;display:flex;align-items:flex-end;justify-content:center;padding:0;}
 .modal{--mp:20px;background:var(--surface);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:88vh;overflow-y:auto;overflow-x:hidden;padding:24px var(--mp) 32px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 .modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 20px;}
+/* Главное действие всегда под рукой: при длинном списке (группа на 10 человек)
+   кнопка прилипает к низу, а не ждёт в конце прокрутки. Только внутри модалок. */
+.modal .btn-gold{position:sticky;bottom:0;z-index:4;margin-top:4px;box-shadow:0 0 0 10px var(--surface);}
+/* Отметка присутствия: палец, а не курсор — крупнее цель и вся строка отзывается */
+.attend-row{padding:12px 0;}
+.attend-row:hover{background:color-mix(in srgb, var(--surface2) 45%, transparent);}
+.attend-check{width:26px;height:26px;border-radius:7px;font-size:15px;}
+.attend-check:hover{border-color:var(--green);}
+/* Секции формы посещаемости отделены линией — три блока подряд иначе сливаются */
+#attend-trainer-form .form-row + .form-row,
+#attend-admin-controls .form-row + .form-row{border-top:1px solid color-mix(in srgb, var(--border) 55%, transparent);padding-top:14px;}
 .modal-title{position:sticky;top:0;z-index:5;background:var(--surface);font-size:1.05rem;font-weight:700;
   letter-spacing:-.01em;margin:0 calc(-1 * var(--mp)) 16px;padding:6px var(--mp) 12px;
   border-bottom:1px solid var(--border);box-shadow:0 -26px 0 var(--surface);}
