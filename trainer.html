@@ -102,13 +102,14 @@ input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 .balance-empty{background:color-mix(in srgb, var(--red) 15%, transparent);color:var(--red);}
 
 /* ── LESSON ITEM ── */
-.lesson-item{padding:12px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);}
+.lesson-item{padding:13px 10px;margin:0 -10px;border-radius:8px;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);transition:background .12s;}
+.lesson-item:hover{background:color-mix(in srgb, var(--surface2) 60%, transparent);}
 .lesson-item:last-child{border-bottom:none;}
 .lesson-row1{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
-.lesson-student{font-weight:700;font-size:.9rem;}
-.lesson-date{font-size:.78rem;color:var(--text2);}
+.lesson-student{font-weight:700;font-size:.92rem;letter-spacing:-.01em;}
+.lesson-date{font-size:.78rem;color:var(--text2);font-variant-numeric:tabular-nums;letter-spacing:.01em;}
 .lesson-row2{display:flex;align-items:center;gap:8px;}
-.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.72rem;font-weight:700;}
+.tag{display:inline-block;padding:3px 8px;border-radius:4px;font-size:.72rem;font-weight:700;line-height:1.35;}
 .tag-offline{background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2);}
 .tag-online{background:color-mix(in srgb, var(--green) 12%, transparent);color:var(--green);}
 .tag-group{background:color-mix(in srgb, var(--purple) 12%, transparent);color:var(--purple);}
@@ -222,10 +223,10 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .fin-cell-btn:hover{transform:scale(1.04);outline:1px solid var(--accent);border-radius:10px;}
 
 /* ── PENDING LESSON ── */
-.tag-pending{background:color-mix(in srgb, var(--orange) 18%, transparent);color:var(--orange);}
-.lesson-pending-dot{width:8px;height:8px;border-radius:50%;background:var(--orange);flex-shrink:0;animation:pulse-dot 1.4s ease-in-out infinite;}
+.tag-pending{background:color-mix(in srgb, var(--accent) 16%, transparent);color:var(--accent);}
+.lesson-pending-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;animation:pulse-dot 1.4s ease-in-out infinite;}
 @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
-.lesson-needs-confirm{border-left:3px solid var(--orange);padding-left:10px;margin-left:-10px;}
+.lesson-needs-confirm{border-left:2px solid var(--accent);background:color-mix(in srgb, var(--accent) 7%, transparent);}
 .edit-btn-confirm{background:color-mix(in srgb, var(--orange) 15%, transparent)!important;border:1px solid color-mix(in srgb, var(--orange) 40%, transparent)!important;border-radius:8px!important;color:var(--orange)!important;}
 
 /* ── ATTENDANCE ── */
@@ -1851,8 +1852,8 @@ async function loadHomePage(fromCache) {
   ].sort((a,b) => (a._date||'') > (b._date||'') ? 1 : -1);
   const actEl = document.getElementById('home-actions');
   if (actEl) actEl.innerHTML = needAction.length ? `
-    <div class="card" style="margin-bottom:14px;border-color:color-mix(in srgb, var(--orange) 40%, transparent)">
-      <div class="card-head"><span class="card-title">❗ Требуют действия</span><span class="dim" style="font-size:.78rem">${needAction.length}</span></div>
+    <div class="card" style="margin-bottom:14px;border-color:color-mix(in srgb, var(--accent) 38%, transparent)">
+      <div class="card-head"><span class="card-title">❗ Требуют действия</span><span style="font-size:.72rem;font-weight:700;background:color-mix(in srgb, var(--accent) 16%, transparent);color:var(--accent);padding:2px 9px;border-radius:20px">${needAction.length}</span></div>
       <div class="card-body">${needAction.slice(0, 15).map(item => item._isGroup ? groupFeedItemHTML(item) : lessonItemHTML(item)).join('')}${needAction.length > 15 ? `<div class="dim" style="text-align:center;padding:8px;font-size:.78rem">и ещё ${needAction.length - 15}…</div>` : ''}</div>
     </div>` : '';
 
