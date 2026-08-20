@@ -105,10 +105,8 @@ input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 .lesson-item{padding:13px 10px;margin:0 -10px;border-radius:8px;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);transition:background .12s;}
 .lesson-item:hover{background:color-mix(in srgb, var(--surface2) 60%, transparent);}
 .lesson-item:last-child{border-bottom:none;}
-.lesson-row1{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
 .lesson-student{font-weight:700;font-size:.92rem;letter-spacing:-.01em;}
 .lesson-date{font-size:.78rem;color:var(--text2);font-variant-numeric:tabular-nums;letter-spacing:.01em;}
-.lesson-row2{display:flex;align-items:center;gap:8px;}
 .tag{display:inline-block;padding:3px 8px;border-radius:4px;font-size:.72rem;font-weight:700;line-height:1.35;}
 .tag-offline{background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2);}
 .tag-online{background:color-mix(in srgb, var(--green) 12%, transparent);color:var(--green);}
@@ -2916,33 +2914,30 @@ function renderHistoryList() {
 function histLessonItemHTML(l) {
   const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
   const { isPending, isDone, isCancelled, isRescheduled, needsConfirm, isScheduled, isLocked, isAdmin } = getLessonFlags(l);
+  const bigTime  = l.time ? esc(l.time) : d;
+  const smallDay = l.time ? d : '';
 
   // История: тренеру карандаш открывает ПРОСМОТР (+удаление по правам),
-  // админу — полноценное редактирование
+  // админу — полноценное редактирование. Права здесь не меняем — действия живут на Главной.
   const editBtnHTML =
-    `<button data-edit-id="${esc(l.id)}" ${isAdmin?'':'data-view="1"'} title="${isAdmin?'Редактировать':'Просмотр'}"
-      style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>`;
+    `<button data-edit-id="${esc(l.id)}" ${isAdmin?'':'data-view="1"'} class="li-ico" title="${isAdmin?'Редактировать':'Просмотр'}">✏️</button>`;
 
   return `<div class="lesson-item${isCancelled?' is-cancelled':''}${needsConfirm?' lesson-needs-confirm':''}">
-    <div class="lesson-row1">
-      <div style="display:flex;align-items:center;gap:7px;min-width:0">
-        ${needsConfirm ? '<div class="lesson-pending-dot"></div>' : ''}
-        <span class="lesson-student" style="cursor:pointer" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
+    <div class="li-row">
+      <div class="li-time">${bigTime}${smallDay ? `<small>${smallDay}</small>` : ''}</div>
+      <div class="li-main">
+        <span class="lesson-student" style="cursor:pointer;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
+        <div class="li-meta">
+          <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
+          ${needsConfirm ? '<span class="tag tag-pending">Подтвердить</span>' : ''}
+          ${isScheduled  ? '<span class="tag tag-scheduled">Запланировано</span>' : ''}
+          ${isCancelled  ? '<span class="tag tag-cancelled">Отменено</span>' : ''}
+          ${isRescheduled? '<span class="tag tag-rescheduled">Перенесено</span>' : ''}
+          ${l.trainerName&&isAdmin?`<span class="dim" style="font-size:.73rem">${esc(l.trainerName)}</span>`:''}
+          ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,60))}${l.notes.length>60?'…':''}</span>`:''}
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span class="lesson-date">${d}${l.time ? ' · ' + esc(l.time) : ''}</span>
-        ${editBtnHTML}
-      </div>
-    </div>
-    <div class="lesson-row2">
-      <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
-      ${needsConfirm ? '<span class="tag tag-pending">Подтвердить</span>' : ''}
-      ${isScheduled  ? '<span class="tag" style="background:color-mix(in srgb, var(--accent2) 10%, transparent);color:var(--accent2)">📅 Запланировано</span>' : ''}
-      ${isDone       ? '<span class="tag" style="background:color-mix(in srgb, var(--green) 10%, transparent);color:var(--green)">✅</span>' : ''}
-      ${isCancelled  ? '<span class="tag tag-cancelled">Отменено</span>' : ''}
-      ${isRescheduled? '<span class="tag tag-rescheduled">Перенесено</span>' : ''}
-      ${l.trainerName&&isAdmin?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
-      ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,60))}${l.notes.length>60?'…':''}</span>`:''}
+      <div class="li-side">${editBtnHTML}</div>
     </div>
   </div>`;
 }
@@ -2950,27 +2945,30 @@ function histLessonItemHTML(l) {
 function histGroupItemHTML(g) {
   const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short'}) : '—';
   const { submitted, approved, needsApproval, canEdit, isAdmin } = getGroupFlags(g);
+  const bigTime  = g.time ? esc(g.time) : d;
+  const smallDay = g.time ? d : '';
   return `<div class="lesson-item">
-    <div class="lesson-row1">
-      <span class="lesson-student">👥 ${esc(g.venue||'Группа')}</span>
-      <div style="display:flex;align-items:center;gap:6px">
-        <span class="lesson-date">${d}</span>
-        <button data-edit-group-id="${g.id}" ${isAdmin?'':'data-view="1"'} title="${isAdmin?'Редактировать':'Просмотр'}" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px">✏️</button>
+    <div class="li-row">
+      <div class="li-time">${bigTime}${smallDay ? `<small>${smallDay}</small>` : ''}</div>
+      <div class="li-main">
+        <span class="lesson-student" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">👥 ${esc(g.venue||'Группа')}</span>
+        <div class="li-meta">
+          <span class="tag tag-group">${g.count} чел.${g.maxStudents ? ' / ' + g.maxStudents : ''}</span>
+          <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
+          ${approved ? `<span class="tag tag-attendance-ok">✅ подтв.</span>` : ''}
+          ${submitted&&!approved ? `<span class="tag tag-scheduled">⏳ проверка</span>` : ''}
+          ${_grpVisBadge(g)}
+          ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.73rem">${esc(g.trainerName)}</span>`:''}
+        </div>
+      </div>
+      <div class="li-side">
+        <button data-edit-group-id="${g.id}" ${isAdmin?'':'data-view="1"'} class="li-ico" title="${isAdmin?'Редактировать':'Просмотр'}">✏️</button>
       </div>
     </div>
-    <div class="lesson-row2">
-      <span class="tag tag-group">${g.count} чел.${g.maxStudents ? ' / ' + g.maxStudents : ''}</span>
-      <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
-      ${approved ? `<span class="tag tag-attendance-ok" style="padding:1px 5px;font-size:.68rem">✅ подтв.</span>` : ''}
-      ${submitted&&!approved ? `<span class="tag" style="background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2);padding:1px 5px;font-size:.68rem">⏳ проверка</span>` : ''}
-      ${_grpVisBadge(g)}
-      ${g.time ? `<span style="font-size:.72rem;color:var(--text2)">🕐 ${g.time}</span>` : ''}
-      ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;padding-left:65px">
       ${(g.studentNames||[]).map(n=>`<span style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:.73rem">${esc(n)}</span>`).join('')}
     </div>
-    ${g.notes?`<div style="font-size:.75rem;color:var(--text2);margin-top:6px;font-style:italic">💬 ${esc(g.notes)}</div>`:''}
+    ${g.notes?`<div style="font-size:.75rem;color:var(--text2);margin-top:6px;padding-left:65px;font-style:italic">💬 ${esc(g.notes)}</div>`:''}
   </div>`;
 }
 
