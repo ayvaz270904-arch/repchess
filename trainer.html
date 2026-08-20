@@ -1711,7 +1711,9 @@ function _applyUsedMap(usedMap) {
     s.used = usedMap[s.email] || 0;
     // FIFO: проведённые сначала гасят истёкшие пакеты, и только остаток — активные
     const usedActive = Math.max(0, s.used - (s.purchasedExpired || 0));
-    s.remaining = Math.max(0, (s.purchased || 0) - usedActive);
+    s.usedActive = usedActive;
+    s.remainingRaw = (s.purchased || 0) - usedActive;   // без зажима — для админа (виден долг)
+    s.remaining = Math.max(0, s.remainingRaw);          // для значков и клиента
   });
 }
 
@@ -3123,21 +3125,17 @@ async function loadAdminData() {
 }
 
 async function loadBalanceAlerts() {
-  // Get used lessons per student
-  const snap = await db.collection('lessons').get();
-  const usedMap = {};
-  snap.docs.forEach(d => {
-    const _raw = String(d.data().studentEmail || '').toLowerCase().trim();
-    const email = _emailAlias[_raw] || _raw;   // фолдим к представительскому email (склейка по телефону)
-    usedMap[email] = (usedMap[email]||0) + 1;
-  });
+  // Единый расчёт (кэш 5/10 мин). Своего полного чтения коллекции здесь больше нет:
+  // оно и расходилось с остальными числами (считало ВСЕ занятия, включая отменённые
+  // и ещё не проведённые, и без FIFO по истёкшим пакетам), и жгло квоту Firestore.
+  await _enrichStudentsWithRemaining();
 
   const alerts = [];
   const listItems = [];
   for (const s of students) {
     if (!s.purchased) continue;
-    const used = usedMap[s.email] || 0;
-    const remaining = s.purchased - used;
+    const used = s.used || 0;
+    const remaining = s.remainingRaw ?? s.remaining ?? 0;
     if (remaining <= 0) {
       alerts.push(`<div class="alert"><div class="alert-icon">🔴</div><div class="alert-text"><b>${esc(s.name)}</b> — закончились занятия (куплено: ${s.purchased}, использовано: ${used})</div></div>`);
       listItems.push({s, remaining, used});
@@ -4478,14 +4476,12 @@ async function openStudentInfoModal(email) {
       : db.collection('lessons').where('studentEmail','==', email);
     const snap = await _q.get();
     const allLessons = snap.docs.map(d=>({id:d.id,...d.data()}));
-    // Списывают баланс ТОЛЬКО проведённые (done или легаси без статуса) — единое правило
-    // CRM/тренерки/бота. Раньше считались и pending (ещё не проведённые!), и absent.
-    const used = allLessons.filter(l => !l.status || l.status === 'done').length;
+    // Баланс НЕ считаем здесь — берём из единого расчёта (_applyUsedMap),
+    // иначе формулы неизбежно разъезжаются: именно так карточка и стала врать.
+    if (s.remainingRaw == null) await _enrichStudentsWithRemaining();
+    const used = s.used || 0;
+    const remaining = s.remainingRaw ?? 0;
     const upcoming = allLessons.filter(l => (l.status === 'pending' || l.status === 'rescheduled')).length;
-    // FIFO: проведённые сначала гасят ИСТЁКШИЕ пакеты, и только остаток — активные.
-    // Без этого занятия из давно истёкших пакетов вычитались из текущего.
-    const usedActive = Math.max(0, used - (s.purchasedExpired || 0));
-    const remaining = (s.purchased || 0) - usedActive;   // без зажима: админу виден реальный долг
     const lastLesson = allLessons.filter(l=>l._date).sort((a,b)=>b._date>a._date?1:-1)[0];
     const lastDate = lastLesson?._date
       ? new Date(lastLesson._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})
@@ -6004,7 +6000,7 @@ async function loadHomeReminders() {
     const last = lastDone[em] || '', up = upCnt[em] || 0;
     if (!((last && last >= cutoff) || up > 0)) continue;   // не занимается сейчас — пропускаем
     activeCnt++;
-    const rem = s.remaining ?? ((s.purchased || 0) - (s.used || 0));
+    const rem = s.remainingRaw ?? s.remaining ?? 0;
     if (rem > 2) continue;
     if (rem <= 0) zeroCnt++;
     if (rem <= 0 && up > 0) debtCnt++;                     // придёт на занятие с нулевым балансом
