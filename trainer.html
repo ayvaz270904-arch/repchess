@@ -1311,6 +1311,10 @@ function _closeModal(id) {
 // ══════════════════════════════════════════════
 let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
+// Метка сборки: видно в консоли, чтобы всегда понимать, какой код реально загружен
+const APP_VERSION = '08.20-badgefix';
+console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
+
 let students = [];          // from  CSV
 let _nickByEmail = {}, _nickByPhone = {};   // ник ТГ из «Лиды»/«Профили» для поиска учеников по нику
 let _nameByEmail = {};   // реальное ФИО из «Профили» по почте (в т.ч. служебной cert-*@repchess.local)
