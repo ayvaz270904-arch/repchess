@@ -4469,10 +4469,23 @@ async function openStudentInfoModal(email) {
 
   try {
     // Считаем использованные занятия
-    const snap = await db.collection('lessons').where('studentEmail','==',email).get();
+    // Все почты этого человека (профили склеены по телефону) — иначе занятия,
+    // записанные на вторую почту, не найдутся и баланс будет завышен
+    const _mails = Object.keys(_emailAlias).filter(e => _emailAlias[e] === email);
+    if (!_mails.includes(email)) _mails.push(email);
+    const _q = _mails.length > 1
+      ? db.collection('lessons').where('studentEmail','in', _mails.slice(0,10))
+      : db.collection('lessons').where('studentEmail','==', email);
+    const snap = await _q.get();
     const allLessons = snap.docs.map(d=>({id:d.id,...d.data()}));
-    const used = allLessons.filter(l => l.status !== 'cancelled').length;
-    const remaining = s.purchased - used;
+    // Списывают баланс ТОЛЬКО проведённые (done или легаси без статуса) — единое правило
+    // CRM/тренерки/бота. Раньше считались и pending (ещё не проведённые!), и absent.
+    const used = allLessons.filter(l => !l.status || l.status === 'done').length;
+    const upcoming = allLessons.filter(l => (l.status === 'pending' || l.status === 'rescheduled')).length;
+    // FIFO: проведённые сначала гасят ИСТЁКШИЕ пакеты, и только остаток — активные.
+    // Без этого занятия из давно истёкших пакетов вычитались из текущего.
+    const usedActive = Math.max(0, used - (s.purchasedExpired || 0));
+    const remaining = (s.purchased || 0) - usedActive;   // без зажима: админу виден реальный долг
     const lastLesson = allLessons.filter(l=>l._date).sort((a,b)=>b._date>a._date?1:-1)[0];
     const lastDate = lastLesson?._date
       ? new Date(lastLesson._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'})
@@ -4501,12 +4514,12 @@ async function openStudentInfoModal(email) {
         </div>
         <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center">
           <div style="font-size:1.6rem;font-weight:800;color:var(--accent2)">${used}</div>
-          <div style="font-size:.7rem;color:var(--text2)">Проведено</div>
+          <div style="font-size:.7rem;color:var(--text2)">Проведено${upcoming ? ` · +${upcoming} в плане` : ''}</div>
         </div>
       </div>
       <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📅 Последнее занятие: <span style="color:var(--text)">${lastDate}</span></div>
       <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">🎯 Тренер: ${trainerStr}</div>
-      <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📦 Куплено: <span style="color:var(--text)">${s.purchased} занятий</span></div>
+      <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📦 Куплено: <span style="color:var(--text)">${s.purchased} занятий</span>${s.purchasedExpired ? ` <span style="color:var(--text2)">(+${s.purchasedExpired} истекло)</span>` : ''}</div>
       ${Object.keys(s.byCat||{}).length ? `<div style="font-size:.78rem;color:var(--text2);margin:-2px 0 6px 22px">${Object.keys(s.byCat).map(k=>`${esc(k)} — <b style="color:var(--text)">${s.byCat[k]}</b>`).join('<br>')}</div>` : ''}
       ${(s.overrideByCat && Object.keys(s.overrideByCat).length) ? `<div style="font-size:.75rem;color:var(--accent2);margin:2px 0 6px 22px">✏️ Ручной баланс активен</div>` : ''}
       ${currentTrainer?.role==='admin' ? _balancePanelHTML(s) : ''}
