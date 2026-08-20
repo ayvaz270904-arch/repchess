@@ -215,6 +215,10 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .note-chip:hover,.note-chip:active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:var(--accent);color:var(--accent);}
 
 /* ── REMIND CARD ── */
+.rem-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);}
+.rem-stat{background:var(--surface);padding:11px 12px;}
+.rem-stat b{display:block;font-size:1.3rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;}
+.rem-stat span{font-size:.64rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
 .remind-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);}
 .remind-item:last-child{border-bottom:none;}
 .copy-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.72rem;padding:4px 8px;cursor:pointer;white-space:nowrap;}
@@ -366,9 +370,10 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <!-- Напомнить о продлении -->
       <div class="card" id="home-remind-card" style="display:none;border-color:color-mix(in srgb, var(--orange) 35%, transparent);margin-bottom:14px">
         <div class="card-head" style="border-color:color-mix(in srgb, var(--orange) 25%, transparent)">
-          <span class="card-title">🔔 Написать сегодня</span>
-          <span style="font-size:.72rem;color:var(--orange)">заканчиваются занятия</span>
+          <span class="card-title">💸 Занимаются, но баланс кончился</span>
+          <span id="home-remind-sub" style="font-size:.72rem;color:var(--text2)"></span>
         </div>
+        <div class="rem-stats" id="home-remind-stats"></div>
         <div class="card-body" id="home-remind-body"></div>
       </div>
       <div id="home-actions"></div>
@@ -5951,34 +5956,88 @@ async function saveUnknownPayments() {
 async function loadHomeReminders() {
   const isAdmin = currentTrainer.role === 'admin';
   const myAssigned = currentTrainer.assignedStudents || [];
-
-  // Фильтруем: нужные ученики
-  let pool = isAdmin ? students.filter(s => s.purchased > 0) :
+  const pool = isAdmin ? students.filter(s => s.purchased > 0) :
     myAssigned.length ? students.filter(s => assignedHas(myAssigned, s.email) && s.purchased > 0) : [];
 
-  const remind = [];
+  // КТО ЗАНИМАЕТСЯ СЕЙЧАС — считаем по занятиям, а не по факту давней покупки.
+  // Без этого в список попадали все, кто когда-то купил пакет и израсходовал его хоть год назад.
+  const ACTIVE_DAYS = 30;
+  const today  = localDateStr(new Date());
+  const cutoff = localDateStr(new Date(Date.now() - ACTIVE_DAYS * 86400000));
+  const fold = e => { const x = String(e || '').toLowerCase().trim(); return _emailAlias[x] || x; };
+  const lastDone = {}, upCnt = {}, upNext = {};
+  (_homeIndivCache || []).forEach(l => {
+    const em = fold(l.studentEmail); if (!em || !l._date) return;
+    if (!l.status || l.status === 'done') {
+      if (!lastDone[em] || l._date > lastDone[em]) lastDone[em] = l._date;
+    } else if ((l.status === 'pending' || l.status === 'rescheduled') && l._date >= today) {
+      upCnt[em] = (upCnt[em] || 0) + 1;
+      if (!upNext[em] || l._date < upNext[em]) upNext[em] = l._date;
+    }
+  });
+  (_homeGrpCache || []).forEach(g => {
+    if (!g._date) return;
+    (g.attendedEmails || []).forEach(e => { const em = fold(e);
+      if (em && (!lastDone[em] || g._date > lastDone[em])) lastDone[em] = g._date; });
+    if (g._date >= today) (g.studentEmails || []).forEach(e => { const em = fold(e); if (!em) return;
+      upCnt[em] = (upCnt[em] || 0) + 1;
+      if (!upNext[em] || g._date < upNext[em]) upNext[em] = g._date; });
+  });
+
+  const rows = [];
+  let activeCnt = 0, zeroCnt = 0, debtCnt = 0;
   for (const s of pool) {
-    // Используем уже вычисленный s.remaining (из _enrichStudentsWithRemaining)
-    const rem = s.remaining ?? (s.purchased - (s.used || 0));
-    if (rem <= 2) remind.push({ s, rem });
+    const em = String(s.email || '').toLowerCase();
+    const last = lastDone[em] || '', up = upCnt[em] || 0;
+    if (!((last && last >= cutoff) || up > 0)) continue;   // не занимается сейчас — пропускаем
+    activeCnt++;
+    const rem = s.remaining ?? ((s.purchased || 0) - (s.used || 0));
+    if (rem > 2) continue;
+    if (rem <= 0) zeroCnt++;
+    if (rem <= 0 && up > 0) debtCnt++;                     // придёт на занятие с нулевым балансом
+    rows.push({ s, rem, last, up, next: upNext[em] || '' });
   }
 
   const el = document.getElementById('home-remind-card');
   if (!el) return;
-  if (!remind.length) { el.style.display = 'none'; return; }
+  if (!rows.length) { el.style.display = 'none'; return; }
 
-  remind.sort((a,b) => a.rem - b.rem);
+  // Сначала те, кто уже записан с нулём (самое срочное), потом по остатку
+  rows.sort((a, b) => (b.rem <= 0 && b.up > 0) - (a.rem <= 0 && a.up > 0) || a.rem - b.rem || b.up - a.up);
   el.style.display = '';
-  document.getElementById('home-remind-body').innerHTML = remind.slice(0,6).map(({s, rem}) => {
+
+  document.getElementById('home-remind-stats').innerHTML = `
+    <div class="rem-stat"><b>${activeCnt}</b><span>занимаются</span></div>
+    <div class="rem-stat"><b style="color:var(--orange)">${zeroCnt}</b><span>баланс на нуле</span></div>
+    <div class="rem-stat"><b style="color:${debtCnt ? 'var(--accent)' : 'var(--text2)'}">${debtCnt}</b><span>придут в долг</span></div>`;
+  const sub = document.getElementById('home-remind-sub');
+  if (sub) sub.textContent = `${rows.length} из ${activeCnt}`;
+
+  const daysAgo = ds => {
+    if (!ds) return '';
+    const n = Math.round((new Date(today) - new Date(ds)) / 86400000);
+    if (n <= 0) return 'сегодня';
+    if (n === 1) return 'вчера';
+    return `${n} дн. назад`;
+  };
+  const fmtShort = ds => ds ? new Date(ds + 'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '';
+
+  document.getElementById('home-remind-body').innerHTML = rows.slice(0, 8).map(({ s, rem, last, up, next }) => {
+    const debt  = rem <= 0 && up > 0;
     const color = rem <= 0 ? 'var(--red)' : 'var(--orange)';
     const label = rem <= 0 ? '0 занятий' : `${rem} зан.`;
+    const ctx = [ last ? 'был' + (daysAgo(last) === 'сегодня' ? ' сегодня' : ' ' + daysAgo(last)) : '',
+                  up ? `записан(а) на ${fmtShort(next)}${up > 1 ? ` (+${up - 1})` : ''}` : '' ]
+                .filter(Boolean).join(' · ');
     return `<div class="remind-item">
-      <div>
-        <div style="font-weight:600;font-size:.85rem">${esc(s.name)}</div>
-        ${s.phone ? `<div style="font-size:.72rem;color:var(--text2)">${esc(s.phone)}</div>` : ''}
+      <div style="min-width:0">
+        <div style="font-weight:600;font-size:.85rem;display:flex;align-items:center;gap:6px">
+          ${debt ? '<span class="dot"></span>' : ''}${esc(s.name)}
+        </div>
+        <div style="font-size:.72rem;color:var(--text2)">${esc(s.phone || '')}${s.phone && ctx ? ' · ' : ''}${ctx}</div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span class="balance-badge" style="background:color-mix(in srgb, var(--red) 12%, transparent);color:${color}">${label}</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        <span class="balance-badge" style="background:color-mix(in srgb, ${color} 14%, transparent);color:${color}">${label}</span>
         ${s.phone ? `<button class="copy-btn" onclick="navigator.clipboard.writeText('${escJs(s.phone)}').then(()=>toast('Номер скопирован','ok'))">📋</button>` : ''}
       </div>
     </div>`;
