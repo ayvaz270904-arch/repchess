@@ -90,7 +90,7 @@ input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 
 /* ── STUDENT SEARCH ── */
 .student-search-wrap{position:relative;}
-.student-results{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.student-results{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;max-height:340px;overflow-y:auto;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.4);}
 .student-result-item{padding:11px 14px;cursor:pointer;border-bottom:1px solid color-mix(in srgb, var(--border) 50%, transparent);display:flex;align-items:center;justify-content:space-between;}
 .student-result-item:last-child{border-bottom:none;}
 .student-result-item:hover{background:var(--surface2);}
@@ -100,6 +100,7 @@ input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 .balance-ok{background:color-mix(in srgb, var(--green) 15%, transparent);color:var(--green);}
 .balance-low{background:color-mix(in srgb, var(--orange) 15%, transparent);color:var(--orange);}
 .balance-empty{background:color-mix(in srgb, var(--red) 15%, transparent);color:var(--red);}
+.balance-unknown{background:var(--surface2);color:var(--text2);}
 
 /* ── LESSON ITEM ── */
 .lesson-item{padding:13px 10px;margin:0 -10px;border-radius:8px;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);transition:background .12s;}
@@ -1771,13 +1772,17 @@ async function _enrichStudentsWithRemaining() {
 
 // Хелперы для значка баланса на основе остатка
 function _remBadgeClass(s) {
-  const r = s.remaining ?? s.purchased ?? 0;
+  // ВАЖНО: раньше при непосчитанном остатке подставлялось s.purchased — и КУПЛЕННОЕ
+  // показывалось с подписью «ост.». Теперь честно: не посчитано — нейтральный бейдж.
+  const r = s.remainingRaw ?? s.remaining;
+  if (r == null) return 'balance-unknown';
   if (r <= 0) return 'balance-empty';
   if (r <= 2) return 'balance-low';
   return 'balance-ok';
 }
 function _remBadgeText(s) {
-  const r = s.remaining ?? s.purchased ?? 0;
+  const r = s.remainingRaw ?? s.remaining;
+  if (r == null) return '…';
   return r + ' ост.';
 }
 
@@ -4769,6 +4774,7 @@ async function openAttendModal(groupId) {
     } catch(e) { toast('Ошибка: ' + e.message, 'err'); return; }
   }
 
+  await _enrichStudentsWithRemaining();   // остатки должны быть посчитаны до показа бейджей
   document.getElementById('attend-group-id').value = groupId;
   const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long'}) : '';
   document.getElementById('attend-modal-title').textContent = `📋 Посещаемость — ${esc(g.venue||'Группа')} ${dt}`;
