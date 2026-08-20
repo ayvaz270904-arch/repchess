@@ -121,14 +121,14 @@ const tg = window.Telegram ? window.Telegram.WebApp : null;
 const app = document.getElementById('app');
 
 // Политика обработки персональных данных (страница на сайте). Пусто — текст согласия без ссылки.
-const POLICY_URL = 'https://repchess.ru/policy';
+const POLICY_URL = 'https://edu.repchess.ru/policy';
 // Публичная оферта (страница на сайте). Пусто — строка про оферту не показывается.
-const OFFER_URL = 'https://repchess.ru/offer';
+const OFFER_URL = 'https://edu.repchess.ru/offer';
 
 // Кнопки покупки на главной: [подпись, ссылка на страницу оплаты]. Пустой список — карточка скрыта.
 // UTM-метки → аналитика сайта (Тильда) видит переходы из бота.
 const BUY_LINKS = [
-  ['Выбрать пакет на сайте', 'https://repchess.ru/education?utm_source=telegram&utm_medium=bot_cabinet&utm_campaign=buy'],
+  ['Выбрать пакет на сайте', 'https://edu.repchess.ru?utm_source=telegram&utm_medium=bot_cabinet&utm_campaign=buy'],
 ];
 
 let data = null;          // основной payload кабинета

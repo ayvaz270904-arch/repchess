@@ -39,10 +39,10 @@ export const MOCK_CABINET: Cabinet = {
       ] },
       { date: '2026-08-09', label: 'Суббота, 9 авг', items: [
         { time: '12:00', title: 'Групповое офлайн, младшая группа' },
-        { time: '18:00', title: 'Турнир выходного дня', ticketUrl: 'https://repchess.ru', ticketLabel: 'Регистрация' },
+        { time: '18:00', title: 'Турнир выходного дня', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Регистрация' },
       ] },
     ],
-    note: { text: 'Приведи друга — занятие в подарок', url: 'https://repchess.ru' },
+    note: { text: 'Приведи друга — занятие в подарок', url: 'https://edu.repchess.ru' },
     postUrl: 'https://t.me/RepChessEducation',
   },
   lessonHistory: [
@@ -66,6 +66,6 @@ export const MOCK_CABINET: Cabinet = {
   email: 'sasha@mail.ru',
   emailPending: false,
   refLink: 'https://t.me/RepChessEducation_bot?start=ref_6666696537',
-  buyLinks: [['Выбрать пакет на сайте', 'https://repchess.ru/education']],
+  buyLinks: [['Выбрать пакет на сайте', 'https://edu.repchess.ru']],
   promoAvailable: false,
 }
