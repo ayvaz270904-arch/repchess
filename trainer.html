@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Rep Chess Education — Журнал тренера</title>
 <link rel="manifest" href="manifest-trainer.json">
-<meta name="theme-color" content="#AC3D36">
+<meta name="theme-color" content="#CF4B4E">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Журнал">
@@ -16,9 +16,11 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --bg:#0f1117;--surface:#1a1d27;--surface2:#252836;--border:#2d3142;
-  --accent:#AC3D36;--accent2:#4a9eff;--text:#e8e8e8;--text2:#9ca3b0;
-  --green:#22c55e;--red:#ef4444;--orange:#f97316;--purple:#a855f7;
+  /* Тёмная основа — как в кабинете клиента (Mini App). Бренд-красный #CF4B4E.
+     Статусные цвета приглушены: смысл читается, но с брендовым красным не спорят. */
+  --bg:#0d0e12;--surface:#171921;--surface2:#1c1f29;--border:#272b38;
+  --accent:#CF4B4E;--accent2:#5b8fd0;--text:#e2e5f6;--text2:#a7aaba;
+  --green:#3fa97a;--red:#e5484d;--orange:#d89149;--purple:#9366c4;--gold:#d9b44a;
 }
 body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;font-size:15px;}
 
@@ -35,7 +37,7 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .auth-err{color:var(--red);font-size:.82rem;text-align:center;margin-bottom:10px;min-height:18px;}
 .btn-full{width:100%;padding:13px;border-radius:10px;border:none;cursor:pointer;font-size:.95rem;font-weight:700;transition:all .15s;}
 .btn-gold{background:var(--accent);color:#fff;}
-.btn-gold:hover{background:#8f312b;}
+.btn-gold:hover{background:color-mix(in srgb, var(--accent) 82%, #000);}
 .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
 .btn-ghost:hover{background:var(--border);}
 
@@ -44,8 +46,8 @@ body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,san
 .topbar{background:var(--surface);border-bottom:2px solid var(--accent);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
 .topbar-left{display:flex;align-items:center;gap:10px;}
 .topbar h1{font-size:1rem;font-weight:800;color:var(--accent);}
-.trainer-badge{font-size:.75rem;background:rgba(245,200,66,.12);color:var(--accent);border:1px solid rgba(245,200,66,.3);padding:3px 10px;border-radius:20px;font-weight:600;}
-.admin-badge{background:rgba(239,68,68,.12);color:var(--red);border-color:rgba(239,68,68,.3);}
+.trainer-badge{font-size:.75rem;background:color-mix(in srgb, var(--gold) 12%, transparent);color:var(--accent);border:1px solid color-mix(in srgb, var(--gold) 30%, transparent);padding:3px 10px;border-radius:20px;font-weight:600;}
+.admin-badge{background:color-mix(in srgb, var(--red) 12%, transparent);color:var(--red);border-color:color-mix(in srgb, var(--red) 30%, transparent);}
 .btn-sm{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:.78rem;cursor:pointer;}
 .btn-sm:hover{color:var(--text);background:var(--surface2);}
 
@@ -82,33 +84,33 @@ input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 /* ── TOGGLE BUTTONS ── */
 .toggle-group{display:flex;gap:8px;flex-wrap:wrap;}
 .toggle-btn{padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:.85rem;cursor:pointer;transition:all .15s;font-weight:500;}
-.toggle-btn.on{background:rgba(245,200,66,.12);border-color:var(--accent);color:var(--accent);font-weight:700;}
+.toggle-btn.on{background:color-mix(in srgb, var(--gold) 12%, transparent);border-color:var(--accent);color:var(--accent);font-weight:700;}
 
 /* ── STUDENT SEARCH ── */
 .student-search-wrap{position:relative;}
 .student-results{position:absolute;top:100%;left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:10px;max-height:220px;overflow-y:auto;z-index:50;box-shadow:0 8px 24px rgba(0,0,0,.4);}
-.student-result-item{padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(45,49,66,.5);display:flex;align-items:center;justify-content:space-between;}
+.student-result-item{padding:11px 14px;cursor:pointer;border-bottom:1px solid color-mix(in srgb, var(--border) 50%, transparent);display:flex;align-items:center;justify-content:space-between;}
 .student-result-item:last-child{border-bottom:none;}
 .student-result-item:hover{background:var(--surface2);}
 .student-name{font-weight:600;font-size:.88rem;}
 .student-meta{font-size:.75rem;color:var(--text2);}
 .balance-badge{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:10px;}
-.balance-ok{background:rgba(34,197,94,.15);color:var(--green);}
-.balance-low{background:rgba(249,115,22,.15);color:var(--orange);}
-.balance-empty{background:rgba(239,68,68,.15);color:var(--red);}
+.balance-ok{background:color-mix(in srgb, var(--green) 15%, transparent);color:var(--green);}
+.balance-low{background:color-mix(in srgb, var(--orange) 15%, transparent);color:var(--orange);}
+.balance-empty{background:color-mix(in srgb, var(--red) 15%, transparent);color:var(--red);}
 
 /* ── LESSON ITEM ── */
-.lesson-item{padding:12px 0;border-bottom:1px solid rgba(45,49,66,.4);}
+.lesson-item{padding:12px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);}
 .lesson-item:last-child{border-bottom:none;}
 .lesson-row1{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
 .lesson-student{font-weight:700;font-size:.9rem;}
 .lesson-date{font-size:.78rem;color:var(--text2);}
 .lesson-row2{display:flex;align-items:center;gap:8px;}
 .tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.72rem;font-weight:700;}
-.tag-offline{background:rgba(74,158,255,.12);color:var(--accent2);}
-.tag-online{background:rgba(34,197,94,.12);color:var(--green);}
-.tag-group{background:rgba(168,85,247,.12);color:var(--purple);}
-.tag-indiv{background:rgba(249,115,22,.12);color:var(--orange);}
+.tag-offline{background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2);}
+.tag-online{background:color-mix(in srgb, var(--green) 12%, transparent);color:var(--green);}
+.tag-group{background:color-mix(in srgb, var(--purple) 12%, transparent);color:var(--purple);}
+.tag-indiv{background:color-mix(in srgb, var(--orange) 12%, transparent);color:var(--orange);}
 
 /* ── STAT CARDS ── */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
@@ -130,7 +132,7 @@ input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 .group-student-tag button:hover{color:var(--red);}
 
 /* ── ALERT ── */
-.alert{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;}
+.alert{background:color-mix(in srgb, var(--red) 8%, transparent);border:1px solid color-mix(in srgb, var(--red) 25%, transparent);border-radius:10px;padding:12px 16px;display:flex;align-items:flex-start;gap:10px;margin-bottom:12px;}
 .alert-icon{font-size:1.1rem;flex-shrink:0;}
 .alert-text{font-size:.82rem;line-height:1.5;}
 .alert-text b{color:var(--text);}
@@ -145,7 +147,7 @@ input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 /* ── ADMIN TABLE ── */
 .tbl{width:100%;border-collapse:collapse;font-size:.82rem;}
 .tbl th{text-align:left;padding:8px 12px;color:var(--text2);font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);}
-.tbl td{padding:9px 12px;border-bottom:1px solid rgba(45,49,66,.4);vertical-align:middle;}
+.tbl td{padding:9px 12px;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);vertical-align:middle;}
 .tbl tr:last-child td{border-bottom:none;}
 .tbl tr:hover td{background:var(--surface2);}
 
@@ -155,8 +157,8 @@ input[type="date"].form-inp{width:auto;max-width:100%;min-width:160px;}
 /* ── TOAST ── */
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 20px;font-size:.88rem;font-weight:600;white-space:nowrap;z-index:1000;opacity:0;transition:all .3s;pointer-events:none;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-.toast.ok{border-color:rgba(34,197,94,.4);color:var(--green);}
-.toast.err{border-color:rgba(239,68,68,.4);color:var(--red);}
+.toast.ok{border-color:color-mix(in srgb, var(--green) 40%, transparent);color:var(--green);}
+.toast.err{border-color:color-mix(in srgb, var(--red) 40%, transparent);color:var(--red);}
 
 /* ── LOADING ── */
 #page-loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;flex-direction:column;gap:16px;}
@@ -176,11 +178,11 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 #fab-wrap{position:fixed;bottom:90px;right:18px;z-index:150;display:flex;flex-direction:column;align-items:flex-end;gap:10px;}
 #fab-options{display:none;flex-direction:column;align-items:flex-end;gap:8px;}
 .fab-row{display:flex;align-items:center;gap:8px;}
-.fab-label{background:rgba(15,17,23,.92);color:var(--text);padding:5px 12px;border-radius:20px;font-size:.78rem;white-space:nowrap;border:1px solid var(--border);backdrop-filter:blur(6px);}
+.fab-label{background:color-mix(in srgb, var(--bg) 92%, transparent);color:var(--text);padding:5px 12px;border-radius:20px;font-size:.78rem;white-space:nowrap;border:1px solid var(--border);backdrop-filter:blur(6px);}
 .fab-btn{width:46px;height:46px;border-radius:50%;border:none;color:#fff;font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;}
-.fab-btn-group{background:var(--purple);box-shadow:0 3px 12px rgba(168,85,247,.4);}
-.fab-btn-indiv{background:var(--accent2);box-shadow:0 3px 12px rgba(74,158,255,.4);}
-#fab-main{width:56px;height:56px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:1.6rem;font-weight:400;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px rgba(172,61,54,.55);transition:transform .25s,background .15s;line-height:1;}
+.fab-btn-group{background:var(--purple);box-shadow:0 3px 12px color-mix(in srgb, var(--purple) 40%, transparent);}
+.fab-btn-indiv{background:var(--accent2);box-shadow:0 3px 12px color-mix(in srgb, var(--accent2) 40%, transparent);}
+#fab-main{width:56px;height:56px;border-radius:50%;border:none;background:var(--accent);color:#fff;font-size:1.6rem;font-weight:400;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 18px color-mix(in srgb, var(--accent) 55%, transparent);transition:transform .25s,background .15s;line-height:1;}
 #fab-main:active{transform:scale(.93);}
 
 /* ── SAFE AREA (iPhone notch / home indicator) ── */
@@ -197,18 +199,18 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 }
 
 /* ── LESSON STATUS ── */
-.tag-cancelled{background:rgba(239,68,68,.12);color:var(--red);}
-.tag-rescheduled{background:rgba(249,115,22,.12);color:var(--orange);}
+.tag-cancelled{background:color-mix(in srgb, var(--red) 12%, transparent);color:var(--red);}
+.tag-rescheduled{background:color-mix(in srgb, var(--orange) 12%, transparent);color:var(--orange);}
 .lesson-item.is-cancelled{opacity:.5;}
 .lesson-item.is-cancelled .lesson-student{text-decoration:line-through;}
 
 /* ── NOTE CHIPS ── */
 .note-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;}
 .note-chip{padding:4px 10px;border-radius:16px;border:1px solid var(--border);background:none;color:var(--text2);font-size:.75rem;cursor:pointer;transition:all .15s;font-family:inherit;}
-.note-chip:hover,.note-chip:active{background:rgba(172,61,54,.12);border-color:var(--accent);color:var(--accent);}
+.note-chip:hover,.note-chip:active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:var(--accent);color:var(--accent);}
 
 /* ── REMIND CARD ── */
-.remind-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4);}
+.remind-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);}
 .remind-item:last-child{border-bottom:none;}
 .copy-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.72rem;padding:4px 8px;cursor:pointer;white-space:nowrap;}
 .copy-btn:hover{color:var(--accent);border-color:var(--accent);}
@@ -218,39 +220,39 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .fin-cell-btn:hover{transform:scale(1.04);outline:1px solid var(--accent);border-radius:10px;}
 
 /* ── PENDING LESSON ── */
-.tag-pending{background:rgba(249,115,22,.18);color:var(--orange);}
+.tag-pending{background:color-mix(in srgb, var(--orange) 18%, transparent);color:var(--orange);}
 .lesson-pending-dot{width:8px;height:8px;border-radius:50%;background:var(--orange);flex-shrink:0;animation:pulse-dot 1.4s ease-in-out infinite;}
 @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
 .lesson-needs-confirm{border-left:3px solid var(--orange);padding-left:10px;margin-left:-10px;}
-.edit-btn-confirm{background:rgba(249,115,22,.15)!important;border:1px solid rgba(249,115,22,.4)!important;border-radius:8px!important;color:var(--orange)!important;}
+.edit-btn-confirm{background:color-mix(in srgb, var(--orange) 15%, transparent)!important;border:1px solid color-mix(in srgb, var(--orange) 40%, transparent)!important;border-radius:8px!important;color:var(--orange)!important;}
 
 /* ── ATTENDANCE ── */
-.attend-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4);}
+.attend-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);}
 .attend-row:last-child{border-bottom:none;}
 .attend-check{width:22px;height:22px;border-radius:6px;border:2px solid var(--border);background:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;transition:all .15s;}
 .attend-check.on{background:var(--green);border-color:var(--green);}
-.attend-check.absent{background:rgba(239,68,68,.15);border-color:var(--red);}
-.tag-mismatch{background:rgba(239,68,68,.15);color:var(--red);}
-.tag-attendance-ok{background:rgba(34,197,94,.12);color:var(--green);}
-.tag-group-buyer{background:rgba(168,85,247,.1);color:var(--purple);font-size:.65rem;}
-.tag-indiv-buyer{background:rgba(74,158,255,.1);color:var(--accent2);font-size:.65rem;}
+.attend-check.absent{background:color-mix(in srgb, var(--red) 15%, transparent);border-color:var(--red);}
+.tag-mismatch{background:color-mix(in srgb, var(--red) 15%, transparent);color:var(--red);}
+.tag-attendance-ok{background:color-mix(in srgb, var(--green) 12%, transparent);color:var(--green);}
+.tag-group-buyer{background:color-mix(in srgb, var(--purple) 10%, transparent);color:var(--purple);font-size:.65rem;}
+.tag-indiv-buyer{background:color-mix(in srgb, var(--accent2) 10%, transparent);color:var(--accent2);font-size:.65rem;}
 
 /* ── STUDENT DB (admin) ── */
-.sdb-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4);cursor:pointer;}
+.sdb-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);cursor:pointer;}
 .sdb-item:last-child{border-bottom:none;}
 .sdb-item:hover{background:var(--surface2);margin:0 -18px;padding:10px 18px;border-radius:8px;}
 /* SCHEDULE (график доступности) */
 .day-chip{padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:.85rem;font-weight:700;cursor:pointer;user-select:none;position:relative;}
-.day-chip.on{background:rgba(201,74,66,.15);border-color:var(--accent);color:var(--accent);}
+.day-chip.on{background:color-mix(in srgb, var(--accent) 15%, transparent);border-color:var(--accent);color:var(--accent);}
 .day-chip .dot{position:absolute;top:4px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--green);}
 .slot-chip{padding:9px 4px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:.8rem;text-align:center;cursor:pointer;user-select:none;}
-.slot-chip.on{background:rgba(34,197,94,.15);border-color:rgba(34,197,94,.55);color:var(--green);font-weight:700;}
-.slot-chip.on.fmt-offline{background:rgba(74,158,255,.14);border-color:rgba(74,158,255,.5);color:var(--accent2);}
-.slot-chip.on.fmt-online{background:rgba(168,85,247,.14);border-color:rgba(168,85,247,.5);color:var(--purple);}
+.slot-chip.on{background:color-mix(in srgb, var(--green) 15%, transparent);border-color:color-mix(in srgb, var(--green) 55%, transparent);color:var(--green);font-weight:700;}
+.slot-chip.on.fmt-offline{background:color-mix(in srgb, var(--accent2) 14%, transparent);border-color:color-mix(in srgb, var(--accent2) 50%, transparent);color:var(--accent2);}
+.slot-chip.on.fmt-online{background:color-mix(in srgb, var(--purple) 14%, transparent);border-color:color-mix(in srgb, var(--purple) 50%, transparent);color:var(--purple);}
 .fmt-brush{padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:.78rem;font-weight:700;cursor:pointer;user-select:none;}
-.fmt-brush.on{border-color:var(--green);color:var(--green);background:rgba(34,197,94,.12);}
-.fmt-brush.on[data-fmt="offline"]{border-color:var(--accent2);color:var(--accent2);background:rgba(74,158,255,.12);}
-.fmt-brush.on[data-fmt="online"]{border-color:var(--purple);color:var(--purple);background:rgba(168,85,247,.12);}
+.fmt-brush.on{border-color:var(--green);color:var(--green);background:color-mix(in srgb, var(--green) 12%, transparent);}
+.fmt-brush.on[data-fmt="offline"]{border-color:var(--accent2);color:var(--accent2);background:color-mix(in srgb, var(--accent2) 12%, transparent);}
+.fmt-brush.on[data-fmt="online"]{border-color:var(--purple);color:var(--purple);background:color-mix(in srgb, var(--purple) 12%, transparent);}
 </style>
 </head>
 <body>
@@ -339,8 +341,8 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       </div>
       <div class="stat-grid" id="home-stats"></div>
       <!-- Напомнить о продлении -->
-      <div class="card" id="home-remind-card" style="display:none;border-color:rgba(249,115,22,.35);margin-bottom:14px">
-        <div class="card-head" style="border-color:rgba(249,115,22,.25)">
+      <div class="card" id="home-remind-card" style="display:none;border-color:color-mix(in srgb, var(--orange) 35%, transparent);margin-bottom:14px">
+        <div class="card-head" style="border-color:color-mix(in srgb, var(--orange) 25%, transparent)">
           <span class="card-title">🔔 Написать сегодня</span>
           <span style="font-size:.72rem;color:var(--orange)">заканчиваются занятия</span>
         </div>
@@ -567,7 +569,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
           <span class="dim" id="sdb-count" style="font-size:.78rem"></span>
         </div>
         <div class="card-body">
-          <button onclick="openAddStudentModal()" style="background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:11px;font-weight:700;font-size:.88rem;cursor:pointer;width:100%;margin-bottom:12px">🎁 Добавить сертификат вручную</button>
+          <button onclick="openAddStudentModal()" style="background:color-mix(in srgb, var(--green) 12%, transparent);color:var(--green);border:1px solid color-mix(in srgb, var(--green) 30%, transparent);border-radius:10px;padding:11px;font-weight:700;font-size:.88rem;cursor:pointer;width:100%;margin-bottom:12px">🎁 Добавить сертификат вручную</button>
           <input class="form-inp" id="sdb-search" type="text" placeholder="Поиск по имени или email..."
             oninput="renderStudentDB(this.value)" style="margin-bottom:12px">
           <div id="sdb-list"><div class="empty">Загрузка...</div></div>
@@ -635,7 +637,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <div class="card">
         <div class="card-head"><span class="card-title">🔗 Быстрые ссылки</span></div>
         <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4)">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
             <div>
               <div style="font-weight:600;font-size:.88rem">📋 Журнал тренера</div>
               <div style="font-size:.72rem;color:var(--text2)" id="journal-link-text">текущая страница</div>
@@ -649,7 +651,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
             </div>
             <div style="display:flex;gap:6px">
               <button class="copy-btn" onclick="navigator.clipboard.writeText('https://ayvaz270904-arch.github.io/repchess/index.html').then(()=>toast('Ссылка скопирована','ok'))">Копировать</button>
-              <a href="https://ayvaz270904-arch.github.io/repchess/index.html" target="_blank" style="text-decoration:none"><button class="copy-btn" style="color:var(--accent2);border-color:rgba(74,158,255,.3)">Открыть</button></a>
+              <a href="https://ayvaz270904-arch.github.io/repchess/index.html" target="_blank" style="text-decoration:none"><button class="copy-btn" style="color:var(--accent2);border-color:color-mix(in srgb, var(--accent2) 30%, transparent)">Открыть</button></a>
             </div>
           </div>
         </div>
@@ -701,7 +703,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
           oninput="searchStudents(this.value,'rec')" onfocus="showAllStudents('rec')" autocomplete="off">
         <div class="student-results" id="rec-student-results" style="display:none"></div>
       </div>
-      <div id="rec-student-chosen" style="display:none;margin-top:8px;padding:10px 14px;background:rgba(172,61,54,.08);border:1px solid rgba(172,61,54,.25);border-radius:10px;">
+      <div id="rec-student-chosen" style="display:none;margin-top:8px;padding:10px 14px;background:color-mix(in srgb, var(--accent) 8%, transparent);border:1px solid color-mix(in srgb, var(--accent) 25%, transparent);border-radius:10px;">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <div>
             <div style="font-weight:700" id="rec-chosen-name"></div>
@@ -735,7 +737,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       </select>
       <div id="rec-trainer-warn" style="color:var(--orange);font-size:.78rem;margin-top:6px;display:none">⚠️ Ученик не закреплён за этим тренером</div>
     </div>
-    <div class="form-row" style="background:rgba(249,115,22,.06);border:1px solid rgba(249,115,22,.2);border-radius:10px;padding:10px 14px">
+    <div class="form-row" style="background:color-mix(in srgb, var(--orange) 6%, transparent);border:1px solid color-mix(in srgb, var(--orange) 20%, transparent);border-radius:10px;padding:10px 14px">
       <div style="font-size:.8rem;color:var(--orange)">💡 Занятие создаётся как «запланированное». После его проведения отметь результат через ✏️</div>
     </div>
     <div class="form-row">
@@ -1010,7 +1012,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </div>
     <!-- Сообщение о блокировке (только для тренера после подтверждения) -->
     <div id="edit-locked-msg" style="display:none;margin-bottom:14px">
-      <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);border-radius:10px;padding:12px 16px;font-size:.85rem;color:var(--text2)">
+      <div style="background:color-mix(in srgb, var(--green) 8%, transparent);border:1px solid color-mix(in srgb, var(--green) 25%, transparent);border-radius:10px;padding:12px 16px;font-size:.85rem;color:var(--text2)">
         🔒 Занятие подтверждено — редактирование заблокировано. Обратитесь к администратору при необходимости изменений.
       </div>
     </div>
@@ -1056,7 +1058,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       </div>
       <button class="btn-full btn-gold" onclick="saveEditLesson()" id="edit-save-btn">Сохранить</button>
       <div style="height:8px"></div>
-      <button class="btn-full" id="edit-delete-btn" style="background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:13px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%" onclick="confirmDeleteLesson()">🗑 Удалить занятие</button>
+      <button class="btn-full" id="edit-delete-btn" style="background:color-mix(in srgb, var(--red) 12%, transparent);color:var(--red);border:1px solid color-mix(in srgb, var(--red) 30%, transparent);border-radius:10px;padding:13px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%" onclick="confirmDeleteLesson()">🗑 Удалить занятие</button>
       <div style="height:8px"></div>
     </div>
     <button class="btn-full btn-ghost" onclick="closeEditModal()">Закрыть</button>
@@ -1144,7 +1146,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       </div>
       <!-- Несоответствие -->
       <div id="attend-mismatch-warn" style="display:none;margin-bottom:10px">
-        <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);border-radius:10px;padding:10px 14px;font-size:.82rem;color:var(--orange)">⚠️ <span id="attend-mismatch-text"></span></div>
+        <div style="background:color-mix(in srgb, var(--orange) 8%, transparent);border:1px solid color-mix(in srgb, var(--orange) 25%, transparent);border-radius:10px;padding:10px 14px;font-size:.82rem;color:var(--orange)">⚠️ <span id="attend-mismatch-text"></span></div>
       </div>
       <button class="btn-full btn-gold" id="attend-approve-btn" onclick="approveAttendance()" style="background:var(--green);margin-bottom:8px">✅ Подтвердить занятие</button>
     </div>
@@ -1847,7 +1849,7 @@ async function loadHomePage(fromCache) {
   ].sort((a,b) => (a._date||'') > (b._date||'') ? 1 : -1);
   const actEl = document.getElementById('home-actions');
   if (actEl) actEl.innerHTML = needAction.length ? `
-    <div class="card" style="margin-bottom:14px;border-color:rgba(249,115,22,.4)">
+    <div class="card" style="margin-bottom:14px;border-color:color-mix(in srgb, var(--orange) 40%, transparent)">
       <div class="card-head"><span class="card-title">❗ Требуют действия</span><span class="dim" style="font-size:.78rem">${needAction.length}</span></div>
       <div class="card-body">${needAction.slice(0, 15).map(item => item._isGroup ? groupFeedItemHTML(item) : lessonItemHTML(item)).join('')}${needAction.length > 15 ? `<div class="dim" style="text-align:center;padding:8px;font-size:.78rem">и ещё ${needAction.length - 15}…</div>` : ''}</div>
     </div>` : '';
@@ -1893,10 +1895,10 @@ function groupFeedItemHTML(g) {
       <span class="tag tag-group">${g.count||0} чел.</span>
       <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
       ${approved ? `<span class="tag tag-attendance-ok">✅ подтв.</span>` : ''}
-      ${submitted && !approved ? `<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2)">⏳ проверка</span>` : ''}
+      ${submitted && !approved ? `<span class="tag" style="background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2)">⏳ проверка</span>` : ''}
       ${hasMismatch ? `<span class="tag tag-mismatch">⚠️</span>` : ''}
       ${needsAttend ? `<span class="tag tag-pending">Отметить</span>` : ''}
-      ${needsApproval ? `<span class="tag" style="background:rgba(74,158,255,.15);color:var(--accent2)">📬 Подтвердить</span>` : ''}
+      ${needsApproval ? `<span class="tag" style="background:color-mix(in srgb, var(--accent2) 15%, transparent);color:var(--accent2)">📬 Подтвердить</span>` : ''}
       ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
       ${names ? `<span class="dim" style="font-size:.73rem">${esc(names)}</span>` : ''}
     </div>
@@ -1928,8 +1930,8 @@ function lessonItemHTML(l) {
     <div class="lesson-row2">
       <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
       ${needsConfirm ? '<span class="tag tag-pending">Подтвердить</span>' : ''}
-      ${isScheduled  ? '<span class="tag" style="background:rgba(74,158,255,.1);color:var(--accent2)">📅 Запланировано</span>' : ''}
-      ${isDone       ? '<span class="tag" style="background:rgba(34,197,94,.1);color:var(--green)">✅</span>' : ''}
+      ${isScheduled  ? '<span class="tag" style="background:color-mix(in srgb, var(--accent2) 10%, transparent);color:var(--accent2)">📅 Запланировано</span>' : ''}
+      ${isDone       ? '<span class="tag" style="background:color-mix(in srgb, var(--green) 10%, transparent);color:var(--green)">✅</span>' : ''}
       ${isCancelled  ? '<span class="tag tag-cancelled">Отменено</span>' : ''}
       ${isRescheduled? '<span class="tag tag-rescheduled">Перенесено</span>' : ''}
       ${l.trainerName&&isAdmin?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
@@ -2320,7 +2322,7 @@ function _renderGrpAttendBlock(g) {
     <div class="form-row">
       <div class="form-label">📋 Посещаемость ${g.adminApproved
         ? '<span class="tag tag-attendance-ok" style="padding:1px 6px;font-size:.68rem">✅ подтверждена</span>'
-        : '<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2);padding:1px 6px;font-size:.68rem">⏳ на проверке</span>'}</div>
+        : '<span class="tag" style="background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2);padding:1px 6px;font-size:.68rem">⏳ на проверке</span>'}</div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 14px">
         ${rows || '<div class="dim" style="font-size:.8rem;padding:4px 0">Список пуст</div>'}${extraRows}
       </div>
@@ -2360,15 +2362,15 @@ function _grpVisBadge(g) {
   const st = _grpRegState(g);
   if (st === 'hidden') return '';
   const box = (bg, col, txt) => `<span style="font-size:.72rem;background:${bg};color:${col};border:1px solid ${col}55;border-radius:10px;padding:1px 7px">${txt}</span>`;
-  if (st === 'open')      return box('rgba(74,158,255,.12)', 'var(--accent2)', '🌐 запись открыта');
-  if (st === 'scheduled') return box('rgba(249,115,22,.12)', 'var(--orange)', '⏳ откроется ' + _fmtDT(g.regOpensAt));
-  return box('rgba(249,115,22,.12)', 'var(--orange)', '⏳ запись закрыта');
+  if (st === 'open')      return box('color-mix(in srgb, var(--accent2) 12%, transparent)', 'var(--accent2)', '🌐 запись открыта');
+  if (st === 'scheduled') return box('color-mix(in srgb, var(--orange) 12%, transparent)', 'var(--orange)', '⏳ откроется ' + _fmtDT(g.regOpensAt));
+  return box('color-mix(in srgb, var(--orange) 12%, transparent)', 'var(--orange)', '⏳ запись закрыта');
 }
 // Кнопка «Открыть запись» — когда запись закрыта/отложена (только админ)
 function _grpOpenBtn(g, gid) {
   const st = _grpRegState(g);
   return (st === 'closed' || st === 'scheduled')
-    ? `<button onclick="openGroupReg('${gid}')" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--green);font-size:.75rem;padding:5px 9px;cursor:pointer;white-space:nowrap">🔓 Открыть запись</button>`
+    ? `<button onclick="openGroupReg('${gid}')" style="background:color-mix(in srgb, var(--green) 12%, transparent);border:1px solid color-mix(in srgb, var(--green) 30%, transparent);border-radius:8px;color:var(--green);font-size:.75rem;padding:5px 9px;cursor:pointer;white-space:nowrap">🔓 Открыть запись</button>`
     : '';
 }
 
@@ -2467,7 +2469,7 @@ async function openEditGroupModal(groupId, viewMode) {
     delBtn = document.createElement('button');
     delBtn.id = 'grp-delete-btn';
     delBtn.className = 'btn-full';
-    delBtn.style.cssText = 'background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:13px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%;margin-top:8px';
+    delBtn.style.cssText = 'background:color-mix(in srgb, var(--red) 12%, transparent);color:var(--red);border:1px solid color-mix(in srgb, var(--red) 30%, transparent);border-radius:10px;padding:13px;font-size:.95rem;font-weight:700;cursor:pointer;width:100%;margin-top:8px';
     delBtn.textContent = '🗑 Удалить занятие';
     delBtn.addEventListener('click', confirmDeleteGroup);
     document.getElementById('grp-submit').parentNode.insertBefore(delBtn, document.getElementById('grp-submit').nextSibling.nextSibling);
@@ -2679,7 +2681,7 @@ async function loadGroupLessons() {
             ${approved ? '✅ Подтверждено' : '⏳ Ожидает проверки'} (${attendedList.length} чел.)
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:4px">
-            ${attendedList.map(n=>`<span style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.2);border-radius:6px;padding:2px 8px">${esc(n)}</span>`).join('')}
+            ${attendedList.map(n=>`<span style="background:color-mix(in srgb, var(--green) 10%, transparent);border:1px solid color-mix(in srgb, var(--green) 20%, transparent);border-radius:6px;padding:2px 8px">${esc(n)}</span>`).join('')}
           </div>
           ${extraRaw.length>0?`<div style="margin-top:6px;color:var(--orange);font-size:.72rem">
             + ${extraRaw.length} дополнительных: ${extraRaw.map((name,i) => {
@@ -2691,7 +2693,7 @@ async function loadGroupLessons() {
         </div>`;
     }
 
-    return `<div class="card" style="cursor:default${needsApproval?';border-color:rgba(74,158,255,.4)':hasMismatch?';border-color:rgba(239,68,68,.3)':''}">
+    return `<div class="card" style="cursor:default${needsApproval?';border-color:color-mix(in srgb, var(--accent2) 40%, transparent)':hasMismatch?';border-color:color-mix(in srgb, var(--red) 30%, transparent)':''}">
       <div class="card-head">
         <div>
           <div style="font-weight:700">${esc(g.venue)}</div>
@@ -2701,18 +2703,18 @@ async function loadGroupLessons() {
             ${_grpVisBadge(g)}
             <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${g.format==='online'?'Онлайн':'Офлайн'}</span>
             ${approved?`<span class="tag tag-attendance-ok" style="padding:1px 6px">✅ подтверждено</span>`:''}
-            ${submitted&&!approved?`<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2);padding:1px 6px">⏳ на проверке</span>`:''}
+            ${submitted&&!approved?`<span class="tag" style="background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2);padding:1px 6px">⏳ на проверке</span>`:''}
             ${hasMismatch?`<span class="tag tag-mismatch" style="padding:1px 6px">⚠️ несоответствие</span>`:''}
             ${needsAttend?`<span class="tag tag-pending" style="padding:1px 6px;animation:pulse-dot 1.5s infinite">Отметить!</span>`:''}
-            ${needsApproval?`<span class="tag" style="background:rgba(74,158,255,.15);color:var(--accent2);padding:1px 6px">📬 Подтвердить</span>`:''}
+            ${needsApproval?`<span class="tag" style="background:color-mix(in srgb, var(--accent2) 15%, transparent);color:var(--accent2);padding:1px 6px">📬 Подтвердить</span>`:''}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           ${isAdmin?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName||'')}</span>`:''}
           ${!submitted && (pastDate || isAdmin)
-            ? `<button onclick="openAttendModal('${gid}')" style="background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:8px;color:var(--green);font-size:.75rem;padding:5px 9px;cursor:pointer;white-space:nowrap">📋 Посещ.</button>`
+            ? `<button onclick="openAttendModal('${gid}')" style="background:color-mix(in srgb, var(--green) 12%, transparent);border:1px solid color-mix(in srgb, var(--green) 30%, transparent);border-radius:8px;color:var(--green);font-size:.75rem;padding:5px 9px;cursor:pointer;white-space:nowrap">📋 Посещ.</button>`
             : submitted
-              ? `<button onclick="openAttendModal('${gid}')" style="background:${needsApproval?'rgba(74,158,255,.15)':'none'};border:1px solid ${needsApproval?'rgba(74,158,255,.4)':'var(--border)'};border-radius:8px;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.75rem;padding:5px 9px;cursor:pointer">${needsApproval?'✅ Подтвердить':'👁 Просмотр'}</button>`
+              ? `<button onclick="openAttendModal('${gid}')" style="background:${needsApproval?'color-mix(in srgb, var(--accent2) 15%, transparent)':'none'};border:1px solid ${needsApproval?'color-mix(in srgb, var(--accent2) 40%, transparent)':'var(--border)'};border-radius:8px;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.75rem;padding:5px 9px;cursor:pointer">${needsApproval?'✅ Подтвердить':'👁 Просмотр'}</button>`
               : ''}
           ${g.format==='online' && (isAdmin || g.trainerId===currentUser.uid)
             ? `<button onclick="openGroupLinksModal('${gid}')" style="background:none;border:none;cursor:pointer;color:var(--accent2);font-size:.9rem;padding:4px 6px;min-width:32px;min-height:32px" title="Ссылки на онлайн-занятие">🔗</button>` : ''}
@@ -2911,8 +2913,8 @@ function histLessonItemHTML(l) {
     <div class="lesson-row2">
       <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
       ${needsConfirm ? '<span class="tag tag-pending">Подтвердить</span>' : ''}
-      ${isScheduled  ? '<span class="tag" style="background:rgba(74,158,255,.1);color:var(--accent2)">📅 Запланировано</span>' : ''}
-      ${isDone       ? '<span class="tag" style="background:rgba(34,197,94,.1);color:var(--green)">✅</span>' : ''}
+      ${isScheduled  ? '<span class="tag" style="background:color-mix(in srgb, var(--accent2) 10%, transparent);color:var(--accent2)">📅 Запланировано</span>' : ''}
+      ${isDone       ? '<span class="tag" style="background:color-mix(in srgb, var(--green) 10%, transparent);color:var(--green)">✅</span>' : ''}
       ${isCancelled  ? '<span class="tag tag-cancelled">Отменено</span>' : ''}
       ${isRescheduled? '<span class="tag tag-rescheduled">Перенесено</span>' : ''}
       ${l.trainerName&&isAdmin?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
@@ -2936,7 +2938,7 @@ function histGroupItemHTML(g) {
       <span class="tag tag-group">${g.count} чел.${g.maxStudents ? ' / ' + g.maxStudents : ''}</span>
       <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
       ${approved ? `<span class="tag tag-attendance-ok" style="padding:1px 5px;font-size:.68rem">✅ подтв.</span>` : ''}
-      ${submitted&&!approved ? `<span class="tag" style="background:rgba(74,158,255,.12);color:var(--accent2);padding:1px 5px;font-size:.68rem">⏳ проверка</span>` : ''}
+      ${submitted&&!approved ? `<span class="tag" style="background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2);padding:1px 5px;font-size:.68rem">⏳ проверка</span>` : ''}
       ${_grpVisBadge(g)}
       ${g.time ? `<span style="font-size:.72rem;color:var(--text2)">🕐 ${g.time}</span>` : ''}
       ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
@@ -3076,7 +3078,7 @@ async function loadAdminData() {
     return`<tr>
       <td><b>${esc(t.name||'')}</b></td>
       <td class="dim" style="font-size:.78rem">${esc(t.email||'')}</td>
-      <td><span class="badge ${t.role==='admin'?'badge-empty':'badge-active'}" style="${t.role==='admin'?'background:rgba(239,68,68,.12);color:var(--red)':'background:rgba(74,158,255,.12);color:var(--accent2)'}">${t.role==='admin'?'Админ':'Тренер'}</span></td>
+      <td><span class="badge ${t.role==='admin'?'badge-empty':'badge-active'}" style="${t.role==='admin'?'background:color-mix(in srgb, var(--red) 12%, transparent);color:var(--red)':'background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2)'}">${t.role==='admin'?'Админ':'Тренер'}</span></td>
       <td></td>
     </tr>`;}).join('');
 
@@ -3110,14 +3112,14 @@ async function loadBalanceAlerts() {
       alerts.push(`<div class="alert"><div class="alert-icon">🔴</div><div class="alert-text"><b>${esc(s.name)}</b> — закончились занятия (куплено: ${s.purchased}, использовано: ${used})</div></div>`);
       listItems.push({s, remaining, used});
     } else if (remaining <= 2) {
-      alerts.push(`<div class="alert" style="background:rgba(249,115,22,.08);border-color:rgba(249,115,22,.25)"><div class="alert-icon">🟡</div><div class="alert-text"><b>${esc(s.name)}</b> — осталось <b>${remaining} занятия</b>. Написать?</div></div>`);
+      alerts.push(`<div class="alert" style="background:color-mix(in srgb, var(--orange) 8%, transparent);border-color:color-mix(in srgb, var(--orange) 25%, transparent)"><div class="alert-icon">🟡</div><div class="alert-text"><b>${esc(s.name)}</b> — осталось <b>${remaining} занятия</b>. Написать?</div></div>`);
     }
   }
 
   document.getElementById('admin-alerts').innerHTML = alerts.slice(0,5).join('');
   document.getElementById('adm-balance-list').innerHTML = listItems.length
     ? listItems.map(({s,remaining,used})=>`
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(45,49,66,.4)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
           <div>
             <div style="font-weight:700">${esc(s.name)}</div>
             <div style="font-size:.75rem;color:var(--text2)">${s.id} · ${esc(s.email)}</div>
@@ -3552,7 +3554,7 @@ let _allWeekFrom = '';
 
 // Стабильные контрастные цвета: только тренеры (без админов), сортировка по id —
 // новый тренер автоматически получает следующий цвет из палитры
-const _TRAINER_PALETTE = ['#4a9eff','#f97316','#22c55e','#a855f7','#eab308','#14b8a6','#ec4899','#84cc16','#06b6d4','#f43f5e','#8b5cf6','#d97706'];
+const _TRAINER_PALETTE = ['#5b8fd0','#d89149','#3fa97a','#9366c4','#d9b44a','#3fa79c','#c96f9b','#8aa84f','#4f9fb0','#cf6b7a','#7d6fc4','#b8894a'];
 function _trainerColors() {
   const map = {};
   _trainersCache.filter(t => t.role !== 'admin')
@@ -3687,7 +3689,7 @@ function _renderAllSlotsDay(colorOf, trainers) {
       avail.push(`<span style="font-size:.72rem;padding:2px 8px;border-radius:8px;border:1px solid ${colorOf[t.id]};color:${colorOf[t.id]}">${esc(shortName)}${mark[f]}</span>`);
     });
     if (!avail.length) return;
-    rows += `<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-top:1px solid rgba(45,49,66,.4)">
+    rows += `<div style="display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-top:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
       <span style="font-size:.82rem;font-weight:700;color:var(--text2);min-width:46px;padding-top:2px">${s}</span>
       <div style="display:flex;flex-wrap:wrap;gap:5px">${avail.join('')}</div>
     </div>`;
@@ -3769,7 +3771,7 @@ function renderSchedule() {
     '<div class="form-label" style="margin-bottom:6px">Сводка недели</div>' +
     SCHED_DAYS.map((d,i) => {
       const r = slotsToRanges(_sched.template[i] || [], _sched.formats[i]);
-      return `<div style="display:flex;justify-content:space-between;gap:10px;font-size:.82rem;padding:5px 0;border-top:1px solid rgba(45,49,66,.4)">
+      return `<div style="display:flex;justify-content:space-between;gap:10px;font-size:.82rem;padding:5px 0;border-top:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
         <span style="color:var(--text2);flex-shrink:0">${d}</span><span style="text-align:right">${r || '—'}</span></div>`;
     }).join('');
   schedRenderExceptionList();
@@ -3907,7 +3909,7 @@ function schedRenderExceptionList() {
     ? '<div class="form-label" style="margin-bottom:6px">Активные исключения</div>' + keys.map(d => {
         const e = _sched.exceptions[d];
         const txt = e.closed ? '🚫 закрыт' : (slotsToRanges(e.slots || [], e.formats) || '—');
-        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.82rem;padding:6px 0;border-top:1px solid rgba(45,49,66,.4)">
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:.82rem;padding:6px 0;border-top:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
           <span>${d.split('-').reverse().join('.')}</span>
           <span style="color:var(--text2);flex:1;text-align:right">${txt}</span>
           <button onclick="schedResetExc('${d}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:2px 6px">✕</button>
@@ -4062,8 +4064,8 @@ function renderCalendar() {
   for (let day=1;day<=daysInMonth;day++){
     const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
     const d=dayMap[ds]; const total=d?d.indiv+d.group:0; const isToday=ds===today;
-    const bg=d?.indiv>0&&d?.group>0?'linear-gradient(135deg,rgba(74,158,255,.22),rgba(168,85,247,.22))':d?.group>0?'rgba(168,85,247,.2)':d?.indiv>0?'rgba(74,158,255,.2)':'';
-    html+=`<div onclick="${d?`showCalDay('${ds}')`:'void 0'}" style="aspect-ratio:1;min-height:36px;border-radius:8px;background:${bg};border:${isToday?'2px solid var(--accent)':'1px solid rgba(45,49,66,.5)'};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:${d?'pointer':'default'}">
+    const bg=d?.indiv>0&&d?.group>0?'linear-gradient(135deg,color-mix(in srgb, var(--accent2) 22%, transparent),color-mix(in srgb, var(--purple) 22%, transparent))':d?.group>0?'color-mix(in srgb, var(--purple) 20%, transparent)':d?.indiv>0?'color-mix(in srgb, var(--accent2) 20%, transparent)':'';
+    html+=`<div onclick="${d?`showCalDay('${ds}')`:'void 0'}" style="aspect-ratio:1;min-height:36px;border-radius:8px;background:${bg};border:${isToday?'2px solid var(--accent)':'1px solid color-mix(in srgb, var(--border) 50%, transparent)'};display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:${d?'pointer':'default'}">
       <span style="font-size:.75rem;font-weight:${isToday?'800':'400'};color:${isToday?'var(--accent)':'var(--text)'}">${day}</span>
       ${total>0?`<span style="font-size:.58rem;color:var(--text2);line-height:1">${total}</span>`:''}
     </div>`;
@@ -4517,7 +4519,7 @@ function openFinDrill(trainerId, type, trainerName) {
           const cnt = g.attendanceMarked
             ? (g.attendedEmails||[]).length + (g.extraAttendees||[]).length + (g.guestCharges||[]).length
             : (g.count||0);
-          return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(45,49,66,.4)">
+          return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
             <div>
               <div style="font-weight:600;font-size:.88rem">👥 ${esc(g.venue||'Группа')} <span style="font-size:.72rem;color:var(--text2)">(${cnt} чел.)</span></div>
               <div style="font-size:.72rem;color:var(--text2)">${d}${g.notes?` · ${esc(g.notes.slice(0,40))}`:''}</div>
@@ -4536,7 +4538,7 @@ function openFinDrill(trainerId, type, trainerName) {
     document.getElementById('fin-drill-body').innerHTML = lessons.length
       ? lessons.map(l => {
           const d = l._date ? new Date(l._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
-          return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(45,49,66,.4)">
+          return `<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
             <div>
               <div style="font-weight:600;font-size:.88rem">${esc(l.studentName||'—')}</div>
               <div style="font-size:.72rem;color:var(--text2)">${d}${l.notes?` · ${esc(l.notes.slice(0,40))}`:''}</div>
@@ -4574,16 +4576,16 @@ async function loadGroupMismatches() {
       const items = pending.map(d => {
         const g = d.data();
         const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
-        return `<div class="alert" style="background:rgba(74,158,255,.06);border-color:rgba(74,158,255,.25)">
+        return `<div class="alert" style="background:color-mix(in srgb, var(--accent2) 6%, transparent);border-color:color-mix(in srgb, var(--accent2) 25%, transparent)">
           <div class="alert-icon">📬</div>
           <div class="alert-text">
             <b>${esc(g.venue||'Групповое')}</b> ${dt} (${esc(g.trainerName||'')}) — тренер отправил отметки
-            <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:rgba(74,158,255,.15);border:1px solid rgba(74,158,255,.3);border-radius:6px;color:var(--accent2);font-size:.72rem;padding:2px 8px;cursor:pointer">✅ Подтвердить</button>
+            <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:color-mix(in srgb, var(--accent2) 15%, transparent);border:1px solid color-mix(in srgb, var(--accent2) 30%, transparent);border-radius:6px;color:var(--accent2);font-size:.72rem;padding:2px 8px;cursor:pointer">✅ Подтвердить</button>
           </div>
         </div>`;
       }).join('');
-      html += `<div class="card" style="margin-bottom:14px;border-color:rgba(74,158,255,.3)">
-        <div class="card-head" style="border-color:rgba(74,158,255,.2)"><span class="card-title" style="color:var(--accent2)">📬 Ожидают подтверждения (${pending.length})</span></div>
+      html += `<div class="card" style="margin-bottom:14px;border-color:color-mix(in srgb, var(--accent2) 30%, transparent)">
+        <div class="card-head" style="border-color:color-mix(in srgb, var(--accent2) 20%, transparent)"><span class="card-title" style="color:var(--accent2)">📬 Ожидают подтверждения (${pending.length})</span></div>
         <div class="card-body">${items}</div>
       </div>`;
     }
@@ -4595,16 +4597,16 @@ async function loadGroupMismatches() {
       const items = uniqueMismatch.map(d => {
         const g = d.data();
         const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
-        return `<div class="alert" style="background:rgba(249,115,22,.06);border-color:rgba(249,115,22,.25)">
+        return `<div class="alert" style="background:color-mix(in srgb, var(--orange) 6%, transparent);border-color:color-mix(in srgb, var(--orange) 25%, transparent)">
           <div class="alert-icon">⚠️</div>
           <div class="alert-text">
             <b>${esc(g.venue||'Групповое')}</b> ${dt} — <span style="color:var(--orange)">${esc(g.mismatchNote||'несоответствие посещаемости')}</span>
-            <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:none;border:1px solid rgba(249,115,22,.3);border-radius:6px;color:var(--orange);font-size:.72rem;padding:2px 8px;cursor:pointer">Просмотреть</button>
+            <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:none;border:1px solid color-mix(in srgb, var(--orange) 30%, transparent);border-radius:6px;color:var(--orange);font-size:.72rem;padding:2px 8px;cursor:pointer">Просмотреть</button>
           </div>
         </div>`;
       }).join('');
-      html += `<div class="card" style="margin-bottom:14px;border-color:rgba(249,115,22,.3)">
-        <div class="card-head" style="border-color:rgba(249,115,22,.2)"><span class="card-title" style="color:var(--orange)">⚠️ Несоответствия посещаемости</span></div>
+      html += `<div class="card" style="margin-bottom:14px;border-color:color-mix(in srgb, var(--orange) 30%, transparent)">
+        <div class="card-head" style="border-color:color-mix(in srgb, var(--orange) 20%, transparent)"><span class="card-title" style="color:var(--orange)">⚠️ Несоответствия посещаемости</span></div>
         <div class="card-body">${items}</div>
       </div>`;
     }
@@ -4745,8 +4747,8 @@ async function openAttendModal(groupId) {
     adminControls.style.display = 'none';
     statusBanner.style.display  = '';
     statusBanner.style.background = approved
-      ? 'rgba(34,197,94,.1)' : 'rgba(249,115,22,.08)';
-    statusBanner.style.border = `1px solid ${approved ? 'rgba(34,197,94,.3)' : 'rgba(249,115,22,.25)'}`;
+      ? 'color-mix(in srgb, var(--green) 10%, transparent)' : 'color-mix(in srgb, var(--orange) 8%, transparent)';
+    statusBanner.style.border = `1px solid ${approved ? 'color-mix(in srgb, var(--green) 30%, transparent)' : 'color-mix(in srgb, var(--orange) 25%, transparent)'}`;
     statusBanner.style.color = approved ? 'var(--green)' : 'var(--orange)';
     statusBanner.textContent = approved
       ? '✅ Занятие подтверждено администратором'
@@ -4758,7 +4760,7 @@ async function openAttendModal(groupId) {
       return expectedNames[i] || email;
     });
     document.getElementById('attend-readonly-attended').innerHTML = attended.length
-      ? attended.map(n=>`<span style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:6px;padding:3px 10px;font-size:.82rem">${esc(n)}</span>`).join('')
+      ? attended.map(n=>`<span style="background:color-mix(in srgb, var(--green) 10%, transparent);border:1px solid color-mix(in srgb, var(--green) 25%, transparent);border-radius:6px;padding:3px 10px;font-size:.82rem">${esc(n)}</span>`).join('')
       : '<span style="color:var(--text2);font-size:.82rem">никто не отмечен</span>';
 
     // Дополнительные
@@ -4823,8 +4825,8 @@ async function openAttendModal(groupId) {
     statusBanner.style.display  = submitted ? '' : 'none';
 
     if (submitted) {
-      statusBanner.style.background = approved ? 'rgba(34,197,94,.1)' : 'rgba(74,158,255,.1)';
-      statusBanner.style.border = `1px solid ${approved ? 'rgba(34,197,94,.3)' : 'rgba(74,158,255,.3)'}`;
+      statusBanner.style.background = approved ? 'color-mix(in srgb, var(--green) 10%, transparent)' : 'color-mix(in srgb, var(--accent2) 10%, transparent)';
+      statusBanner.style.border = `1px solid ${approved ? 'color-mix(in srgb, var(--green) 30%, transparent)' : 'color-mix(in srgb, var(--accent2) 30%, transparent)'}`;
       statusBanner.style.color = approved ? 'var(--green)' : 'var(--accent2)';
       statusBanner.textContent = approved
         ? '✅ Занятие подтверждено вами'
@@ -4967,7 +4969,7 @@ function _renderGuestCharge(row) {
   const wrap = row.querySelector('.guest-charge-wrap');
   const email = row.dataset.chargeEmail || '', sname = row.dataset.chargeName || '';
   if (email) {
-    wrap.innerHTML = `<div style="display:flex;align-items:center;gap:6px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:6px 10px;font-size:.82rem">
+    wrap.innerHTML = `<div style="display:flex;align-items:center;gap:6px;background:color-mix(in srgb, var(--green) 10%, transparent);border:1px solid color-mix(in srgb, var(--green) 30%, transparent);border-radius:8px;padding:6px 10px;font-size:.82rem">
         <span style="color:var(--green);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">списать с: ${esc(sname||email)}</span>
         <button onclick="_guestChargeClear(this)" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:.9rem;padding:0 2px">✕</button>
       </div>`;
@@ -5478,7 +5480,7 @@ function renderInsightsSummary() {
   const el = document.getElementById('ins-summary');
   if (el) el.innerHTML = tile(leads.length, 'лидов', 'var(--accent2)')
     + tile(`${conv}<span style="font-size:.8rem"> · ${pct}%</span>`, 'сконвертир.', 'var(--green)')
-    + tile(profiles.length, 'анкет', 'var(--gold, #eab308)');
+    + tile(profiles.length, 'анкет', 'var(--gold, #d9b44a)');
 }
 
 function insightsTab(t) {
@@ -5504,11 +5506,11 @@ function _renderLeads(q) {
   return rows.slice(0, 200).map(r => {
     const conv = (r['Стал клиентом'] || '').trim();
     const nick = (r['Ник'] || '').trim();
-    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid rgba(45,49,66,.4);font-size:.84rem">
+    return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-top:1px solid color-mix(in srgb, var(--border) 40%, transparent);font-size:.84rem">
       <span><b>${esc(r['Имя (Telegram)'] || '—')}</b> · ${esc(r['Телефон'] || '')}
         <div class="dim" style="font-size:.72rem">${esc(r['Дата'] || '')}${nick ? ' · ' + esc(nick) : ''}</div></span>
-      ${conv ? `<span class="tag" style="background:rgba(34,197,94,.12);color:var(--green);white-space:nowrap">✅ клиент</span>`
-             : `<span class="tag" style="background:rgba(249,115,22,.12);color:var(--orange);white-space:nowrap">лид</span>`}
+      ${conv ? `<span class="tag" style="background:color-mix(in srgb, var(--green) 12%, transparent);color:var(--green);white-space:nowrap">✅ клиент</span>`
+             : `<span class="tag" style="background:color-mix(in srgb, var(--orange) 12%, transparent);color:var(--orange);white-space:nowrap">лид</span>`}
     </div>`;
   }).join('');
 }
@@ -5531,10 +5533,10 @@ function _renderProfiles(q) {
   const list = rows.slice(0, 200).map(r => {
     const client = (r['Email в базе'] || '').trim();
     const meta = [r['Возраст'], r['Пол'], r['Город']].map(x => (x||'').trim()).filter(Boolean).join(' · ');
-    return `<div style="padding:8px 0;border-top:1px solid rgba(45,49,66,.4);font-size:.84rem">
+    return `<div style="padding:8px 0;border-top:1px solid color-mix(in srgb, var(--border) 40%, transparent);font-size:.84rem">
       <div style="display:flex;justify-content:space-between;gap:8px">
         <b>${esc(r['ФИО'] || '—')}</b>
-        ${client ? `<span class="tag" style="background:rgba(34,197,94,.12);color:var(--green);white-space:nowrap">клиент</span>` : ''}
+        ${client ? `<span class="tag" style="background:color-mix(in srgb, var(--green) 12%, transparent);color:var(--green);white-space:nowrap">клиент</span>` : ''}
       </div>
       <div class="dim" style="font-size:.72rem">${esc(meta)}${(r['Уровень']||'').trim() ? ' · ♟ ' + esc(r['Уровень']) : ''}${(r['Почта']||'').trim() ? ' · ' + esc(r['Почта']) : ''}</div>
     </div>`;
@@ -5629,7 +5631,7 @@ async function loadCertCodes() {
         <span style="font-size:.8rem;font-weight:700;color:var(--text2)">Активированные · ${used.length}</span>
         <button onclick="archiveUsedCerts()" style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:3px 9px;border-radius:6px;cursor:pointer">🗄 Все в архив</button>
       </div>`;
-      html += used.map(c => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-top:1px solid rgba(45,49,66,.4);font-size:.78rem">
+      html += used.map(c => `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-top:1px solid color-mix(in srgb, var(--border) 40%, transparent);font-size:.78rem">
         <span style="font-family:monospace;opacity:.6">${esc(c.id)}</span>
         <span class="dim" style="flex:1;text-align:center;font-size:.7rem">${esc(c.kind||'')} ${esc(c.format||'')} ×${c.lessons||0}</span>
         <span style="font-size:.7rem;color:var(--green)">✅ ${esc(c.usedByName || c.usedBy)}</span>
@@ -5951,7 +5953,7 @@ async function loadHomeReminders() {
         ${s.phone ? `<div style="font-size:.72rem;color:var(--text2)">${esc(s.phone)}</div>` : ''}
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <span class="balance-badge" style="background:rgba(239,68,68,.12);color:${color}">${label}</span>
+        <span class="balance-badge" style="background:color-mix(in srgb, var(--red) 12%, transparent);color:${color}">${label}</span>
         ${s.phone ? `<button class="copy-btn" onclick="navigator.clipboard.writeText('${escJs(s.phone)}').then(()=>toast('Номер скопирован','ok'))">📋</button>` : ''}
       </div>
     </div>`;
