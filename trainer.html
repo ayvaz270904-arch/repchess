@@ -202,6 +202,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 }
 
 /* ── LESSON STATUS ── */
+.tag-scheduled{background:color-mix(in srgb, var(--accent2) 10%, transparent);color:var(--accent2);}
 .tag-cancelled{background:color-mix(in srgb, var(--red) 12%, transparent);color:var(--red);}
 .tag-rescheduled{background:color-mix(in srgb, var(--orange) 12%, transparent);color:var(--orange);}
 .lesson-item.is-cancelled{opacity:.5;}
@@ -226,7 +227,25 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .tag-pending{background:color-mix(in srgb, var(--accent) 16%, transparent);color:var(--accent);}
 .lesson-pending-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;animation:pulse-dot 1.4s ease-in-out infinite;}
 @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.75)}}
-.lesson-needs-confirm{border-left:2px solid var(--accent);background:color-mix(in srgb, var(--accent) 7%, transparent);}
+.lesson-needs-confirm{background:color-mix(in srgb, var(--accent) 7%, transparent);}
+/* Строка-расписание: время колонкой слева, статусная линия, действие — настоящей кнопкой */
+.li-row{display:grid;grid-template-columns:54px 1fr auto;gap:11px;align-items:center;}
+.li-time{text-align:right;font-size:.86rem;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;}
+.li-time small{display:block;font-size:.64rem;color:var(--text2);font-weight:600;margin-top:2px;letter-spacing:.01em;}
+.lesson-needs-confirm .li-time{color:var(--accent);}
+.li-main{border-left:2px solid var(--border);padding-left:11px;min-width:0;}
+.lesson-needs-confirm .li-main{border-left-color:var(--accent);}
+.li-meta{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:5px;}
+.li-side{display:flex;align-items:center;gap:2px;flex-shrink:0;}
+.li-ico{background:none;border:none;cursor:pointer;font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px;color:var(--text2);}
+.li-action{width:100%;margin-top:11px;padding:9px;border-radius:8px;font-family:inherit;cursor:pointer;
+  border:1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background:color-mix(in srgb, var(--accent) 15%, transparent);color:var(--accent);font-size:.8rem;font-weight:700;}
+.li-action:hover{background:color-mix(in srgb, var(--accent) 24%, transparent);}
+.li-action:active{transform:scale(.99);}
+.li-action.alt{border-color:color-mix(in srgb, var(--accent2) 45%, transparent);
+  background:color-mix(in srgb, var(--accent2) 14%, transparent);color:var(--accent2);}
+.li-action.alt:hover{background:color-mix(in srgb, var(--accent2) 22%, transparent);}
 .edit-btn-confirm{background:color-mix(in srgb, var(--orange) 15%, transparent)!important;border:1px solid color-mix(in srgb, var(--orange) 40%, transparent)!important;border-radius:8px!important;color:var(--orange)!important;}
 
 /* ── ATTENDANCE ── */
@@ -1877,34 +1896,36 @@ function groupFeedItemHTML(g) {
   const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
   const names = (g.studentNames||[]).slice(0,3).join(', ') + ((g.count||0)>3 ? ` и ещё ${g.count-3}` : '');
   const { submitted, approved, pastDate, hasMismatch, needsAttend, needsApproval, canEdit, isAdmin } = getGroupFlags(g);
-  return `<div class="lesson-item${hasMismatch?' lesson-needs-confirm':''}">
-    <div class="lesson-row1">
-      <div style="display:flex;align-items:center;gap:7px">
-        ${needsAttend || needsApproval ? '<div class="lesson-pending-dot"></div>' : ''}
-        <span class="lesson-student">👥 ${esc(g.venue||'Групповое')}</span>
+  const canMark = !submitted && (pastDate || currentTrainer.role==='admin');
+  const bigTime  = g.time ? esc(g.time) : d;
+  const smallDay = g.time ? d : '';
+  const showLinks = g.format==='online' && (currentTrainer.role==='admin' || g.trainerId===currentUser.uid);
+
+  const actionHTML = canMark
+    ? `<button class="li-action" onclick="openAttendModal('${g.id}')">Отметить посещаемость</button>`
+    : needsApproval
+      ? `<button class="li-action alt" onclick="openAttendModal('${g.id}')">Проверить и подтвердить</button>` : '';
+
+  return `<div class="lesson-item${(needsAttend||needsApproval||hasMismatch)?' lesson-needs-confirm':''}">
+    <div class="li-row">
+      <div class="li-time">${bigTime}${smallDay ? `<small>${smallDay}</small>` : ''}</div>
+      <div class="li-main">
+        <span class="lesson-student" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">👥 ${esc(g.venue||'Групповое')}</span>
+        <div class="li-meta">
+          <span class="tag tag-group">${g.count||0} чел.</span>
+          <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
+          ${approved ? `<span class="tag tag-attendance-ok">✅ подтв.</span>` : ''}
+          ${submitted && !approved ? `<span class="tag tag-scheduled">⏳ проверка</span>` : ''}
+          ${hasMismatch ? `<span class="tag tag-mismatch">⚠️</span>` : ''}
+          ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.73rem">${esc(g.trainerName)}</span>`:''}
+          ${names ? `<span class="dim" style="font-size:.73rem">${esc(names)}</span>` : ''}
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span class="lesson-date">${d}</span>
-        ${g.format==='online' && (currentTrainer.role==='admin' || g.trainerId===currentUser.uid)
-          ? `<button onclick="openGroupLinksModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--accent2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Ссылки на онлайн-занятие">🔗</button>` : ''}
-        ${!submitted && (pastDate || currentTrainer.role==='admin')
-          ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--green);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Отметить посещаемость">📋</button>`
-          : needsApproval
-            ? `<button onclick="openAttendModal('${g.id}')" style="background:none;border:none;cursor:pointer;color:var(--accent2);font-size:.8rem;padding:2px 4px;min-width:28px;min-height:28px" title="Подтвердить">✅</button>`
-            : ''}
+      <div class="li-side">
+        ${showLinks ? `<button onclick="openGroupLinksModal('${g.id}')" class="li-ico" style="color:var(--accent2)" title="Ссылки на онлайн-занятие">🔗</button>` : ''}
       </div>
     </div>
-    <div class="lesson-row2">
-      <span class="tag tag-group">${g.count||0} чел.</span>
-      <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}">${g.format==='online'?'Онлайн':'Офлайн'}</span>
-      ${approved ? `<span class="tag tag-attendance-ok">✅ подтв.</span>` : ''}
-      ${submitted && !approved ? `<span class="tag" style="background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2)">⏳ проверка</span>` : ''}
-      ${hasMismatch ? `<span class="tag tag-mismatch">⚠️</span>` : ''}
-      ${needsAttend ? `<span class="tag tag-pending">Отметить</span>` : ''}
-      ${needsApproval ? `<span class="tag" style="background:color-mix(in srgb, var(--accent2) 15%, transparent);color:var(--accent2)">📬 Подтвердить</span>` : ''}
-      ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName)}</span>`:''}
-      ${names ? `<span class="dim" style="font-size:.73rem">${esc(names)}</span>` : ''}
-    </div>
+    ${actionHTML}
   </div>`;
 }
 
@@ -1912,34 +1933,34 @@ function lessonItemHTML(l) {
   const d = l._date ? new Date(l._date + 'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
   const { isPending, isDone, isCancelled, isRescheduled, needsConfirm, isScheduled, isLocked, isAdmin } = getLessonFlags(l);
 
-  // Главная = действия: подтверждённые (done/cancelled/легаси) — просто строки-статусы,
-  // смотреть/редактировать их — через Историю
+  // Время — главное в левой колонке; если его нет (старые записи), в колонку встаёт дата
+  const bigTime  = l.time ? esc(l.time) : d;
+  const smallDay = l.time ? d : '';
+
+  // Подтверждённые (done/cancelled/легаси) правятся через Историю — здесь только статус
   const confirmed = !l.status || l.status === 'done' || l.status === 'cancelled';
-  const editBtnHTML = confirmed ? '' :
-    `<button data-edit-id="${l.id}" class="${needsConfirm?'edit-btn-confirm':''}"
-      style="background:none;border:none;cursor:pointer;color:${needsConfirm?'var(--orange)':'var(--text2)'};font-size:.85rem;padding:2px 4px;line-height:1;min-width:28px;min-height:28px" title="${needsConfirm?'Подтвердить занятие':'Редактировать'}">${needsConfirm?'❓':'✏️'}</button>`;
+  const sideHTML = (!confirmed && !needsConfirm)
+    ? `<button data-edit-id="${l.id}" class="li-ico" title="Редактировать">✏️</button>` : '';
+  const actionHTML = needsConfirm
+    ? `<button class="li-action" data-edit-id="${l.id}">Подтвердить занятие</button>` : '';
 
   return `<div class="lesson-item${isCancelled?' is-cancelled':''}${needsConfirm?' lesson-needs-confirm':''}">
-    <div class="lesson-row1">
-      <div style="display:flex;align-items:center;gap:7px;min-width:0">
-        ${needsConfirm ? '<div class="lesson-pending-dot"></div>' : ''}
-        <span class="lesson-student" style="cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
+    <div class="li-row">
+      <div class="li-time">${bigTime}${smallDay ? `<small>${smallDay}</small>` : ''}</div>
+      <div class="li-main">
+        <span class="lesson-student" style="cursor:pointer;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" data-si-email="${esc(l.studentEmail||'')}">${esc(l.studentName||'—')}</span>
+        <div class="li-meta">
+          <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
+          ${isScheduled  ? '<span class="tag tag-scheduled">Запланировано</span>' : ''}
+          ${isCancelled  ? '<span class="tag tag-cancelled">Отменено</span>' : ''}
+          ${isRescheduled? '<span class="tag tag-rescheduled">Перенесено</span>' : ''}
+          ${l.trainerName&&isAdmin?`<span class="dim" style="font-size:.73rem">${esc(l.trainerName)}</span>`:''}
+          ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,40))}${l.notes.length>40?'…':''}</span>`:''}
+        </div>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-        <span class="lesson-date">${d}${l.time ? ' · ' + esc(l.time) : ''}</span>
-        ${editBtnHTML}
-      </div>
+      <div class="li-side">${sideHTML}</div>
     </div>
-    <div class="lesson-row2">
-      <span class="tag ${l.format==='online'?'tag-online':'tag-offline'}">${l.format==='online'?'Онлайн':'Офлайн'}</span>
-      ${needsConfirm ? '<span class="tag tag-pending">Подтвердить</span>' : ''}
-      ${isScheduled  ? '<span class="tag" style="background:color-mix(in srgb, var(--accent2) 10%, transparent);color:var(--accent2)">📅 Запланировано</span>' : ''}
-      ${isDone       ? '<span class="tag" style="background:color-mix(in srgb, var(--green) 10%, transparent);color:var(--green)">✅</span>' : ''}
-      ${isCancelled  ? '<span class="tag tag-cancelled">Отменено</span>' : ''}
-      ${isRescheduled? '<span class="tag tag-rescheduled">Перенесено</span>' : ''}
-      ${l.trainerName&&isAdmin?`<span class="dim" style="font-size:.75rem">${esc(l.trainerName)}</span>`:''}
-      ${l.notes?`<span class="dim" style="font-size:.73rem;font-style:italic">💬 ${esc(l.notes.slice(0,40))}${l.notes.length>40?'…':''}</span>`:''}
-    </div>
+    ${actionHTML}
   </div>`;
 }
 
