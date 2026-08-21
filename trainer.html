@@ -1600,7 +1600,7 @@ async function loadStudents() {
       // Ключ = телефон (последние 10 цифр), иначе email. Один человек = одна карточка,
       // даже если писал имя по-разному или сделал опечатку в почте; разных людей (разные телефоны) не смешиваем.
       const key = personKey(email, row['Phone']);
-      if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', tgNick: '', purchased: 0, purchasedExpired: 0, purchasedGroup: 0, purchasedIndiv: 0, byCat: {}, firstDate: null, nextExpiry: null };
+      if (!map[key]) map[key] = { name: row['Name']||'', email, key, phone: row['Phone']||'', tgNick: '', purchased: 0, purchasedExpired: 0, purchasedGroup: 0, purchasedIndiv: 0, byCat: {}, packs: [], firstDate: null, nextExpiry: null };
       const m = map[key];
       if ((row['Name']||'').length > m.name.length) m.name = row['Name'];
       if (!m.phone && row['Phone']) m.phone = row['Phone'];
@@ -1628,6 +1628,7 @@ async function loadStudents() {
           let expiryDate = null;
           if (date) { expiryDate = new Date(date); expiryDate.setMonth(expiryDate.getMonth() + expiryMonths); }
           const isExpired = expiryDate && expiryDate < new Date();
+          if (date) m.packs.push({ d: date, exp: expiryDate, n: cnt, cat: cls.cat });   // для модели C
           if (!isExpired) {
             m.purchased += cnt;
             if (isGrp) m.purchasedGroup += cnt; else m.purchasedIndiv += cnt;
@@ -1638,7 +1639,7 @@ async function loadStudents() {
             }
             if (!m.firstDate || (date && date < m.firstDate)) m.firstDate = date;
           } else {
-            m.purchasedExpired += cnt;   // для FIFO-списания в _enrichStudentsWithRemaining
+            m.purchasedExpired += cnt;   // только для показа «(+N истекло)» в карточке
           }
           // Ближайшая дата истечения (для предупреждений)
           if (expiryDate && !isExpired) {
@@ -1663,6 +1664,7 @@ async function loadStudents() {
         if (cat.indexOf('Групп') === 0) m.purchasedGroup += applied; else m.purchasedIndiv += applied;
       }
       m.overrideByCat = {}; for (const cat in ov) m.overrideByCat[cat] = ov[cat].delta;   // для панели — величина правки
+      m.overrideFull = ov;   // с датами — нужно модели C
     }
 
     // Assign IDs (RC-XXXX) sorted by first payment date
@@ -1673,6 +1675,13 @@ async function loadStudents() {
     // Also include students without payments (free sign-ups)
     const freeStudents = Object.values(map).filter(s => !s.purchased);
     freeStudents.forEach((s, i) => { s.id = `RC-F${String(i+1).padStart(3,'0')}`; s.purchased = 0; });
+
+    // Одна почта на нескольких людей (подарочные покупки) — занятия записаны на почту,
+    // разделить их между людьми нечем. Долг таким не начисляем.
+    const _byMail = {};
+    Object.values(map).forEach(x => { const e = String(x.email||'').toLowerCase();
+      if (e) (_byMail[e] = _byMail[e] || []).push(x); });
+    Object.keys(_byMail).forEach(e => { if (_byMail[e].length > 1) _byMail[e].forEach(x => x.sharedEmail = true); });
 
     students = [...sorted, ...freeStudents];
 
@@ -1720,16 +1729,42 @@ function populateTrainerSelect(selId) {
 // Одним запросом к Firestore считает использованные занятия для всех учеников.
 // Результат: s.used и s.remaining = s.purchased - used (не меньше 0).
 let _enrichedAt = 0;
-const _USED_CACHE_KEY = 'repchess_used_v2';   // v2: usedMap склеен по представительскому email (телефонная группировка)
+const _USED_CACHE_KEY = 'repchess_used_v3';   // v3: храним ДАТЫ занятий (модель C), а не счётчики
 
+// МОДЕЛЬ C (единое правило с ботом и кабинетом): занятие гасит пакет, действовавший
+// НА ЕГО ДАТУ; если живого не было — оплаченный остаток истёкшего; и только потом долг.
+// usedMap: email → массив дат проведённых занятий (не счётчик — нужна хронология).
 function _applyUsedMap(usedMap) {
+  const now = new Date();
   students.forEach(s => {
-    s.used = usedMap[s.email] || 0;
-    // FIFO: проведённые сначала гасят истёкшие пакеты, и только остаток — активные
-    const usedActive = Math.max(0, s.used - (s.purchasedExpired || 0));
-    s.usedActive = usedActive;
-    s.remainingRaw = (s.purchased || 0) - usedActive;   // без зажима — для админа (виден долг)
-    s.remaining = Math.max(0, s.remainingRaw);          // для значков и клиента
+    const dates = (usedMap[s.email] || []).slice().sort();
+    s.used = dates.length;
+    const packs = (s.packs || []).map(p => ({ ...p, cap: p.n })).sort((a,b) => a.d - b.d);
+    let unpaid = 0;
+    dates.forEach(ds => {
+      const ld = new Date(ds + 'T12:00:00');
+      for (let i=0;i<packs.length;i++)                       // 1) действовавший на дату занятия
+        if (packs[i].cap>0 && packs[i].d<=ld && ld<=packs[i].exp) { packs[i].cap--; return; }
+      for (let j=0;j<packs.length;j++)                       // 2) милосердие: оплаченный остаток
+        if (packs[j].cap>0 && packs[j].d<=ld) { packs[j].cap--; return; }
+      unpaid++;                                              // 3) платить было нечем — долг
+    });
+    const byCat = {};
+    packs.forEach(p => { if (p.exp >= now) byCat[p.cat] = (byCat[p.cat]||0) + p.cap; });
+    const ov = s.overrideFull;                               // ручные правки: минус не съедает будущие покупки
+    if (ov) for (const c in ov) {
+      let before = 0, after = 0;
+      packs.forEach(p => { if (p.exp < now || p.cat !== c) return;
+        if (ov[c].date && p.d > ov[c].date) after += p.cap; else before += p.cap; });
+      byCat[c] = Math.max(0, before + ov[c].delta) + after;
+    }
+    s.remainByCat = byCat;
+    let rem = 0; for (const c in byCat) rem += byCat[c];
+    rem -= unpaid;
+    if (s.sharedEmail) rem = Math.max(0, rem);               // почта общая → долг недостоверен
+    s.usedActive = Math.max(0, s.used - (s.purchasedExpired || 0));
+    s.remainingRaw = rem;                                    // без зажима — админу виден долг
+    s.remaining = Math.max(0, rem);                          // для значков
   });
 }
 
@@ -1759,10 +1794,10 @@ async function _enrichStudentsWithRemaining() {
       // Списывают баланс только ПРОВЕДЁННЫЕ: done или старые записи без статуса.
       // pending/rescheduled/cancelled/absent НЕ списывают (единое правило CRM/тренер/бот)
       if (data.status && data.status !== 'done') return;
-      if (data.studentEmail) {
+      if (data.studentEmail && data._date) {
         const _em = String(data.studentEmail).toLowerCase().trim();
         const _rep = _emailAlias[_em] || _em;   // фолдим все email человека к его представительскому
-        usedMap[_rep] = (usedMap[_rep] || 0) + 1;
+        (usedMap[_rep] = usedMap[_rep] || []).push(data._date);   // даты, а не счётчик — нужна хронология
       }
     });
     _applyUsedMap(usedMap);
@@ -1848,11 +1883,6 @@ async function loadHomePage(fromCache) {
   _homeIndivCache = indivAll;
   _homeGrpCache = grpAll;
 
-  // Строим карту использованных занятий по ученикам (для напоминаний)
-  const usedMap = {};
-  indivAll.filter(l => !l.status || l.status === 'done').forEach(l => {
-    if (l.studentEmail) { const _e = _emailAlias[String(l.studentEmail).toLowerCase().trim()] || String(l.studentEmail).toLowerCase().trim(); usedMap[_e] = (usedMap[_e]||0) + 1; }
-  });
   loadHomeReminders(); // async, не блокирует рендер
 
   // Статистика: инд. занятия + групповые как единицы
