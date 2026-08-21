@@ -231,6 +231,8 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .rem-stat{background:var(--surface);padding:11px 12px;}
 .rem-stat b{display:block;font-size:1.3rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;}
 .rem-stat span{font-size:.64rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
+.si-sec{font-size:.7rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 7px;padding-top:12px;border-top:1px solid color-mix(in srgb, var(--border) 55%, transparent);}
+.si-sec:first-of-type{border-top:none;padding-top:0;margin-top:4px;}
 .remind-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);}
 .remind-item:last-child{border-bottom:none;}
 .copy-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.72rem;padding:4px 8px;cursor:pointer;white-space:nowrap;}
@@ -1046,10 +1048,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div class="modal-handle"></div>
     <div class="modal-title" id="edit-lesson-title">Редактировать занятие</div>
     <input type="hidden" id="edit-lesson-id">
-    <div class="form-row">
-      <div class="form-label">Ученик</div>
-      <div id="edit-lesson-student" style="font-weight:700;padding:8px 0;color:var(--text)"></div>
-    </div>
+    <div id="edit-lesson-student" style="font-weight:700;font-size:1rem;padding:2px 0 12px;color:var(--text);border-bottom:1px solid color-mix(in srgb, var(--border) 55%, transparent);margin-bottom:14px"></div>
     <!-- Сообщение о блокировке (только для тренера после подтверждения) -->
     <div id="edit-locked-msg" style="display:none;margin-bottom:14px">
       <div style="background:color-mix(in srgb, var(--green) 8%, transparent);border:1px solid color-mix(in srgb, var(--green) 25%, transparent);border-radius:10px;padding:12px 16px;font-size:.85rem;color:var(--text2)">
@@ -1060,6 +1059,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <div id="edit-view-wrap" style="display:none;margin-bottom:14px"></div>
     <!-- Редактируемые поля -->
     <div id="edit-editable-wrap">
+      <div class="si-sec">Когда и как</div>
       <div class="form-row">
         <div class="form-label">Дата</div>
         <input class="form-inp" id="edit-lesson-date" type="date">
@@ -1072,15 +1072,16 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
         <input type="hidden" id="edit-lesson-format" value="offline">
       </div>
+      <div class="si-sec">Результат</div>
       <div class="form-row">
-        <div class="form-label">Результат занятия</div>
+        <div class="form-label">Что было на занятии</div>
         <div class="toggle-group">
           <button class="toggle-btn" id="edit-status-done" onclick="toggle('edit-lesson-status',this,'done')">✅ Проведено</button>
           <button class="toggle-btn" id="edit-status-cancelled" onclick="toggle('edit-lesson-status',this,'cancelled')">❌ Отменено</button>
           <button class="toggle-btn" id="edit-status-rescheduled" onclick="toggle('edit-lesson-status',this,'rescheduled')">🔄 Перенесено</button>
         </div>
         <input type="hidden" id="edit-lesson-status" value="">
-        <div style="font-size:.72rem;color:var(--text2);margin-top:6px">После выбора «Проведено» или «Отменено» занятие будет заблокировано от изменений</div>
+        <div style="font-size:.72rem;color:var(--orange);margin-top:8px;background:color-mix(in srgb, var(--orange) 8%, transparent);border:1px solid color-mix(in srgb, var(--orange) 22%, transparent);border-radius:8px;padding:8px 10px">⚠️ «Проведено» и «Отменено» необратимы: занятие закроется от изменений и спишет баланс</div>
       </div>
       <div class="form-row">
         <div class="form-label">Заметки <span style="color:var(--text2);text-transform:none;font-size:.72rem">(необязательно)</span></div>
@@ -4563,14 +4564,22 @@ async function openStudentInfoModal(email) {
           <div style="font-size:.7rem;color:var(--text2)">Проведено${upcoming ? ` · +${upcoming} в плане` : ''}</div>
         </div>
       </div>
-      <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📅 Последнее занятие: <span style="color:var(--text)">${lastDate}</span></div>
-      <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">🎯 Тренер: ${trainerStr}</div>
-      <div style="font-size:.82rem;color:var(--text2);margin-bottom:6px">📦 Куплено: <span style="color:var(--text)">${s.purchased} занятий</span>${s.purchasedExpired ? ` <span style="color:var(--text2)">(+${s.purchasedExpired} истекло)</span>` : ''}</div>
-      ${Object.keys(s.byCat||{}).length ? `<div style="font-size:.78rem;color:var(--text2);margin:-2px 0 6px 22px">${Object.keys(s.byCat).map(k=>`${esc(k)} — <b style="color:var(--text)">${s.byCat[k]}</b>`).join('<br>')}</div>` : ''}
-      ${(s.overrideByCat && Object.keys(s.overrideByCat).length) ? `<div style="font-size:.75rem;color:var(--accent2);margin:2px 0 6px 22px">✏️ Ручной баланс активен</div>` : ''}
+      ${Object.keys(s.remainByCat||{}).filter(k=>s.remainByCat[k]).length ? `
+        <div class="si-sec">Остаток по направлениям</div>
+        <div style="margin-bottom:12px">${Object.keys(s.remainByCat).filter(k=>s.remainByCat[k]).map(k=>
+          `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:.82rem">
+             <span style="color:var(--text2)">${esc(k)}</span><b>${s.remainByCat[k]}</b></div>`).join('')}</div>` : ''}
+
+      <div class="si-sec">Занятия</div>
+      <div style="font-size:.82rem;color:var(--text2);margin-bottom:5px">Последнее: <span style="color:var(--text)">${lastDate}</span></div>
+      <div style="font-size:.82rem;color:var(--text2);margin-bottom:5px">Тренер: ${trainerStr}</div>
+      <div style="font-size:.82rem;color:var(--text2);margin-bottom:5px">Куплено: <span style="color:var(--text)">${s.purchased} занятий</span>${s.purchasedExpired ? ` (+${s.purchasedExpired} истекло)` : ''}</div>
+      ${expiryStr ? `<div style="font-size:.82rem;margin-bottom:5px">${expiryStr}</div>` : ''}
+      ${(s.overrideByCat && Object.keys(s.overrideByCat).length) ? `<div style="font-size:.75rem;color:var(--accent2);margin-bottom:5px">✏️ Ручной баланс активен</div>` : ''}
       ${currentTrainer?.role==='admin' ? _balancePanelHTML(s) : ''}
-      ${expiryStr ? `<div style="font-size:.82rem;margin-bottom:6px">${expiryStr}</div>` : ''}
-      ${_stuNick(s) ? `<div style="font-size:.82rem;color:var(--text2);margin-top:8px">✈️ Telegram: @${esc(_stuNick(s))}</div>` : ''}
+
+      <div class="si-sec">Контакты</div>
+      ${_stuNick(s) ? `<div style="font-size:.82rem;color:var(--text2);margin-bottom:5px">Telegram: <a class="tg-link" href="https://t.me/${esc(_stuNick(s))}" target="_blank">@${esc(_stuNick(s))}</a></div>` : ''}
       ${s.chatId ? `<div style="font-size:.82rem;color:var(--text2);margin-top:8px;display:flex;gap:8px;align-items:center">🆔 Chat ID: <b style="color:var(--text)">${esc(String(s.chatId))}</b>
         <button class="copy-btn" onclick="navigator.clipboard.writeText('${escJs(String(s.chatId))}').then(()=>toast('Скопировано','ok'))">Копировать</button></div>` : ''}
       ${s.phone ? `<div style="margin-top:10px;display:flex;gap:8px;align-items:center">
@@ -5826,10 +5835,12 @@ let _balEmail = null;
 // Инлайн-панель ручного баланса внутри карточки ученика. Показывает текущее число по каждой
 // категории («сейчас: N»), поле пустое (или уже заданный вручную override).
 function _balancePanelHTML(s) {
-  const ov = s.overrideByCat || {}, bc = s.byCat || {};
+  // «сейчас» — это ОСТАТОК по категории (s.remainByCat), а не купленное: правку делают
+  // от текущего состояния. Купленное показываем отдельно, мелким.
+  const ov = s.overrideByCat || {}, bc = s.remainByCat || {}, bought = s.byCat || {};
   const sign = v => (v > 0 ? '+' + v : String(v));
   const row = (id, cat, label) => `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-      <div style="flex:1;font-size:.82rem">${label}<div style="font-size:.7rem;color:var(--text2)">сейчас: ${bc[cat] || 0}${ov[cat] != null ? ' (правка ' + sign(ov[cat]) + ')' : ''}</div></div>
+      <div style="flex:1;font-size:.82rem">${label}<div style="font-size:.7rem;color:var(--text2)">осталось: <b style="color:var(--text)">${bc[cat] || 0}</b>${bought[cat] ? ' · куплено ' + bought[cat] : ''}${ov[cat] != null ? ' · правка ' + sign(ov[cat]) : ''}</div></div>
       <input class="form-inp" id="${id}" type="number" min="-200" max="200" style="width:88px;text-align:center" placeholder="±0" value="${ov[cat] != null ? ov[cat] : ''}">
     </div>`;
   return `
