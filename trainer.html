@@ -1544,7 +1544,7 @@ async function showApp() {
 // ══════════════════════════════════════════════
 //  LOAD STUDENTS FROM 
 // ══════════════════════════════════════════════
-const _CACHE_KEY = 'repchess__v5';   // v5: склейка карточек по телефону (сброс старого кэша с ключом email+имя)
+const _CACHE_KEY = 'repchess__v6';   // v6: + packs с датами (модель C). Старый кэш без packs даёт ложный минус — сбрасываем
 const _CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
 async function loadStudents() {
@@ -1559,6 +1559,11 @@ async function loadStudents() {
         students.forEach(s => {
           if (s.firstDate)  s.firstDate  = new Date(s.firstDate);
           if (s.nextExpiry) s.nextExpiry = new Date(s.nextExpiry);
+          // Пакеты модели C: без восстановления дат сравнения дают NaN → всё считается
+          // неоплаченным и баланс уходит в глубокий минус
+          (s.packs || []).forEach(p => { p.d = new Date(p.d); p.exp = p.exp ? new Date(p.exp) : null; });
+          if (s.overrideFull) for (const c in s.overrideFull)
+            if (s.overrideFull[c].date) s.overrideFull[c].date = new Date(s.overrideFull[c].date);
         });
         return;
       }
@@ -1740,6 +1745,11 @@ function _applyUsedMap(usedMap) {
   students.forEach(s => {
     const dates = (usedMap[s.email] || []).slice().sort();
     s.used = dates.length;
+    if (!s.packs && s.purchased) {   // битый/старый кэш: пакетов нет — не выдумываем долг
+      s.used = dates.length; s.remainByCat = { ...(s.byCat||{}) };
+      s.remainingRaw = Math.max(0, (s.purchased||0) - Math.max(0, dates.length - (s.purchasedExpired||0)));
+      s.remaining = s.remainingRaw; return;
+    }
     const packs = (s.packs || []).map(p => ({ ...p, cap: p.n })).sort((a,b) => a.d - b.d);
     let unpaid = 0;
     dates.forEach(ds => {
