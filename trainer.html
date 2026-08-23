@@ -227,10 +227,10 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .note-chip:hover,.note-chip:active{background:color-mix(in srgb, var(--accent) 12%, transparent);border-color:var(--accent);color:var(--accent);}
 
 /* ── REMIND CARD ── */
-.rem-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);}
-.rem-stat{background:var(--surface);padding:11px 12px;}
-.rem-stat b{display:block;font-size:1.3rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;}
-.rem-stat span{font-size:.64rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
+.rem-stats,.stat-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border-bottom:1px solid var(--border);}
+.rem-stat,.stat-cell{background:var(--surface);padding:11px 12px;}
+.rem-stat b,.stat-cell b{display:block;font-size:1.3rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums;}
+.rem-stat span,.stat-cell span{font-size:.64rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
 .si-sec{font-size:.7rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 7px;padding-top:12px;border-top:1px solid color-mix(in srgb, var(--border) 55%, transparent);}
 .si-sec:first-of-type{border-top:none;padding-top:0;margin-top:4px;}
 .remind-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);}
@@ -1321,6 +1321,7 @@ let _nickByEmail = {}, _nickByPhone = {};   // ник ТГ из «Лиды»/«�
 let _nameByEmail = {};   // реальное ФИО из «Профили» по почте (в т.ч. служебной cert-*@repchess.local)
 let _chatByEmail = {};   // Chat ID из «Профили» по почте — надёжный якорь для бот-гостей
 let _emailAlias = {};    // email → представительский email того же человека (склейка по телефону, для проведённых занятий)
+let _allPayments = [];   // платежи с суммами и датами — только для раздела «Финансы» (выручка за период)
 // ЕДИНЫЙ КЛЮЧ ЛИЧНОСТИ (одна логика с CRM, ботом, клиентом): телефон (последние 10 цифр), иначе email.
 // Телефон склеивает варианты имени и опечатки в почте одного человека и не смешивает разных людей.
 function personKey(email, phone){
@@ -1544,7 +1545,7 @@ async function showApp() {
 // ══════════════════════════════════════════════
 //  LOAD STUDENTS FROM 
 // ══════════════════════════════════════════════
-const _CACHE_KEY = 'repchess__v6';   // v6: + packs с датами (модель C). Старый кэш без packs даёт ложный минус — сбрасываем
+const _CACHE_KEY = 'repchess__v7';   // v7: + суммы платежей для раздела «Финансы»
 const _CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
 async function loadStudents() {
@@ -1552,9 +1553,10 @@ async function loadStudents() {
   try {
     const raw = sessionStorage.getItem(_CACHE_KEY);
     if (raw) {
-      const { data, ts } = JSON.parse(raw);
+      const { data, pays, ts } = JSON.parse(raw);
       if (Date.now() - ts < _CACHE_TTL) {
         students = data;
+        _allPayments = pays || [];
         // JSON превращает Date в строки — восстанавливаем, иначе "истекает через N дн." считается как NaN → «Пакет истёк»
         students.forEach(s => {
           if (s.firstDate)  s.firstDate  = new Date(s.firstDate);
@@ -1587,6 +1589,7 @@ async function loadStudents() {
 
     // Group by email, compute purchased lessons
     const map = {};
+    _allPayments = [];
     // Ручной баланс (paymentid=manual:override) — приоритет над сайтом; собираем заранее по ключу email+имя.
     const overridesByKey = {};
     for (const row of rows) {
@@ -1620,6 +1623,7 @@ async function loadStudents() {
         const prodStr = row['products'] || '';
         if (price > 0 || prodStr) {   // промо (цена 0) тоже учитываем, если есть товар
           const cls = classifyPayment(prodStr, price, date);
+          if (price > 0 && date) _allPayments.push({ d: localDateStr(date), price, cat: cls.cat });
           const cnt = cls.lessons;
           const isGrp = cls.group;
           // Фиксируем неизвестные тарифы для ручной классификации (только платные)
@@ -1692,7 +1696,7 @@ async function loadStudents() {
     students = [...sorted, ...freeStudents];
 
     // Сохраняем в sessionStorage
-    try { sessionStorage.setItem(_CACHE_KEY, JSON.stringify({ data: students, ts: Date.now() })); } catch(e) {}
+    try { sessionStorage.setItem(_CACHE_KEY, JSON.stringify({ data: students, pays: _allPayments, ts: Date.now() })); } catch(e) {}
     _applyRealNames();   // если анкеты уже загружены — сразу подставляем реальные ФИО бот-гостям
 
   } catch(e) {
@@ -4405,12 +4409,35 @@ async function loadFinance() {
     wrap.innerHTML = html || '<div class="empty">Нет тренеров</div>';
 
     if (isAdmin) {
+      // ВЫРУЧКА за период — по дате оплаты (сходится с движением денег по счёту).
+      // Промо и сертификаты идут по нулю и в выручку не попадают.
+      const pays = _allPayments.filter(p => p.d >= fromVal && p.d <= toVal);
+      const revenue = pays.reduce((t, p) => t + p.price, 0);
+      const byCat = {};
+      pays.forEach(p => { const c = byCat[p.cat] = byCat[p.cat] || { n: 0, sum: 0 }; c.n++; c.sum += p.price; });
+      const margin = revenue - totalPayout;
+      const marginPct = revenue > 0 ? Math.round(margin * 100 / revenue) : 0;
+      const money = v => v.toLocaleString('ru') + ' ₽';
+      const noData = !_allPayments.length;
+
       summaryCard.style.display = '';
       document.getElementById('fin-summary-body').innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="color:var(--text2)">Итого к выплате тренерам</span>
-          <span style="font-size:1.2rem;font-weight:800;color:var(--green)">${totalPayout > 0 ? totalPayout.toLocaleString('ru') + ' ₽' : '—'}</span>
-        </div>`;
+        <div class="stat-strip" style="margin:-16px -18px 14px;border-top:none">
+          <div class="stat-cell"><b>${noData ? '…' : money(revenue)}</b><span>выручка</span></div>
+          <div class="stat-cell"><b style="color:var(--orange)">${money(totalPayout)}</b><span>тренерам</span></div>
+          <div class="stat-cell"><b style="color:${margin >= 0 ? 'var(--green)' : 'var(--red)'}">${noData ? '…' : money(margin)}</b><span>разница${!noData && revenue > 0 ? ' · ' + marginPct + '%' : ''}</span></div>
+        </div>
+        ${noData ? `<div style="font-size:.78rem;color:var(--text2)">Суммы оплат не загружены — нажми обновление базы, и выручка появится.</div>` : ''}
+        ${Object.keys(byCat).length ? `
+          <div class="si-sec" style="margin-top:0">Выручка по направлениям</div>
+          ${Object.keys(byCat).sort((a,b) => byCat[b].sum - byCat[a].sum).map(c => `
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:.84rem;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
+              <span>${esc(c)}</span>
+              <span><span style="color:var(--text2);font-size:.76rem;margin-right:10px">${byCat[c].n} опл.</span><b>${money(byCat[c].sum)}</b></span>
+            </div>`).join('')}
+          <div style="display:flex;justify-content:space-between;padding:8px 0 0;font-size:.8rem;color:var(--text2)">
+            <span>Средний чек</span><span>${money(Math.round(revenue / pays.length))}</span>
+          </div>` : (noData ? '' : '<div style="font-size:.82rem;color:var(--text2);margin-top:4px">За период оплат не было</div>')}`;
     } else if (toShow.length > 0) {
       // Для тренера — показываем его собственную зарплату в сводной карточке
       const me = toShow[0];
