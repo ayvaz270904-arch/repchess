@@ -1033,6 +1033,12 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
           <input class="form-inp" id="rate-group-on" type="number" min="0" step="50" placeholder="0">
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-label">Действует с</div>
+        <input class="form-inp" id="rate-from" type="date">
+        <div style="font-size:.72rem;color:var(--text2);margin-top:6px">Занятия до этой даты останутся оплачены по прежней ставке. Прошлые ставки сохраняются.</div>
+      </div>
+      <div id="rate-history-wrap"></div>
     </div>
     <div class="auth-err" id="rate-err"></div>
     <button class="btn-full btn-gold" id="rate-confirm-btn" style="display:none">Подтвердить</button>
@@ -4272,6 +4278,28 @@ function finSetThisMonth() {
   loadFinance();
 }
 
+// ИСТОРИЯ СТАВОК. Документ trainerRates/{id} хранит history: [{from:'YYYY-MM-DD', indivOff, indivOn, groupOff, groupOn}]
+// плюс плоские поля rate* — это ТЕКУЩАЯ ставка (для обратной совместимости).
+// Занятие оплачивается по ставке, действовавшей В ЕГО ДЕНЬ.
+function _rateHistory(rd) {
+  if (!rd) return [];
+  const h = Array.isArray(rd.history) ? rd.history.slice() : [];
+  if (!h.length) {
+    // Старые данные без истории: считаем, что нынешняя ставка действовала всегда
+    const flat = { from: '2000-01-01', indivOff: rd.rateIndivOff||0, indivOn: rd.rateIndivOn||0,
+                   groupOff: rd.rateGroupOff||0, groupOn: rd.rateGroupOn||0 };
+    if (flat.indivOff || flat.indivOn || flat.groupOff || flat.groupOn) h.push(flat);
+  }
+  return h.sort((a,b) => (a.from||'') < (b.from||'') ? -1 : 1);
+}
+function _rateAt(rd, dateStr, key) {
+  const h = _rateHistory(rd);
+  if (!h.length) return 0;
+  let cur = h[0];                                   // занятие раньше первой ставки — берём самую раннюю
+  for (const e of h) { if ((e.from||'') <= dateStr) cur = e; else break; }
+  return cur[key] || 0;
+}
+
 async function loadFinance() {
   const fromVal = document.getElementById('fin-from').value;
   const toVal   = document.getElementById('fin-to').value;
@@ -4323,6 +4351,8 @@ async function loadFinance() {
     // 3. Считаем по тренерам с фильтрацией по дате в JS
     const emptyCount = () => ({ indivOff:0, indivOn:0, groupOff:0, groupOn:0 });
     const counts = {};
+    const payouts = {};        // ₽ по каждому тренеру — суммируем по занятиям, по ставке на их дату
+    const rateChanged = {};    // менялась ли ставка внутри периода (чтобы честно об этом сказать)
 
     // Кешируем для drill-down
     _finLessonsCache = []; _finGroupsCache = [];
@@ -4339,7 +4369,9 @@ async function loadFinance() {
       if (!tid) return;
       _finLessonsCache.push({id: d.id, ...data, _resolvedTid: tid});
       if (!counts[tid]) counts[tid] = emptyCount();
-      data.format === 'online' ? counts[tid].indivOn++ : counts[tid].indivOff++;
+      const k = data.format === 'online' ? 'indivOn' : 'indivOff';
+      counts[tid][k]++;
+      payouts[tid] = (payouts[tid] || 0) + _rateAt(ratesMap[tid], date, k);
     });
 
     groupSnap.forEach(d => {
@@ -4352,7 +4384,9 @@ async function loadFinance() {
       if (!tid) return;
       _finGroupsCache.push({id: d.id, ...data, _resolvedTid: tid});
       if (!counts[tid]) counts[tid] = emptyCount();
-      data.format === 'online' ? counts[tid].groupOn++ : counts[tid].groupOff++;
+      const k = data.format === 'online' ? 'groupOn' : 'groupOff';
+      counts[tid][k]++;
+      payouts[tid] = (payouts[tid] || 0) + _rateAt(ratesMap[tid], date, k);
     });
 
     // 4. Рендерим карточки
@@ -4368,12 +4402,11 @@ async function loadFinance() {
         groupOff: rd.rateGroupOff ?? t.rateGroupOff ?? 0,
         groupOn:  rd.rateGroupOn  ?? t.rateGroupOn  ?? 0,
       };
-      const payout =
-        c.indivOff * r.indivOff +
-        c.indivOn  * r.indivOn  +
-        c.groupOff * r.groupOff +
-        c.groupOn  * r.groupOn;
+      const payout = payouts[t.id] || 0;   // сумма по занятиям, каждое по ставке своего дня
       totalPayout += payout;
+      // Ставка менялась внутри периода? Тогда «₽» под плиткой — только текущая, о чём и предупредим
+      const _h = _rateHistory(ratesMap[t.id]);
+      rateChanged[t.id] = _h.some(e => e.from > fromVal && e.from <= toVal);
       const safeName = esc(t.name || t.email);
       const hasRates = Object.values(r).some(v => v > 0);
 
@@ -4399,7 +4432,7 @@ async function loadFinance() {
             ${cell(c.groupOn,  'Груп.<br>онлайн',  r.groupOn,  'groupOn')}
           </div>
           <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--border)">
-            <span style="font-weight:700">К выплате</span>
+            <span style="font-weight:700">К выплате${rateChanged[t.id] ? '<span style="font-weight:400;font-size:.72rem;color:var(--orange);display:block">ставка менялась в периоде — считано по датам</span>' : ''}</span>
             <span style="font-size:1.1rem;font-weight:800;color:${payout > 0 ? 'var(--green)' : 'var(--text2)'}">${payout > 0 ? payout.toLocaleString('ru') + ' ₽' : hasRates ? '0 ₽' : 'ставки не заданы'}</span>
           </div>
         </div>
@@ -4449,7 +4482,7 @@ async function loadFinance() {
         groupOff: myRd.rateGroupOff ?? me.rateGroupOff ?? 0,
         groupOn:  myRd.rateGroupOn  ?? me.rateGroupOn  ?? 0,
       };
-      const myPayout = myC.indivOff*myR.indivOff + myC.indivOn*myR.indivOn + myC.groupOff*myR.groupOff + myC.groupOn*myR.groupOn;
+      const myPayout = payouts[me.id] || 0;   // по ставке, действовавшей в день каждого занятия
       const hasMyRates = Object.values(myR).some(v => v > 0);
       summaryCard.style.display = '';
       document.getElementById('fin-summary-body').innerHTML = `
@@ -4479,7 +4512,33 @@ function askRatePassword(id, name, indivOff, indivOn, groupOff, groupOn) {
   document.getElementById('rate-value-wrap').style.display = '';
   document.getElementById('rate-confirm-btn').style.display = 'none';
   document.getElementById('rate-save-btn').style.display = '';
+  document.getElementById('rate-from').value = localDateStr(new Date());
+  _renderRateHistory(_rateTrainerId);
   _openModal('rate-modal');
+}
+
+// Прежние ставки: видно, что и с какого числа действовало
+async function _renderRateHistory(tid) {
+  const el = document.getElementById('rate-history-wrap');
+  if (!el) return;
+  el.innerHTML = '';
+  try {
+    const doc = await db.collection('trainerRates').doc(tid).get();
+    const h = _rateHistory(doc.exists ? doc.data() : null);
+    if (h.length < 1) return;
+    const fmt = d => d === '2000-01-01' ? 'изначально'
+      : new Date(d + 'T12:00:00').toLocaleDateString('ru-RU', { day:'numeric', month:'short', year:'numeric' });
+    el.innerHTML = `
+      <div class="si-sec">История ставок</div>
+      ${h.slice().reverse().map((e, i) => `
+        <div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:.8rem;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
+          <span style="color:${i === 0 ? 'var(--text)' : 'var(--text2)'}">${fmt(e.from)}${i === 0 ? ' <b style="color:var(--green)">· сейчас</b>' : ''}</span>
+          <span style="color:var(--text2);font-variant-numeric:tabular-nums">
+            инд ${e.indivOff||0}/${e.indivOn||0} · групп ${e.groupOff||0}/${e.groupOn||0}
+          </span>
+        </div>`).join('')}
+      <div style="font-size:.68rem;color:var(--text2);margin-top:6px">офлайн/онлайн, ₽ за занятие</div>`;
+  } catch(e) {}
 }
 
 async function saveRate() {
@@ -4490,9 +4549,20 @@ async function saveRate() {
   const rateGroupOn  = parseInt(document.getElementById('rate-group-on').value)  || 0;
 
   try {
-    await db.collection('trainerRates').doc(_rateTrainerId).set({ rateIndivOff, rateIndivOn, rateGroupOff, rateGroupOn }, { merge: true });
+    const from = document.getElementById('rate-from').value || localDateStr(new Date());
+    const doc = await db.collection('trainerRates').doc(_rateTrainerId).get();
+    const hist = _rateHistory(doc.exists ? doc.data() : null)
+      .filter(e => e.from !== from);                    // правка той же даты — заменяем запись
+    hist.push({ from, indivOff: rateIndivOff, indivOn: rateIndivOn, groupOff: rateGroupOff, groupOn: rateGroupOn });
+    hist.sort((a, b) => a.from < b.from ? -1 : 1);
+    const last = hist[hist.length - 1];                 // плоские поля = САМАЯ ПОЗДНЯЯ ставка
+    await db.collection('trainerRates').doc(_rateTrainerId).set({
+      history: hist,
+      rateIndivOff: last.indivOff, rateIndivOn: last.indivOn,
+      rateGroupOff: last.groupOff, rateGroupOn: last.groupOn
+    }, { merge: true });
     _closeModal('rate-modal');
-    toast('Ставки обновлены', 'ok');
+    toast('Ставка сохранена, прежние сохранены в истории', 'ok');
     loadFinance();
   } catch(e) {
     errEl.textContent = 'Ошибка: ' + e.message;
