@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Журнал">
 <link rel="apple-touch-icon" href="icon.svg">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
@@ -723,6 +724,13 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <div class="card" id="fin-summary-card" style="display:none;margin-bottom:14px">
         <div class="card-head"><span class="card-title">Итого за период</span></div>
         <div class="card-body" id="fin-summary-body"></div>
+      </div>
+
+      <!-- Графики (только админ) -->
+      <div class="card" id="fin-chart-card" style="display:none;margin-bottom:14px">
+        <div class="card-head"><span class="card-title">Выручка и выплаты по месяцам</span>
+          <span style="font-size:.7rem;color:var(--text2)">последние 12 мес.</span></div>
+        <div class="card-body"><div style="position:relative;height:230px"><canvas id="fin-chart"></canvas></div></div>
       </div>
 
       <!-- Trainer rows -->
@@ -4300,6 +4308,80 @@ function _rateAt(rd, dateStr, key) {
   return cur[key] || 0;
 }
 
+// График: выручка (по датам оплат) против выплат тренерам (по датам занятий), 12 месяцев.
+// Считается по всем данным, а не по выбранному периоду — чтобы видеть динамику и сезонность.
+let _finChart = null;
+function _renderFinChart(lessonsSnap, groupSnap, ratesMap, nameToId, norm) {
+  const card = document.getElementById('fin-chart-card');
+  const cv = document.getElementById('fin-chart');
+  if (!card || !cv || typeof Chart === 'undefined') return;
+
+  const months = [];                                   // последние 12 месяцев, включая текущий
+  const d0 = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(d0.getFullYear(), d0.getMonth() - i, 1);
+    months.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+  }
+  const idx = {}; months.forEach((m, i) => idx[m] = i);
+  const rev = new Array(12).fill(0), pay = new Array(12).fill(0);
+
+  _allPayments.forEach(p => { const i = idx[p.d.slice(0, 7)]; if (i != null) rev[i] += p.price; });
+
+  lessonsSnap.forEach(d => {
+    const x = d.data();
+    if (x.type === 'group') return;
+    if (x.status === 'cancelled' || x.status === 'pending' || x.status === 'rescheduled') return;
+    const date = x._date || x.date || ''; const i = idx[date.slice(0, 7)]; if (i == null) return;
+    const tid = x.trainerId || nameToId[norm(x.trainerName)]; if (!tid) return;
+    pay[i] += _rateAt(ratesMap[tid], date, x.format === 'online' ? 'indivOn' : 'indivOff');
+  });
+  groupSnap.forEach(d => {
+    const x = d.data();
+    if (x.adminApproved === false) return;
+    const date = x._date || x.date || ''; const i = idx[date.slice(0, 7)]; if (i == null) return;
+    const tid = x.trainerId || nameToId[norm(x.trainerName)]; if (!tid) return;
+    pay[i] += _rateAt(ratesMap[tid], date, x.format === 'online' ? 'groupOn' : 'groupOff');
+  });
+
+  const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+  const labels = months.map(m => {
+    const [y, mo] = m.split('-');
+    return new Date(+y, +mo - 1, 1).toLocaleDateString('ru-RU', { month: 'short' }) + (mo === '01' ? ' ' + y.slice(2) : '');
+  });
+
+  card.style.display = '';
+  if (_finChart) _finChart.destroy();
+  _finChart = new Chart(cv, {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label: 'Выручка',  data: rev, backgroundColor: css('--accent'),  borderRadius: 4 },
+      { label: 'Тренерам', data: pay, backgroundColor: css('--accent2'), borderRadius: 4 }
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: css('--text2'), boxWidth: 12, font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: c => c.dataset.label + ': ' + c.parsed.y.toLocaleString('ru') + ' ₽',
+            afterBody: items => {                        // маржа прямо в подсказке
+              const i = items[0].dataIndex, m = rev[i] - pay[i];
+              return rev[i] ? 'Разница: ' + m.toLocaleString('ru') + ' ₽ · ' + Math.round(m * 100 / rev[i]) + '%' : '';
+            }
+          }
+        }
+      },
+      scales: {
+        x: { ticks: { color: css('--text2'), font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { color: css('--text2'), font: { size: 10 },
+               callback: v => v >= 1000 ? (v / 1000) + 'к' : v },
+             grid: { color: css('--border') }, beginAtZero: true }
+      }
+    }
+  });
+}
+
 async function loadFinance() {
   const fromVal = document.getElementById('fin-from').value;
   const toVal   = document.getElementById('fin-to').value;
@@ -4440,6 +4522,8 @@ async function loadFinance() {
     }
 
     wrap.innerHTML = html || '<div class="empty">Нет тренеров</div>';
+
+    if (isAdmin) _renderFinChart(lessonsSnap, groupSnap, ratesMap, nameToId, norm);
 
     if (isAdmin) {
       // ВЫРУЧКА за период — по дате оплаты (сходится с движением денег по счёту).
