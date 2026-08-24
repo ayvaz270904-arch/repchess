@@ -5,7 +5,7 @@ import { CellIcon } from '../ui/CellIcon'
 import { MascotEmpty } from '../ui/MascotEmpty'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
 import { fetchSlots, getCachedSlots, bookIndiv, joinGroup, leaveGroup, confirmDialog, track, ApiError } from '../data'
-import { errText } from '../errors'
+import { errText, isBalanceMismatch } from '../errors'
 
 export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => void }) {
   // Стартуем из кэша (мгновенно, без спиннера), свежие слоты подтянем фоном.
@@ -58,6 +58,9 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
     } else {
       setBookMsg('⚠️ ' + errText(r.error))
       if (r.error === 'slot_taken' || r.error === 'slot_gone') loadSlotsData()
+      // Сервер не согласен с показанным балансом — перечитываем кабинет и слоты,
+      // чтобы экран перестал показывать устаревшую картинку (см. isBalanceMismatch).
+      if (isBalanceMismatch(r.error)) { onReload(); loadSlotsData() }
     }
   }
 
@@ -71,6 +74,7 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
       onReload()
     } else {
       setGrpMsg('⚠️ ' + errText(r.error))
+      if (isBalanceMismatch(r.error)) onReload()   // экран показывал не то, что на сервере
     }
   }
 

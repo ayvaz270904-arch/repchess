@@ -37,3 +37,18 @@ const ERRS: Record<string, string> = {
 export function errText(code?: string): string {
   return (code && ERRS[code]) || code || 'ошибка'
 }
+
+// Отказы, которые означают: сервер видит баланс ИНАЧЕ, чем показано на экране.
+//
+// Кабинет стартует из localStorage-кэша (мгновенное открытие), и этот кэш может пережить
+// сбой данных на бэкенде. 24.08.2026 клиентка видела «3 занятия на балансе» и активные
+// кнопки «Записаться» в момент, когда её строк оплат на сервере не было — приложение
+// показывало картинку «до поломки» и врало о состоянии.
+//
+// Поэтому на таком отказе экран обязан перечитать кабинет: пусть баланс и доступность
+// кнопок станут правдой, даже если правда неприятная.
+const BALANCE_MISMATCH = new Set(['no_group_pack', 'no_balance', 'no_indiv_pack'])
+
+export function isBalanceMismatch(code?: string): boolean {
+  return !!code && BALANCE_MISMATCH.has(code)
+}
