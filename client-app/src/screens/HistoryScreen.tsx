@@ -11,6 +11,13 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
   const done = data.lessonHistory.filter((h) => h.status === 'done').length
   const purchases = data.purchaseHistory.length
 
+  // Прогресс по остатку. Знаменатель считаем по НЕотрицательному остатку: при долге
+  // (остаток < 0) шкала — это только пройденные занятия, полоса заполнена целиком,
+  // а сам долг выносим в подпись справа. Иначе долг «съедал» бы шкалу и полоса
+  // показывала бы больше 100%.
+  const left = data.balanceTotal
+  const scale = done + Math.max(0, left)
+
   return (
     <List>
       <div className="screen-title">История</div>
@@ -31,14 +38,25 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
         </div>
       )}
 
-      {data.lessonHistory.length > 0 && (
-        <div className="prog-strip">
-          {data.lessonHistory
-            .slice(0, 12)
-            .reverse()
-            .map((h) => (
-              <span key={h.id} className={'prog-sq' + (h.status === 'done' ? ' done' : '')} />
-            ))}
+      {/* Здесь была полоса из 12 квадратиков (красный — проведено, пустой — пропуск).
+          Она ничем не подписывалась и отмечала ровно то же, что убранный счётчик
+          «Пропущено». Заменена на прогресс по остатку: то же место, но про
+          продвижение вперёд, а не про то, где человек не пришёл. */}
+      {scale > 0 && (
+        <div className="prog-bar-wrap">
+          <div className="prog-bar-top">
+            {/* Именно доля, а не «Пройдено N»: число пройденных уже стоит в карточке
+                выше, а знаменатель есть только здесь. */}
+            <span className="pb-done">
+              {done} из {scale}
+            </span>
+            <span className={'pb-left' + (left < 0 ? ' debt' : '')}>
+              {left > 0 ? `осталось ${left}` : left === 0 ? 'занятия закончились' : `долг ${-left}`}
+            </span>
+          </div>
+          <div className="prog-bar">
+            <div className="prog-bar-fill" style={{ width: Math.round((done / scale) * 100) + '%' }} />
+          </div>
         </div>
       )}
 

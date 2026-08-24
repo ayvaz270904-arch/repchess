@@ -865,24 +865,43 @@ html.app-light .mascot-empty img {
   color: var(--rc-hint);
   margin-top: 6px;
 }
-/* Полоса посещаемости: квадрат на занятие (красный — пройдено, пустой — пропуск) */
-.prog-strip {
+/* Прогресс по остатку занятий. Пришёл на смену полосе квадратиков «проведено /
+   пропуск»: та ничем не подписывалась и отмечала пропуски — ровно то, от чего
+   ушли, убрав счётчик «Пропущено». */
+.prog-bar-wrap {
+  padding: 2px 16px 12px;
+}
+.prog-bar-top {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 2px 16px 10px;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+  margin-bottom: 8px;
 }
-.prog-sq {
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  flex: none;
-  background: var(--rc-chip-bg);
-  border: 1px solid var(--rc-hairline);
+.pb-done {
+  font-weight: 600;
+  color: var(--rc-text);
 }
-.prog-sq.done {
+.pb-left {
+  color: var(--rc-hint);
+}
+.pb-left.debt {
+  color: var(--rc-red);
+  font-weight: 600;
+}
+.prog-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--rc-fill);
+  overflow: hidden;
+}
+.prog-bar-fill {
+  height: 100%;
+  min-width: 4px;
+  border-radius: 999px;
   background: var(--rc-red);
-  border-color: var(--rc-red);
+  transition: width 0.3s ease;
 }
 
 /* ── Пустое состояние с маскотом ── */
