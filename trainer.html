@@ -1722,23 +1722,39 @@ async function loadStudents() {
 // ══════════════════════════════════════════════
 //  LOAD TRAINERS
 // ══════════════════════════════════════════════
+let _trainersError = false;   // последняя загрузка списка тренеров упала?
+
 async function loadTrainers() {
   try {
     const snap = await db.collection('trainers').get();
     _trainersCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _trainersError = false;
   } catch(e) {
     console.warn('Could not load trainers:', e);
     _trainersCache = [];
+    _trainersError = true;
   }
 }
 
-function populateTrainerSelect(selId) {
+async function populateTrainerSelect(selId) {
   const sel = document.getElementById(selId);
   if (!sel) return;
+  // Кэш тренеров мог быть ещё пустым: его наполняют страницы История/График/Админ,
+  // а модалки открываются раньше. Администратор, зашедший сразу в «Групповые»,
+  // видел пустой список тренеров — при том что права на чтение у него есть.
+  if (!_trainersCache.length) { try { await loadTrainers(); } catch (e) { console.warn('populateTrainerSelect:', e); } }
   const current = sel.value;
+  const list = _trainersCache.filter(t => t.role !== 'admin');   // админы занятий не ведут
+  if (!list.length) {
+    // Раньше здесь молча оставался один пункт «— выберите тренера —», и упавшее
+    // чтение Firestore было неотличимо от «тренеров правда нет». Говорим прямо.
+    sel.innerHTML = '<option value="">' + (_trainersError
+      ? '\u26a0\ufe0f не удалось загрузить тренеров — обновите страницу'
+      : '\u26a0\ufe0f тренеров нет в базе') + '</option>';
+    return;
+  }
   sel.innerHTML = '<option value="">— выберите тренера —</option>';
-  for (const t of _trainersCache) {
-    if (t.role === 'admin') continue; // admin не ведёт занятия
+  for (const t of list) {
     const opt = document.createElement('option');
     opt.value = t.id;
     opt.textContent = t.name || t.email;
@@ -2382,7 +2398,7 @@ function openIndivModal() {
   const trainerRow = document.getElementById('rec-trainer-row');
   trainerRow.style.display = isAdmin ? '' : 'none';
   if (isAdmin) {
-    populateTrainerSelect('rec-trainer-sel');
+    populateTrainerSelect('rec-trainer-sel');   // без await: значение ниже не выставляется
     document.getElementById('rec-trainer-warn').style.display = 'none';
   }
   _openModal('indiv-modal');
@@ -2496,7 +2512,7 @@ async function openGroupReg(gid) {
   } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
 }
 
-function openGroupModal() {
+async function openGroupModal() {
   if (currentTrainer?.role !== 'admin') { toast('Групповые занятия создаёт администратор', 'err'); return; }
   _setGroupModalReadOnly(false);
   editingGroupId = null;
@@ -2519,7 +2535,7 @@ function openGroupModal() {
   const isAdmin = currentTrainer.role === 'admin';
   const trainerRow = document.getElementById('grp-trainer-row');
   trainerRow.style.display = isAdmin ? '' : 'none';
-  if (isAdmin) populateTrainerSelect('grp-trainer-sel');
+  if (isAdmin) await populateTrainerSelect('grp-trainer-sel');
   _openModal('group-modal');
 }
 
@@ -2570,7 +2586,7 @@ async function openEditGroupModal(groupId, viewMode) {
   const gTrainerRow = document.getElementById('grp-trainer-row');
   if (gTrainerRow) gTrainerRow.style.display = isAdminEdit ? '' : 'none';
   if (isAdminEdit) {
-    populateTrainerSelect('grp-trainer-sel');
+    await populateTrainerSelect('grp-trainer-sel');
     const gSel = document.getElementById('grp-trainer-sel');
     if (gSel) gSel.value = g.trainerId || '';
   }
