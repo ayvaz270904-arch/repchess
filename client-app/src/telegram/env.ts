@@ -16,7 +16,7 @@ import {
 } from '@telegram-apps/sdk-react'
 
 // Тёмная тема Telegram — для локального превью вне клиента (в реальном Telegram придёт своя).
-const DEV_THEME = {
+const DEV_THEME_DARK = {
   accent_text_color: '#6ab3f3',
   bg_color: '#17212b',
   button_color: '#5288c1',
@@ -34,10 +34,38 @@ const DEV_THEME = {
   bottom_bar_bg_color: '#17212b',
 } as const
 
+// Светлая тема Telegram (значения из реального iOS-клиента). Нужна, чтобы светлую
+// тему МОЖНО БЫЛО ПРОВЕРИТЬ локально: `npm run dev` + `?theme=light`.
+// Раньше мок был только тёмный — из-за этого светлая уехала в прод сломанной.
+const DEV_THEME_LIGHT = {
+  accent_text_color: '#007aff',
+  bg_color: '#ffffff',
+  button_color: '#007aff',
+  button_text_color: '#ffffff',
+  destructive_text_color: '#ff3b30',
+  header_bg_color: '#f7f7f7',
+  hint_color: '#8e8e93',
+  link_color: '#007aff',
+  secondary_bg_color: '#efeff4',
+  section_bg_color: '#ffffff',
+  section_header_text_color: '#6d6d72',
+  subtitle_text_color: '#8e8e93',
+  text_color: '#000000',
+  section_separator_color: '#c8c7cc',
+  bottom_bar_bg_color: '#f7f7f7',
+} as const
+
+// ?theme=light в адресной строке (только dev) — переключатель темы для превью.
+function devTheme() {
+  const q = new URLSearchParams(window.location.search).get('theme')
+  return q === 'light' ? DEV_THEME_LIGHT : DEV_THEME_DARK
+}
+
 // Подделываем окружение Telegram, когда приложение открыто просто в браузере (npm run dev).
 // Специально задаём safe area top:47 / bottom:34 (как на iPhone с бровью), чтобы визуально
 // проверить, что контент не залезает под бровь и под home-индикатор.
 function installDevMock(): void {
+  const theme = devTheme()
   const initDataRaw = new URLSearchParams([
     [
       'user',
@@ -61,14 +89,14 @@ function installDevMock(): void {
   mockTelegramEnv({
     launchParams: {
       tgWebAppData: initDataRaw,
-      tgWebAppThemeParams: DEV_THEME,
+      tgWebAppThemeParams: theme,
       tgWebAppVersion: '8.4',
       tgWebAppPlatform: 'ios',
     },
     onEvent(event, next) {
       const [name] = event
       if (name === 'web_app_request_theme') {
-        emitEvent('theme_changed', { theme_params: DEV_THEME })
+        emitEvent('theme_changed', { theme_params: theme })
         return
       }
       if (name === 'web_app_request_viewport') {
@@ -187,6 +215,46 @@ export function getAppearance(): 'light' | 'dark' {
     return themeParams.isDark() ? 'dark' : 'light'
   } catch {
     return 'dark'
+  }
+}
+
+// Базисные фоны темы «Шахматный набор» — держать синхронно с --rc-bg в styles.css.
+const APP_BG = { dark: '#0c0c0e', light: '#f2f2f3' } as const
+
+/**
+ * Ставит класс темы на <html> и красит «обвязку» Telegram под наш фон.
+ *
+ * Класс именно на <html>, а не только на AppRoot: <body> лежит ВНЕ AppRoot, и палитра,
+ * объявленная внутри него, до фона страницы не доходила — в светлой теме получались
+ * белые карточки и чёрный текст на тёмном фоне (баг до 2026-08-24).
+ *
+ * Заодно сообщаем цвет самому клиенту Telegram: иначе в полноэкранном режиме шапка и
+ * низ остаются тёмными, а статус-бар держит белые часы поверх светлого фона.
+ */
+export function applyAppearance(a: 'light' | 'dark'): void {
+  const el = document.documentElement
+  el.classList.toggle('app-light', a === 'light')
+  el.classList.toggle('app-dark', a === 'dark')
+
+  const c = APP_BG[a]
+  try {
+    if (miniApp.setBackgroundColor.isAvailable()) miniApp.setBackgroundColor(c)
+  } catch {
+    /* старый клиент — не критично */
+  }
+  try {
+    // supports.rgb — произвольный HEX (а не только ключи bg_color/secondary_bg_color),
+    // появился в Bot API 6.9; на клиентах постарше шапку просто не трогаем.
+    if (miniApp.setHeaderColor.isAvailable() && miniApp.setHeaderColor.supports.rgb()) {
+      miniApp.setHeaderColor(c)
+    }
+  } catch {
+    /* noop */
+  }
+  try {
+    if (miniApp.setBottomBarColor.isAvailable()) miniApp.setBottomBarColor(c)
+  } catch {
+    /* noop */
   }
 }
 

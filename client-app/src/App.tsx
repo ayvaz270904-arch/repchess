@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { AppRoot, Tabbar, Spinner, Placeholder, Button } from '@telegram-apps/telegram-ui'
-import { subscribeAppearance } from './telegram/env'
+import { subscribeAppearance, applyAppearance } from './telegram/env'
 import { haptic } from './telegram/ui'
 import { tabIcons } from './ui/icons'
 import { fetchCabinet, getCachedCabinet, clearCachedCabinet, track, ApiError } from './data'
@@ -66,6 +66,10 @@ export default function App({
   useEffect(() => {
     subscribeAppearance(setAppearance)
   }, [])
+  // Пользователь переключил тему прямо в Telegram — перекрашиваем <html> и обвязку клиента.
+  useEffect(() => {
+    applyAppearance(appearance)
+  }, [appearance])
   useEffect(() => {
     track('open')
     reload()

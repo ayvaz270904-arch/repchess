@@ -23,57 +23,77 @@
 }
 
 /* ══ Тема «Шахматный набор»: чёрно-белый базис + красный акцент + узор доски ══
-   Перекрываем токены telegram-ui прямо на AppRoot (.app-brand), !important — чтобы
-   победить дефолтные (телеграмный сине-серый). Базис отдельно для тёмной/светлой. */
-.app-brand {
+   ВАЖНО: палитра живёт на <html> (`html.app-dark` / `html.app-light`), а НЕ на AppRoot.
+   <body> находится ВНЕ AppRoot, и переменные, объявленные внутри него, до body не
+   доходят — из-за этого фон страницы всегда брал тёмный фолбэк, и в светлой теме
+   получалась каша: белые карточки и чёрный текст на тёмно-синем фоне.
+   Класс на <html> ставит App.tsx; на AppRoot он тоже дублируется (для совместимости).
+   Ниже `.app-brand` лишь ПРОКИДЫВАЕТ наши --rc-* в токены telegram-ui с !important —
+   это обязательно, потому что telegram-ui объявляет свои --tgui--* прямо на AppRoot,
+   и объявление на <html> проиграло бы более близкому предку. */
+:root,
+html.app-dark {
   --rc-red: #c94a42;
+  --rc-bg: #0c0c0e; /* фон страницы */
+  --rc-surface: #17171a; /* карточки, секции, поля */
+  --rc-text: #f4f4f5;
+  --rc-hint: #8b8b92;
+  --rc-sep: rgba(255, 255, 255, 0.07); /* разделители списков */
+  --rc-fill: rgba(255, 255, 255, 0.06); /* заливка вторичных элементов */
+  --rc-hairline: rgba(255, 255, 255, 0.14); /* рамка карточек */
+  --rc-hairline-strong: rgba(255, 255, 255, 0.24); /* интерактивные чипы/кнопки */
+  --rc-board-sq: rgba(255, 255, 255, 0.05); /* клетка узора доски */
+  --rc-chip-bg: rgba(255, 255, 255, 0.09);
+  --rc-chip-fg: #eaeaec;
+  color-scheme: dark;
+}
+
+/* Светлая — белый базис, чёрный текст (чёрные фигуры на белом).
+   Рамки/заливки здесь заметно плотнее, чем зеркальные к тёмной: на белом
+   полупрозрачный чёрный читается слабее, чем белый на чёрном. */
+html.app-light {
+  --rc-red: #c94a42;
+  --rc-bg: #f2f2f3;
+  --rc-surface: #ffffff;
+  --rc-text: #141416;
+  --rc-hint: #76767c;
+  --rc-sep: rgba(0, 0, 0, 0.08);
+  --rc-fill: rgba(0, 0, 0, 0.05);
+  --rc-hairline: rgba(0, 0, 0, 0.12);
+  --rc-hairline-strong: rgba(0, 0, 0, 0.2); /* интерактивные чипы/кнопки */
+  --rc-board-sq: rgba(0, 0, 0, 0.035);
+  --rc-chip-bg: rgba(0, 0, 0, 0.06);
+  --rc-chip-fg: #33333a;
+  color-scheme: light;
+}
+
+/* Прокидываем базис в токены telegram-ui (на самом AppRoot, поверх его дефолтов) */
+.app-brand {
   --tgui--link_color: var(--rc-red) !important;
   --tgui--button_color: var(--rc-red) !important;
   --tgui--accent_text_color: var(--rc-red) !important;
   --tgui--primary_code_highlight: var(--rc-red) !important;
   --tgui--button_text_color: #ffffff !important;
-}
 
-/* Тёмная — чёрный базис, белый текст (белые фигуры на чёрном) */
-.app-brand.app-dark {
-  --tgui--bg_color: #0c0c0e !important;
-  --tgui--secondary_bg_color: #0c0c0e !important;
-  --tgui--header_bg_color: #0c0c0e !important;
-  --tgui--section_bg_color: #17171a !important;
-  --tgui--tertiary_bg_color: #17171a !important;
-  --tgui--surface_primary: #17171a !important;
-  --tgui--card_bg_color: #17171a !important;
-  --tgui--text_color: #f4f4f5 !important;
-  --tgui--hint_color: #8b8b92 !important;
-  --tgui--subtitle_text_color: #8b8b92 !important;
-  --tgui--section_header_text_color: #8b8b92 !important;
-  --tgui--section_separator_color: rgba(255, 255, 255, 0.07) !important;
-  --tgui--divider: rgba(255, 255, 255, 0.07) !important;
-  --tgui--secondary_fill: rgba(255, 255, 255, 0.06) !important;
-  --rc-board-sq: rgba(255, 255, 255, 0.05);
-  --rc-chip-bg: rgba(255, 255, 255, 0.09);
-  --rc-chip-fg: #eaeaec;
-}
-
-/* Светлая — белый базис, чёрный текст (чёрные фигуры на белом) */
-.app-brand.app-light {
-  --tgui--bg_color: #f2f2f3 !important;
-  --tgui--secondary_bg_color: #f2f2f3 !important;
-  --tgui--header_bg_color: #f2f2f3 !important;
-  --tgui--section_bg_color: #ffffff !important;
-  --tgui--tertiary_bg_color: #ffffff !important;
-  --tgui--surface_primary: #ffffff !important;
-  --tgui--card_bg_color: #ffffff !important;
-  --tgui--text_color: #141416 !important;
-  --tgui--hint_color: #76767c !important;
-  --tgui--subtitle_text_color: #76767c !important;
-  --tgui--section_header_text_color: #76767c !important;
-  --tgui--section_separator_color: rgba(0, 0, 0, 0.08) !important;
-  --tgui--divider: rgba(0, 0, 0, 0.08) !important;
-  --tgui--secondary_fill: rgba(0, 0, 0, 0.05) !important;
-  --rc-board-sq: rgba(0, 0, 0, 0.05);
-  --rc-chip-bg: rgba(0, 0, 0, 0.06);
-  --rc-chip-fg: #33333a;
+  --tgui--bg_color: var(--rc-bg) !important;
+  --tgui--secondary_bg_color: var(--rc-bg) !important;
+  --tgui--header_bg_color: var(--rc-bg) !important;
+  --tgui--bottom_bar_bg_color: var(--rc-bg) !important;
+  --tgui--quartenary_bg_color: var(--rc-bg) !important;
+  --tgui--section_bg_color: var(--rc-surface) !important;
+  --tgui--tertiary_bg_color: var(--rc-surface) !important;
+  --tgui--surface_primary: var(--rc-surface) !important;
+  --tgui--card_bg_color: var(--rc-surface) !important;
+  --tgui--plain_background: var(--rc-surface) !important;
+  --tgui--text_color: var(--rc-text) !important;
+  --tgui--plain_foreground: var(--rc-text) !important;
+  --tgui--hint_color: var(--rc-hint) !important;
+  --tgui--subtitle_text_color: var(--rc-hint) !important;
+  --tgui--section_header_text_color: var(--rc-hint) !important;
+  --tgui--section_separator_color: var(--rc-sep) !important;
+  --tgui--divider: var(--rc-sep) !important;
+  --tgui--outline: var(--rc-hairline) !important;
+  --tgui--secondary_fill: var(--rc-fill) !important;
 }
 
 html,
@@ -82,8 +102,13 @@ body {
   padding: 0;
 }
 
+/* Фон страницы. Тянем из --rc-bg на <html>: --tgui--* здесь НЕ видны (см. коммент выше). */
+html {
+  background: var(--rc-bg);
+}
 body {
-  background: var(--tgui--secondary_bg_color, #17212b);
+  background: var(--rc-bg);
+  color: var(--rc-text);
   overscroll-behavior-y: none;
   /* Системный шрифт как в нативном Telegram (иначе браузер даёт Times) */
   font-family: var(
@@ -125,11 +150,11 @@ body {
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.15;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
 }
 .home-topbar .sub2 {
   font-size: 13px;
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
   margin-top: 2px;
 }
 .home-topbar .ava {
@@ -142,8 +167,8 @@ body {
   justify-content: center;
   font-weight: 700;
   font-size: 16px;
-  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.09));
-  color: var(--rc-chip-fg, #eaeaec);
+  background: var(--rc-chip-bg);
+  color: var(--rc-chip-fg);
   overflow: hidden;
 }
 /* Фото профиля из Telegram заполняет круг (перекрывает стиль маскота) */
@@ -162,8 +187,8 @@ body {
   overflow: hidden;
   margin: 2px 16px 0;
   border-radius: 18px;
-  background: var(--tgui--card_bg_color, #17171a);
-  border: 1px solid rgba(128, 128, 128, 0.16);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-hairline);
   padding: 26px 22px 24px;
   min-height: 168px;
   display: flex;
@@ -175,9 +200,9 @@ body {
   position: absolute;
   inset: 0;
   background-image: conic-gradient(
-    var(--rc-board-sq, rgba(255, 255, 255, 0.05)) 25%,
+    var(--rc-board-sq) 25%,
     transparent 0 50%,
-    var(--rc-board-sq, rgba(255, 255, 255, 0.05)) 0 75%,
+    var(--rc-board-sq) 0 75%,
     transparent 0
   );
   background-size: 16px 16px;
@@ -195,6 +220,21 @@ body {
   z-index: 0;
   pointer-events: none;
 }
+
+/* Маскот нарисован БЕЛЫМ (фигура на чёрном). На светлой теме он сливался с карточкой —
+   оставались висеть одни глаза. Инвертируем в чёрную фигуру и приглушаем: чёрное на
+   белом читается сильнее, чем белое на чёрном, поэтому прозрачности здесь меньше. */
+html.app-light .hero-mascot {
+  filter: invert(1);
+  opacity: 0.3;
+}
+html.app-light .mascot-empty img,
+html.app-light .prof-ava img {
+  filter: invert(1);
+}
+html.app-light .mascot-empty img {
+  opacity: 0.32;
+}
 .hero-inner {
   position: relative;
   z-index: 1;
@@ -205,22 +245,22 @@ body {
   font-weight: 800;
   line-height: 0.92;
   letter-spacing: -0.03em;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
   font-variant-numeric: tabular-nums;
 }
 .hero-cap {
   font-size: 12px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
   margin-top: 8px;
 }
 .hero-pill {
   display: inline-block;
   margin-top: 12px;
   font-size: 11.5px;
-  color: var(--tgui--hint_color, #8b8b92);
-  border: 1px solid rgba(128, 128, 128, 0.24);
+  color: var(--rc-hint);
+  border: 1px solid var(--rc-hairline-strong);
   border-radius: 999px;
   padding: 5px 12px;
 }
@@ -236,22 +276,22 @@ body {
   height: 48px;
   border-radius: 12px;
   background: transparent;
-  border: 1px solid rgba(128, 128, 128, 0.28);
-  color: var(--tgui--text_color, #f4f4f5);
+  border: 1px solid var(--rc-hairline-strong);
+  color: var(--rc-text);
   font: inherit;
   font-weight: 600;
   font-size: 15px;
   cursor: pointer;
 }
 .ghost-btn:active {
-  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.06));
+  background: var(--rc-chip-bg);
 }
 
 .home-sec-title {
   padding: 22px 20px 10px;
   font-size: 16px;
   font-weight: 700;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
 }
 
 .home-grid {
@@ -261,8 +301,8 @@ body {
   padding: 0 16px;
 }
 .home-tile {
-  background: var(--tgui--card_bg_color, #17171a);
-  border: 1px solid rgba(128, 128, 128, 0.14);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-hairline);
   border-radius: 14px;
   padding: 14px 14px 13px;
   display: flex;
@@ -280,16 +320,16 @@ body {
   font-size: 26px;
   font-weight: 800;
   line-height: 1;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
   font-variant-numeric: tabular-nums;
 }
 .tile-count.zero {
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
   font-weight: 700;
 }
 .tile-label {
   font-size: 13px;
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
 }
 
 .home-next-list {
@@ -299,19 +339,19 @@ body {
   padding: 0 16px;
 }
 .home-next {
-  background: var(--tgui--card_bg_color, #17171a);
-  border: 1px solid rgba(128, 128, 128, 0.14);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-hairline);
   border-radius: 14px;
   padding: 15px 16px 13px;
 }
 .next-date {
   font-size: 17px;
   font-weight: 700;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
 }
 .next-meta {
   font-size: 13.5px;
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
   margin-top: 3px;
 }
 .next-foot {
@@ -319,12 +359,12 @@ body {
   justify-content: flex-end;
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px solid rgba(128, 128, 128, 0.12);
+  border-top: 1px solid var(--rc-sep);
 }
 .next-cancel {
   background: none;
   border: none;
-  color: var(--rc-red, #c94a42);
+  color: var(--rc-red);
   font: inherit;
   font-weight: 600;
   font-size: 13px;
@@ -334,7 +374,7 @@ body {
 .home-empty {
   padding: 2px 20px;
   font-size: 14px;
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
 }
 
 .home-actions {
@@ -352,9 +392,9 @@ body {
   min-height: 92px;
   padding: 15px 15px;
   border-radius: 14px;
-  background: var(--tgui--card_bg_color, #17171a);
-  border: 1px solid rgba(128, 128, 128, 0.14);
-  color: var(--tgui--text_color, #f4f4f5);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-hairline);
+  color: var(--rc-text);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -364,11 +404,11 @@ body {
   font-weight: 600;
 }
 .act-tile.red {
-  background: color-mix(in srgb, var(--rc-red, #c94a42) 12%, var(--tgui--card_bg_color, #17171a));
-  border-color: color-mix(in srgb, var(--rc-red, #c94a42) 42%, transparent);
+  background: color-mix(in srgb, var(--rc-red) 12%, var(--rc-surface));
+  border-color: color-mix(in srgb, var(--rc-red) 42%, transparent);
 }
 .act-tile.red .act-lbl {
-  color: var(--rc-red, #c94a42);
+  color: var(--rc-red);
 }
 
 /* Заголовок экрана (Запись/Афиша/История/Профиль) — в стиле Главной */
@@ -378,14 +418,14 @@ body {
   font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.1;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
 }
 .screen-title .st-sub {
   display: block;
   margin-top: 3px;
   font-size: 13px;
   font-weight: 400;
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
 }
 
 .seg-wrap {
@@ -403,25 +443,25 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.1));
-  color: var(--rc-chip-fg, #eaeaec);
+  background: var(--rc-chip-bg);
+  color: var(--rc-chip-fg);
 }
 .cell-icon-red {
-  background: color-mix(in srgb, var(--rc-red, #c94a42) 15%, transparent);
-  color: var(--rc-red, #c94a42);
+  background: color-mix(in srgb, var(--rc-red) 15%, transparent);
+  color: var(--rc-red);
 }
 .cell-count {
   font-size: 16px;
   font-weight: 600;
-  color: var(--tgui--text_color, #f5f5f5);
+  color: var(--rc-text);
   font-variant-numeric: tabular-nums;
 }
 .cell-count.zero {
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
   font-weight: 500;
 }
 .chev {
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
   font-size: 18px;
 }
 
@@ -458,7 +498,7 @@ body {
 .section-note {
   padding: 8px 22px 2px;
   font-size: 13px;
-  color: var(--tgui--link_color, #c94a42);
+  color: var(--rc-red);
 }
 
 /* ── Запись: индивидуальные ── */
@@ -485,15 +525,15 @@ body {
   min-width: 58px;
   padding: 8px 12px;
   border-radius: 13px;
-  border: 1px solid rgba(128, 128, 128, 0.22);
-  background: rgba(128, 128, 128, 0.08);
-  color: var(--tgui--text_color, #fff);
+  border: 1px solid var(--rc-hairline-strong);
+  background: var(--rc-fill);
+  color: var(--rc-text);
   cursor: pointer;
   font: inherit;
 }
 .day-chip .dw {
   font-size: 11px;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
   font-weight: 700;
 }
 .day-chip .dt {
@@ -501,12 +541,12 @@ body {
   font-weight: 700;
 }
 .day-chip.on {
-  border-color: var(--tgui--link_color, #c94a42);
-  background: color-mix(in srgb, var(--tgui--link_color, #c94a42) 14%, transparent);
+  border-color: var(--rc-red);
+  background: color-mix(in srgb, var(--rc-red) 14%, transparent);
 }
 .day-chip.on .dw,
 .day-chip.on .dt {
-  color: var(--tgui--link_color, #c94a42);
+  color: var(--rc-red);
 }
 .slot-grid {
   display: grid;
@@ -521,31 +561,31 @@ body {
   gap: 1px;
   padding: 11px 4px;
   border-radius: 11px;
-  border: 1px solid rgba(128, 128, 128, 0.22);
-  background: rgba(128, 128, 128, 0.08);
-  color: var(--tgui--text_color, #fff);
+  border: 1px solid var(--rc-hairline-strong);
+  background: var(--rc-fill);
+  color: var(--rc-text);
   font-weight: 700;
   font-size: 15px;
   cursor: pointer;
 }
 .slot:active {
-  background: color-mix(in srgb, var(--tgui--link_color, #c94a42) 16%, transparent);
-  border-color: var(--tgui--link_color, #c94a42);
+  background: color-mix(in srgb, var(--rc-red) 16%, transparent);
+  border-color: var(--rc-red);
 }
 .slot .sf {
   font-size: 11px;
   font-weight: 400;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
 }
 .book-note {
   padding: 10px 14px;
   font-size: 13px;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
 }
 .book-msg {
   padding: 8px 14px 0;
   font-size: 13.5px;
-  color: var(--tgui--link_color, #c94a42);
+  color: var(--rc-red);
 }
 
 /* ── Запись: группы ── */
@@ -557,11 +597,11 @@ body {
 .grp-hint {
   padding: 0 18px 12px;
   font-size: 12.5px;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
 }
 .grp-status {
   font-size: 12.5px;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
   text-align: right;
   white-space: nowrap;
 }
@@ -572,18 +612,18 @@ body {
   min-width: 44px;
   font-weight: 700;
   font-size: 14px;
-  color: var(--tgui--text_color, #fff);
+  color: var(--rc-text);
   font-variant-numeric: tabular-nums;
 }
 /* Подсветка сегодняшних событий */
 .ev-time.ev-today {
-  color: var(--rc-red, #c94a42);
+  color: var(--rc-red);
 }
 .ev-badge-today {
   font-size: 11px;
   font-weight: 700;
-  color: var(--rc-red, #c94a42);
-  background: color-mix(in srgb, var(--rc-red, #c94a42) 14%, transparent);
+  color: var(--rc-red);
+  background: color-mix(in srgb, var(--rc-red) 14%, transparent);
   border-radius: 999px;
   padding: 2px 8px;
   margin-left: 6px;
@@ -597,17 +637,17 @@ body {
   margin: 4px 16px 10px;
   padding: 18px;
   border-radius: 16px;
-  background: var(--tgui--card_bg_color, #17171a);
-  border: 1px solid rgba(128, 128, 128, 0.16);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-hairline);
 }
 .ev-banner::before {
   content: '';
   position: absolute;
   inset: 0;
   background-image: conic-gradient(
-    var(--rc-board-sq, rgba(255, 255, 255, 0.05)) 25%,
+    var(--rc-board-sq) 25%,
     transparent 0 50%,
-    var(--rc-board-sq, rgba(255, 255, 255, 0.05)) 0 75%,
+    var(--rc-board-sq) 0 75%,
     transparent 0
   );
   background-size: 16px 16px;
@@ -623,8 +663,8 @@ body {
   display: inline-block;
   font-size: 12px;
   font-weight: 700;
-  color: var(--rc-red, #c94a42);
-  background: color-mix(in srgb, var(--rc-red, #c94a42) 14%, transparent);
+  color: var(--rc-red);
+  background: color-mix(in srgb, var(--rc-red) 14%, transparent);
   border-radius: 999px;
   padding: 4px 11px;
 }
@@ -632,7 +672,7 @@ body {
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.01em;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
   margin-top: 10px;
 }
 .ev-banner-btn {
@@ -641,7 +681,7 @@ body {
   height: 46px;
   border: none;
   border-radius: 12px;
-  background: var(--rc-red, #c94a42);
+  background: var(--rc-red);
   color: #fff;
   font: inherit;
   font-weight: 600;
@@ -658,17 +698,17 @@ body {
   white-space: nowrap;
 }
 .pill-ok {
-  color: var(--tgui--hint_color, #8b8b92);
-  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.08));
+  color: var(--rc-hint);
+  background: var(--rc-chip-bg);
 }
 .pill-warn {
-  color: var(--rc-red, #c94a42);
-  background: color-mix(in srgb, var(--rc-red, #c94a42) 15%, transparent);
+  color: var(--rc-red);
+  background: color-mix(in srgb, var(--rc-red) 15%, transparent);
 }
 .cell-price {
   font-size: 14px;
   font-weight: 600;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -678,10 +718,10 @@ body {
   padding: 6px 22px 8px;
   font-size: 14.5px;
   line-height: 1.5;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
 }
 .gate-promo {
-  color: var(--tgui--link_color, #c94a42);
+  color: var(--rc-red);
 }
 .field {
   padding: 10px 16px 8px;
@@ -691,18 +731,18 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
   margin-bottom: 4px;
   padding-left: 2px;
 }
 .field-hint {
   font-size: 12px;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
   margin-top: 5px;
   padding-left: 2px;
 }
 .field-hint a {
-  color: var(--rc-red, #c94a42);
+  color: var(--rc-red);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -720,11 +760,11 @@ body {
   display: block;
   padding: 12px 10px 4px;
   line-height: 1.5;
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
   font-size: 12px;
 }
 .consent a {
-  color: var(--tgui--hint_color, #708499);
+  color: var(--rc-hint);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -754,8 +794,8 @@ body {
   padding: 6px 16px 6px;
 }
 .stat-card {
-  background: var(--tgui--card_bg_color, #17171a);
-  border: 1px solid rgba(128, 128, 128, 0.14);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-hairline);
   border-radius: 14px;
   padding: 14px 8px;
   text-align: center;
@@ -764,12 +804,12 @@ body {
   font-size: 26px;
   font-weight: 800;
   line-height: 1;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
   font-variant-numeric: tabular-nums;
 }
 .stat-lbl {
   font-size: 11.5px;
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
   margin-top: 6px;
 }
 /* Полоса посещаемости: квадрат на занятие (красный — пройдено, пустой — пропуск) */
@@ -784,12 +824,12 @@ body {
   height: 26px;
   border-radius: 6px;
   flex: none;
-  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.06));
-  border: 1px solid rgba(128, 128, 128, 0.16);
+  background: var(--rc-chip-bg);
+  border: 1px solid var(--rc-hairline);
 }
 .prog-sq.done {
-  background: var(--rc-red, #c94a42);
-  border-color: var(--rc-red, #c94a42);
+  background: var(--rc-red);
+  border-color: var(--rc-red);
 }
 
 /* ── Пустое состояние с маскотом ── */
@@ -808,7 +848,7 @@ body {
 }
 .mascot-empty-txt {
   font-size: 14px;
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
   max-width: 260px;
   line-height: 1.45;
 }
@@ -820,8 +860,8 @@ body {
   gap: 14px;
   margin: 4px 16px 8px;
   padding: 16px;
-  background: var(--tgui--card_bg_color, #17171a);
-  border: 1px solid rgba(128, 128, 128, 0.14);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-hairline);
   border-radius: 16px;
 }
 .prof-ava {
@@ -832,7 +872,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.09));
+  background: var(--rc-chip-bg);
   overflow: hidden;
 }
 .prof-ava img {
@@ -846,7 +886,7 @@ body {
 .prof-name {
   font-size: 17px;
   font-weight: 700;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -856,8 +896,8 @@ body {
   margin-top: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--rc-red, #c94a42);
-  background: color-mix(in srgb, var(--rc-red, #c94a42) 14%, transparent);
+  color: var(--rc-red);
+  background: color-mix(in srgb, var(--rc-red) 14%, transparent);
   border-radius: 999px;
   padding: 3px 10px;
 }
@@ -875,23 +915,23 @@ body {
   font-weight: 600;
   padding: 7px 11px;
   border-radius: 999px;
-  border: 1px solid rgba(128, 128, 128, 0.2);
-  color: var(--tgui--text_color, #f4f4f5);
-  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--rc-hairline-strong);
+  color: var(--rc-text);
+  background: var(--rc-chip-bg);
 }
 .ach .pc {
   font-size: 15px;
   line-height: 1;
 }
 .ach.locked {
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
   background: transparent;
   opacity: 0.6;
 }
 .ach.earned {
-  border-color: color-mix(in srgb, var(--rc-red, #c94a42) 45%, transparent);
-  background: color-mix(in srgb, var(--rc-red, #c94a42) 12%, transparent);
-  color: var(--rc-red, #c94a42);
+  border-color: color-mix(in srgb, var(--rc-red) 45%, transparent);
+  background: color-mix(in srgb, var(--rc-red) 12%, transparent);
+  color: var(--rc-red);
 }
 
 /* ── Запись: карточка тренера ── */
@@ -901,8 +941,8 @@ body {
   gap: 12px;
   margin: 2px 16px 10px;
   padding: 12px 14px;
-  background: var(--tgui--card_bg_color, #17171a);
-  border: 1px solid rgba(128, 128, 128, 0.14);
+  background: var(--rc-surface);
+  border: 1px solid var(--rc-hairline);
   border-radius: 14px;
 }
 .trainer-ava {
@@ -913,19 +953,19 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--rc-chip-bg, rgba(255, 255, 255, 0.09));
-  color: var(--rc-chip-fg, #eaeaec);
+  background: var(--rc-chip-bg);
+  color: var(--rc-chip-fg);
   font-weight: 700;
   font-size: 16px;
 }
 .trainer-name {
   font-size: 15px;
   font-weight: 700;
-  color: var(--tgui--text_color, #f4f4f5);
+  color: var(--rc-text);
 }
 .trainer-role {
   font-size: 12.5px;
-  color: var(--tgui--hint_color, #8b8b92);
+  color: var(--rc-hint);
   margin-top: 1px;
 }
 
