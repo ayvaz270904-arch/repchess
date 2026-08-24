@@ -74,7 +74,11 @@ export function EventsScreen({ data }: { data: Cabinet }) {
                 readOnly={!it.url}
                 after={
                   it.ticketUrl ? (
-                    <Button size="s" mode="bezeled" onClick={() => { haptic(); openUrl(it.ticketUrl!) }}>
+                    // Была mode="bezeled" — красный текст на красноватой заливке, то есть
+                    // ровно тот же вид, что у статус-пилюли «пропуск» в Истории. На разборе
+                    // это и прозвучало: «кажется, что это какой-то статус, а не кнопка».
+                    // Заливка + белый текст: действие ни с чем не спутать.
+                    <Button size="s" onClick={() => { haptic(); openUrl(it.ticketUrl!) }}>
                       {it.ticketLabel === 'Регистрация' ? 'Регистрация' : 'Билеты'}
                     </Button>
                   ) : it.url ? (

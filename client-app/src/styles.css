@@ -380,11 +380,16 @@ html.app-light .mascot-empty img {
   color: var(--rc-hint);
 }
 
+/* Блок действий шёл сразу за «Ближайшим занятием» без собственного заголовка и
+   читался как его часть («кнопка не относится к блоку ближайшее занятие»).
+   Отделяем линией — без выдумывания нового заголовка. */
 .home-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  padding: 12px 16px 4px;
+  margin: 18px 16px 0;
+  padding: 16px 0 4px;
+  border-top: 1px solid var(--rc-sep);
 }
 .act-tile {
   display: flex;
@@ -406,12 +411,16 @@ html.app-light .mascot-empty img {
   font-size: 14.5px;
   font-weight: 600;
 }
+/* Было: заливка 12% + рамка 42% + красная подпись. Читалось как ошибка или
+   статус, а не как приглашение («из-за того что он такой ярко-красный,
+   возникало — это либо ошибка, либо что-то ещё»). Оставляем плитку заметной,
+   но акцент переносим на иконку: подпись обычным текстом, тон еле-еле. */
 .act-tile.red {
-  background: color-mix(in srgb, var(--rc-red) 12%, var(--rc-surface));
-  border-color: color-mix(in srgb, var(--rc-red) 42%, transparent);
+  background: color-mix(in srgb, var(--rc-red) 6%, var(--rc-surface));
+  border-color: color-mix(in srgb, var(--rc-red) 18%, transparent);
 }
 .act-tile.red .act-lbl {
-  color: var(--rc-red);
+  color: var(--rc-text);
 }
 
 /* Заголовок экрана (Запись/Афиша/История/Профиль) — в стиле Главной */
@@ -1008,7 +1017,7 @@ html.app-light .mascot-empty img {
   background: var(--rc-chip-bg);
 }
 .act-tile.red:active {
-  background: color-mix(in srgb, var(--rc-red) 22%, var(--rc-surface));
+  background: color-mix(in srgb, var(--rc-red) 14%, var(--rc-surface));
 }
 .next-cancel:active,
 .field-hint a:active,
