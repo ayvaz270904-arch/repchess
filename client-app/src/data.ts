@@ -167,6 +167,27 @@ export async function fetchSlots(): Promise<IndivSlots> {
   return s
 }
 
+/**
+ * Обёртка для действий кабинета: НИКОГДА не бросает исключение.
+ *
+ * api() бросает ApiError при обрыве сети или нечитаемом ответе, а обработчики нажатий —
+ * обычные async-функции без catch. Из-за этого исключение оставляло экран навсегда
+ * застывшим на «Записываю…»/«Отменяю…»: подпись не менялась, даже если действие на
+ * сервере фактически прошло (GAS медленный — ответ мог не доехать после успешной записи).
+ *
+ * Превращаем такой обрыв в обычный неуспешный результат, чтобы вызывающий код прошёл
+ * по своей же ветке ошибки — и обязательно перечитал состояние с сервера.
+ */
+export async function safeAction<T extends { ok: boolean; error?: string }>(
+  p: Promise<T>,
+): Promise<T | { ok: false; error: string }> {
+  try {
+    return await p
+  } catch (e) {
+    return { ok: false, error: e instanceof ApiError ? e.code : 'server' }
+  }
+}
+
 export async function bookIndiv(date: string, time: string, format: 'offline' | 'online'): Promise<ActionResult> {
   if (DEV) {
     await delay(400)

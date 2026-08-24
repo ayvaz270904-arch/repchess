@@ -3,7 +3,7 @@ import { Button, Input } from '@telegram-apps/telegram-ui'
 import type { Cabinet, UpcomingLesson } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { haptic, openUrl, shareReferral } from '../telegram/ui'
-import { redeemCert, cancelIndiv, confirmDialog, track, userPhoto } from '../data'
+import { redeemCert, cancelIndiv, confirmDialog, track, safeAction, userPhoto } from '../data'
 import { errText } from '../errors'
 import mascot from '../assets/mascot.svg'
 
@@ -41,7 +41,7 @@ export function HomeScreen({
     haptic()
     setCertBusy(true)
     setCertMsg('Проверяю код…')
-    const r = await redeemCert(code)
+    const r = await safeAction(redeemCert(code))
     setCertBusy(false)
     if (r.ok) {
       track('cert_redeem')
@@ -58,7 +58,7 @@ export function HomeScreen({
     if (!ok) return
     haptic()
     setHomeMsg('Отменяю…')
-    const r = await cancelIndiv(u.id)
+    const r = await safeAction(cancelIndiv(u.id))
     if (r.ok) {
       setHomeMsg('')
       onReload()

@@ -4,7 +4,7 @@ import type { Cabinet, GroupLesson, IndivSlots } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { MascotEmpty } from '../ui/MascotEmpty'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
-import { fetchSlots, getCachedSlots, bookIndiv, joinGroup, leaveGroup, confirmDialog, track, ApiError } from '../data'
+import { fetchSlots, getCachedSlots, bookIndiv, joinGroup, leaveGroup, confirmDialog, track, safeAction, ApiError } from '../data'
 import { errText, isBalanceMismatch } from '../errors'
 
 export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => void }) {
@@ -49,7 +49,7 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
     if (!ok) return
     haptic()
     setBookMsg('Записываю…')
-    const r = await bookIndiv(day.date, time, fmt)
+    const r = await safeAction(bookIndiv(day.date, time, fmt))
     if (r.ok) {
       track('book_indiv')
       setBookMsg('✅ Вы записаны!')
@@ -67,7 +67,7 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
   async function join(g: GroupLesson) {
     haptic()
     setGrpMsg('Записываю…')
-    const r = await joinGroup(g.id)
+    const r = await safeAction(joinGroup(g.id))
     if (r.ok) {
       track('group_join')
       setGrpMsg('✅ Вы записаны!')
@@ -83,7 +83,7 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
     if (!ok) return
     haptic()
     setGrpMsg('Отменяю…')
-    const r = await leaveGroup(g.id)
+    const r = await safeAction(leaveGroup(g.id))
     if (r.ok) {
       track('group_leave')
       setGrpMsg('↩️ Запись отменена')

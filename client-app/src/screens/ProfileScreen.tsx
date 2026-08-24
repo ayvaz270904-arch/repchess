@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { List, Section, Input, Button, Caption, SegmentedControl } from '@telegram-apps/telegram-ui'
 import type { Cabinet } from '../types'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
-import { saveProfile, userPhoto } from '../data'
+import { saveProfile, userPhoto, safeAction } from '../data'
 import { errText } from '../errors'
 import { POLICY_URL, OFFER_URL, HELPER_URL } from '../config'
 import mascot from '../assets/mascot.svg'
@@ -93,7 +93,7 @@ export function ProfileScreen({
     haptic()
     setBusy(true)
     setMsg('Сохраняю…')
-    const r = await saveProfile({ fio, email, birthdate, gender, city, level })
+    const r = await safeAction(saveProfile({ fio, email, birthdate, gender, city, level }))
     setBusy(false)
     if (r.ok) {
       if (gate) {
