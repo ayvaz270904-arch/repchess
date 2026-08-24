@@ -45,6 +45,7 @@ html.app-dark {
   --rc-board-sq: rgba(255, 255, 255, 0.05); /* клетка узора доски */
   --rc-chip-bg: rgba(255, 255, 255, 0.09);
   --rc-chip-fg: #eaeaec;
+  --rc-avatar-plate: var(--rc-chip-bg); /* в тёмной кружок и так тёмный */
   color-scheme: dark;
 }
 
@@ -64,6 +65,10 @@ html.app-light {
   --rc-board-sq: rgba(0, 0, 0, 0.035);
   --rc-chip-bg: rgba(0, 0, 0, 0.06);
   --rc-chip-fg: #33333a;
+  /* Тёмная подложка под белого маскота в аватаре: на светлой теме белая фигура
+     иначе сливается с кружком. В тёмной теме подложка не нужна — там кружок и
+     так тёмный, см. --rc-avatar-plate выше. */
+  --rc-avatar-plate: #23232a;
   color-scheme: light;
 }
 
@@ -243,9 +248,10 @@ html.app-light .mascot-empty img {
   filter: brightness(0.72);
   opacity: 0.6;
 }
-html.app-light .prof-ava img:not(.ava-photo) {
-  filter: brightness(0.55);
-}
+/* Аватар — единственное место, где у маскота есть собственная подложка, поэтому
+   фигура там остаётся БЕЛОЙ, а контраст даёт тёмный кружок (белая фигура на
+   тёмном поле, как в шахматном наборе). Фильтр аватару не нужен вовсе — цвет
+   кружка задаётся токеном --rc-avatar-plate, см. .prof-ava. */
 .hero-inner {
   position: relative;
   z-index: 1;
@@ -919,7 +925,11 @@ html.app-light .prof-ava img:not(.ava-photo) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--rc-chip-bg);
+  /* Тёмный кружок под белым маскотом. В тёмной теме это прежний --rc-chip-bg,
+     в светлой — намеренно тёмная плашка, иначе белая фигура сливается.
+     Фото профиля закрывает кружок целиком (100% + object-fit: cover), так что
+     подложку видно только под заглушкой. */
+  background: var(--rc-avatar-plate);
   overflow: hidden;
 }
 .prof-ava img {
