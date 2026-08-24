@@ -26,6 +26,12 @@ export function HomeScreen({
   const initial = (data.name || '?').trim().charAt(0).toUpperCase() || '?'
   const photo = userPhoto()
 
+  // Показываем только направления с ненулевым остатком: у типичного клиента три
+  // из четырёх — нули, и четыре почти одинаковые плитки только мешают читать
+  // первый экран. Сравнение именно с нулём, а не «> 0»: остаток может быть
+  // отрицательным (долг), и его прятать нельзя.
+  const cats = data.categories.filter((c) => c.count !== 0)
+
   async function redeem() {
     const code = cert.toUpperCase().replace(/[^A-Z0-9-]/g, '')
     if (!code) {
@@ -115,26 +121,29 @@ export function HomeScreen({
         {certMsg && <div className="section-note">{certMsg}</div>}
       </div>
 
-      <div className="home-sec-title">По направлениям</div>
-      <div className="home-grid">
-        {data.categories.map((c) => (
-          // Четыре плитки различались одним словом в середине почти одинаковых подписей
-          // («Индив. офлайн / Индив. онлайн / Групп. офлайн / Групп. онлайн»), а иконки
-          // были user/users — на глаз неотличимы и формат вообще не показывали.
-          // Теперь три независимых признака: иконка = формат (pin/globe, они уже лежат
-          // в данных), жирная строка = вид занятия, приглушённая = формат словом.
-          <div className="home-tile" key={c.key}>
-            <div className="tile-top">
-              <CellIcon name={c.icon} />
-              <span className={'tile-count' + (c.count === 0 ? ' zero' : '')}>{c.count}</span>
-            </div>
-            <div className="tile-label">
-              <span className="tl-group">{c.group === 'indiv' ? 'Индивидуальные' : 'Групповые'}</span>
-              <span className="tl-fmt">{(c.title || '').toLowerCase()}</span>
-            </div>
+      {cats.length > 0 && (
+        <>
+          <div className="home-sec-title">По направлениям</div>
+          <div className="home-grid">
+            {/* Признаков различия три и они независимы: иконка = формат (pin/globe,
+                они уже лежат в данных), жирная строка = вид занятия, приглушённая =
+                формат словом. Раньше плитки различались одним словом в середине
+                почти одинаковых подписей, а иконки были неотличимые user/users. */}
+            {cats.map((c) => (
+              <div className="home-tile" key={c.key}>
+                <div className="tile-top">
+                  <CellIcon name={c.icon} />
+                  <span className={'tile-count' + (c.count < 0 ? ' debt' : '')}>{c.count}</span>
+                </div>
+                <div className="tile-label">
+                  <span className="tl-group">{c.group === 'indiv' ? 'Индивидуальные' : 'Групповые'}</span>
+                  <span className="tl-fmt">{(c.title || '').toLowerCase()}</span>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
 
       <div className="home-sec-title">Ближайшее занятие</div>
       {data.upcoming.length ? (

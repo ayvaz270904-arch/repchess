@@ -9,22 +9,20 @@ function money(n: number): string {
 
 export function HistoryScreen({ data }: { data: Cabinet }) {
   const done = data.lessonHistory.filter((h) => h.status === 'done').length
-  const absent = data.lessonHistory.filter((h) => h.status === 'absent').length
   const purchases = data.purchaseHistory.length
 
   return (
     <List>
       <div className="screen-title">История</div>
 
+      {/* Счётчика «Пропущено» здесь намеренно НЕТ: кабинет не журнал посещаемости
+          («человек не обязан, это не университет»). Статус конкретного занятия
+          в списке ниже остаётся — иначе непонятно, куда делось оплаченное. */}
       {data.lessonHistory.length > 0 && (
-        <div className="stat-strip">
+        <div className="stat-strip stat-strip-2">
           <div className="stat-card">
             <div className="stat-num">{done}</div>
             <div className="stat-lbl">Пройдено</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-num">{absent}</div>
-            <div className="stat-lbl">Пропущено</div>
           </div>
           <div className="stat-card">
             <div className="stat-num">{purchases}</div>

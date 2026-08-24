@@ -303,6 +303,10 @@ html.app-light .mascot-empty img {
   gap: 10px;
   padding: 0 16px;
 }
+/* Осталось одно направление — плитка на всю ширину, иначе рядом зияет дыра. */
+.home-grid .home-tile:only-child {
+  grid-column: 1 / -1;
+}
 .home-tile {
   background: var(--rc-surface);
   border: 1px solid var(--rc-hairline);
@@ -326,9 +330,10 @@ html.app-light .mascot-empty img {
   color: var(--rc-text);
   font-variant-numeric: tabular-nums;
 }
-.tile-count.zero {
-  color: var(--rc-hint);
-  font-weight: 700;
+/* Нулевые направления теперь не показываются вовсе, поэтому приглушённый ноль
+   не нужен. А вот долг — показываем, и красным: он требует внимания. */
+.tile-count.debt {
+  color: var(--rc-red);
 }
 .tile-label {
   font-size: 13px;
@@ -819,6 +824,10 @@ html.app-light .mascot-empty img {
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   padding: 6px 16px 6px;
+}
+/* После снятия счётчика «Пропущено» в полосе осталось две карточки. */
+.stat-strip-2 {
+  grid-template-columns: repeat(2, 1fr);
 }
 .stat-card {
   background: var(--rc-surface);
