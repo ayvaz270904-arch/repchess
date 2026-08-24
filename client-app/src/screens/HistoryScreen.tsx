@@ -51,6 +51,7 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
             <Cell
               key={h.id}
               multiline
+              readOnly
               before={
                 <CellIcon
                   name={h.status === 'absent' ? 'clock' : 'check'}
@@ -80,6 +81,7 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
             <Cell
               key={p.id}
               multiline
+              readOnly
               before={<CellIcon name="card" />}
               subtitle={p.date + (p.expired ? ' · истёк' : '')}
               after={<span className="cell-price">{money(p.price)}</span>}

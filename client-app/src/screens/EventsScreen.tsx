@@ -71,6 +71,7 @@ export function EventsScreen({ data }: { data: Cabinet }) {
                 multiline
                 before={<CellIcon name={eventIcon(it.title)} tone={isToday ? 'red' : 'neutral'} />}
                 onClick={it.url ? () => { haptic(); openUrl(it.url!) } : undefined}
+                readOnly={!it.url}
                 after={
                   it.ticketUrl ? (
                     <Button size="s" mode="bezeled" onClick={() => { haptic(); openUrl(it.ticketUrl!) }}>
@@ -94,6 +95,7 @@ export function EventsScreen({ data }: { data: Cabinet }) {
             multiline
             before={<CellIcon name="gift" tone="red" />}
             onClick={s.note.url ? () => openUrl(s.note!.url!) : undefined}
+            readOnly={!s.note.url}
             after={s.note.url ? <span className="chev">›</span> : undefined}
           >
             {s.note.text}

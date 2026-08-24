@@ -105,7 +105,7 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
       )}
       <Section>
         {slotsErr ? (
-          <Cell multiline>{errText(slotsErr)}</Cell>
+          <Cell multiline readOnly>{errText(slotsErr)}</Cell>
         ) : !slots ? (
           <div className="center-inline">
             <Spinner size="m" />
@@ -138,13 +138,13 @@ function renderIndiv(
   bookMsg: string,
 ): ReactNode {
   if (!s.canOffline && !s.canOnline) {
-    return <Cell multiline>Для записи нужен активный пакет индивидуальных занятий.</Cell>
+    return <Cell multiline readOnly>Для записи нужен активный пакет индивидуальных занятий.</Cell>
   }
   if (s.remaining < 1) {
-    return <Cell multiline>Занятия на балансе закончились — продлите пакет, и запись откроется.</Cell>
+    return <Cell multiline readOnly>Занятия на балансе закончились — продлите пакет, и запись откроется.</Cell>
   }
   if (!s.days.length) {
-    return <Cell multiline>У тренера нет свободных слотов на ближайшие 2 недели.</Cell>
+    return <Cell multiline readOnly>У тренера нет свободных слотов на ближайшие 2 недели.</Cell>
   }
 
   const bothPacks = s.canOffline && s.canOnline
@@ -237,7 +237,7 @@ function GroupRow({
 
   return (
     <>
-      <Cell multiline before={<CellIcon name={iconName} />} subtitle={sub} after={after}>
+      <Cell multiline readOnly before={<CellIcon name={iconName} />} subtitle={sub} after={after}>
         {g.date}
         {g.time ? ` · ${g.time}` : ''} · {g.format === 'online' ? 'онлайн' : 'офлайн'}
       </Cell>
