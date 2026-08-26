@@ -4713,6 +4713,83 @@ document.addEventListener('click', e => {
 // ══════════════════════════════════════════════
 //  STUDENT INFO MODAL
 // ══════════════════════════════════════════════
+// ══════════════════════════════════════════════
+//  СПИСОК ЗАНЯТИЙ В КАРТОЧКЕ УЧЕНИКА
+// ══════════════════════════════════════════════
+// Разворачивается по клику на плитку «Проведено». Данные НЕ доливаем: карточка уже
+// читает все занятия ученика (allLessons) — берём их же, поэтому ни одного лишнего
+// чтения Firestore и никакого влияния на расчёт баланса.
+let _siLessons = [];            // занятия открытой карточки
+let _siFilter  = 'done';        // 'done' | 'indiv' | 'group' | 'all'
+
+const _SI_ST = { done:'проведено', pending:'запланировано', rescheduled:'перенесено',
+                 cancelled:'отменено', absent:'пропуск' };
+const _SI_ST_COLOR = { done:'var(--green)', pending:'var(--accent2)', rescheduled:'var(--orange)',
+                       cancelled:'var(--text2)', absent:'var(--red)' };
+
+function _siIsDone(l) { return !l.status || l.status === 'done'; }   // legacy без статуса = проведено
+function _siIsGroup(l) { return l.type === 'group'; }
+
+// «Индив.» и «Групп.» — срезы ВНУТРИ проведённых: раздел открывается с плитки
+// «Проведено», и смешивать в одном ряду фильтр по статусу и по типу — путаница.
+// Полная история, включая запланированные и отменённые, живёт под «Все».
+function _siMatch(l, f) {
+  if (f === 'all')   return true;
+  if (f === 'done')  return _siIsDone(l);
+  if (f === 'indiv') return _siIsDone(l) && !_siIsGroup(l);
+  if (f === 'group') return _siIsDone(l) && _siIsGroup(l);
+  return true;
+}
+
+function _siSetFilter(f) { _siFilter = f; _siRenderLessons(); }
+
+function _siToggleLessons() {
+  const box = document.getElementById('si-lessons');
+  if (!box) return;
+  const open = box.style.display !== 'none';
+  box.style.display = open ? 'none' : 'block';
+  const arrow = document.getElementById('si-lessons-arrow');
+  if (arrow) arrow.textContent = open ? '▾' : '▴';
+  if (!open) _siRenderLessons();
+}
+
+function _siRenderLessons() {
+  const box = document.getElementById('si-lessons');
+  if (!box) return;
+  const cnt = {};
+  ['done','indiv','group','all'].forEach(f => { cnt[f] = _siLessons.filter(l => _siMatch(l, f)).length; });
+  const chip = (f, label) => `<button onclick="_siSetFilter('${f}')" style="border:1px solid ${
+      _siFilter===f ? 'var(--accent)' : 'var(--border)'};background:${
+      _siFilter===f ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'transparent'};color:${
+      _siFilter===f ? 'var(--accent)' : 'var(--text2)'};border-radius:999px;padding:5px 11px;font-size:.75rem;
+      font-weight:600;cursor:pointer;font-family:inherit">${label} ${cnt[f]}</button>`;
+
+  const rows = _siLessons
+    .filter(l => _siMatch(l, _siFilter))
+    .sort((a, b) => (a._date || '') < (b._date || '') ? 1 : -1)   // новые сверху
+    .map(l => {
+      const st = l.status || 'done';
+      const d = l._date
+        ? new Date(l._date + 'T12:00:00').toLocaleDateString('ru-RU', { day:'2-digit', month:'short' })
+        : '—';
+      const kind = (_siIsGroup(l) ? 'Групп.' : 'Индив.') + ' ' + (l.format === 'online' ? 'онлайн' : 'офлайн');
+      return `<div style="display:grid;grid-template-columns:62px 1fr auto;gap:8px;align-items:baseline;
+          padding:7px 0;border-top:1px solid color-mix(in srgb, var(--border) 45%, transparent)">
+        <span style="font-size:.78rem;color:var(--text2);font-variant-numeric:tabular-nums">${esc(d)}${
+          l.time ? `<br><span style="font-size:.7rem">${esc(l.time)}</span>` : ''}</span>
+        <span style="font-size:.82rem">${esc(kind)}${
+          l.trainerName ? `<br><span style="font-size:.72rem;color:var(--text2)">${esc(l.trainerName)}</span>` : ''}</span>
+        <span style="font-size:.72rem;color:${_SI_ST_COLOR[st] || 'var(--text2)'};white-space:nowrap">${
+          esc(_SI_ST[st] || st)}</span>
+      </div>`;
+    }).join('');
+
+  box.innerHTML = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px">
+      ${chip('done','Проведённые')}${chip('indiv','Индив.')}${chip('group','Групп.')}${chip('all','Все')}
+    </div>
+    ${rows || '<div style="font-size:.8rem;color:var(--text2);padding:10px 0">Занятий нет</div>'}`;
+}
+
 async function openStudentInfoModal(email) {
   if (!email) return;
   const s = students.find(x => x.email === email);
@@ -4734,6 +4811,8 @@ async function openStudentInfoModal(email) {
       : db.collection('lessons').where('studentEmail','==', email);
     const snap = await _q.get();
     const allLessons = snap.docs.map(d=>({id:d.id,...d.data()}));
+    _siLessons = allLessons;   // для списка по клику на «Проведено»
+    _siFilter = 'done';        // при каждом открытии карточки начинаем с проведённых
     // Баланс НЕ считаем здесь — берём из единого расчёта (_applyUsedMap),
     // иначе формулы неизбежно разъезжаются: именно так карточка и стала врать.
     if (s.remainingRaw == null) await _enrichStudentsWithRemaining();
@@ -4766,11 +4845,12 @@ async function openStudentInfoModal(email) {
           <div style="font-size:1.6rem;font-weight:800;color:${remaining<=0?'var(--red)':remaining<=2?'var(--orange)':'var(--green)'}">${remaining}</div>
           <div style="font-size:.7rem;color:var(--text2)">Осталось занятий</div>
         </div>
-        <div style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center">
+        <div onclick="_siToggleLessons()" style="background:var(--surface2);border-radius:10px;padding:12px;text-align:center;cursor:pointer" title="Показать занятия">
           <div style="font-size:1.6rem;font-weight:800;color:var(--accent2)">${used}</div>
-          <div style="font-size:.7rem;color:var(--text2)">Проведено${upcoming ? ` · +${upcoming} в плане` : ''}</div>
+          <div style="font-size:.7rem;color:var(--text2)">Проведено${upcoming ? ` · +${upcoming} в плане` : ''} <span id="si-lessons-arrow">▾</span></div>
         </div>
       </div>
+      <div id="si-lessons" style="display:none"></div>
       ${Object.keys(s.remainByCat||{}).filter(k=>s.remainByCat[k]).length ? `
         <div class="si-sec">Остаток по направлениям</div>
         <div style="margin-bottom:12px">${Object.keys(s.remainByCat).filter(k=>s.remainByCat[k]).map(k=>
