@@ -1544,7 +1544,10 @@ async function showApp() {
   await loadPriceOverrides();
   _unknownPayments = [];
   await loadStudents();
-  await loadTrainers();
+  // Список всех тренеров — только админу: правила Firestore не отдают его тренеру
+  // (в документах лежат assignedStudents — почты чужих учеников). Тренеру он и не нужен:
+  // выбор тренера в модалках админский, а своё закрепление есть в currentTrainer.
+  if (currentTrainer.role === 'admin') await loadTrainers();
   loadNickMap();   // карта ников ТГ для поиска (админ, не блокируем загрузку)
   await _enrichStudentsWithRemaining(); // обогащаем s.remaining для всех учеников
   loadHomePage();
@@ -1734,6 +1737,19 @@ async function loadTrainers() {
     _trainersCache = [];
     _trainersError = true;
   }
+}
+
+// Кто закреплён за учеником — с учётом того, что тренеру ЧУЖИЕ закрепления не видны.
+// Правила Firestore намеренно не отдают тренеру список всех тренеров: в их документах
+// лежат assignedStudents, то есть почты чужих учеников. Поэтому под тренером мы можем
+// проверить только СВОЙ список, и «не закреплён» в таком случае было бы враньём —
+// честный ответ «неизвестно».
+function _assignedTrainerInfo(email) {
+  const isAdmin = currentTrainer?.role === 'admin';
+  const found = _trainersCache.length
+    ? (_trainersCache.find(t => assignedHas(t.assignedStudents, email)) || null)
+    : ((currentTrainer && assignedHas(currentTrainer.assignedStudents, email)) ? currentTrainer : null);
+  return { trainer: found, known: isAdmin || !!found };
 }
 
 async function populateTrainerSelect(selId) {
@@ -4834,10 +4850,11 @@ async function openStudentInfoModal(email) {
     }
 
     // Тренер
-    const assignedTrainer = _trainersCache.find(t => assignedHas(t.assignedStudents, email));
-    const trainerStr = assignedTrainer
-      ? `<span style="color:var(--accent2)">${esc(assignedTrainer.name)}</span>`
-      : '<span style="color:var(--text2)">не закреплён</span>';
+    const _ati = _assignedTrainerInfo(email);
+    const trainerStr = _ati.trainer
+      ? `<span style="color:var(--accent2)">${esc(_ati.trainer.name)}</span>`
+      : (_ati.known ? '<span style="color:var(--text2)">не закреплён</span>'
+                    : '<span style="color:var(--text2)">—</span>');
 
     document.getElementById('si-body').innerHTML = `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
@@ -6206,10 +6223,10 @@ function renderStudentDB(q) {
   }
 
   listEl.innerHTML = pool.slice(0, 50).map(s => {
-    const assignedTrainer = _trainersCache.find(t => assignedHas(t.assignedStudents, s.email));
-    const trainerLabel = assignedTrainer
-      ? `<span style="color:var(--accent2);font-size:.72rem">👤 ${esc(assignedTrainer.name.split(' ').slice(0,2).join(' '))}</span>`
-      : `<span style="color:var(--text2);font-size:.72rem">не закреплён</span>`;
+    const _ati = _assignedTrainerInfo(s.email);
+    const trainerLabel = _ati.trainer
+      ? `<span style="color:var(--accent2);font-size:.72rem">👤 ${esc(_ati.trainer.name.split(' ').slice(0,2).join(' '))}</span>`
+      : (_ati.known ? `<span style="color:var(--text2);font-size:.72rem">не закреплён</span>` : '');
     const bal = s.remaining ?? s.purchased ?? 0;
     const balClass = bal <= 0 ? 'balance-empty' : bal <= 2 ? 'balance-low' : 'balance-ok';
     return `<div class="sdb-item" data-si-email="${esc(s.email)}" onclick="openStudentInfoModal('${escJs(s.email)}')">
