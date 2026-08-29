@@ -244,14 +244,83 @@ export async function redeemCert(code: string): Promise<CertResult> {
   return api('action=redeemCert&code=' + encodeURIComponent(code))
 }
 
-// Трекинг — fire-and-forget, только в проде.
+// ── Трекинг — fire-and-forget, только в проде ──
+// События КОПЯТСЯ и уходят ПАЧКОЙ. Раньше каждое переключение вкладки было отдельным
+// запросом к боту: на отзывчивость это не влияло, но жгло квоту Apps Script.
+//
+// Пачка уходит в трёх случаях: накопилось TRACK_MAX_BUFFER событий; прошло
+// TRACK_FLUSH_MS от первого события в пачке; приложение свернули или закрыли.
+// Последнее — главное: Mini App закрывают быстро, поэтому запрос уходит с
+// keepalive, чтобы браузер не убил его вместе со страницей.
+//
+// Формат пачки (разбирает _trackEvent в bot.gs):
+//     событие,деталь,возраст_в_секундах | событие,деталь,возраст | …
+// Каждое поле кодируется отдельно. Разделители «,» и «|» выбраны потому, что
+// encodeURIComponent их экранирует, а «~» — НЕТ (значение вида «a~b» разорвало бы
+// строку; поймано тестом до выкатки). Возраст нужен, чтобы в таблице стояло время
+// самого события, а не время отправки пачки.
+type TrackedEvent = { ev: string; det: string; at: number }
+
+const TRACK_FLUSH_MS = 8000
+const TRACK_MAX_BUFFER = 10
+const TRACK_HARD_CAP = 25 // столько же принимает бот (TRACK_BATCH_MAX)
+
+let trackBuffer: TrackedEvent[] = []
+let trackTimer: ReturnType<typeof setTimeout> | null = null
+let trackHooked = false
+
+function flushTrack(): void {
+  if (trackTimer) {
+    clearTimeout(trackTimer)
+    trackTimer = null
+  }
+  if (!trackBuffer.length) return
+  const batch = trackBuffer.slice(0, TRACK_HARD_CAP)
+  trackBuffer = []
+  try {
+    const now = Date.now()
+    const packed = batch
+      .map(
+        (e) =>
+          encodeURIComponent(e.ev) +
+          ',' +
+          encodeURIComponent(e.det) +
+          ',' +
+          Math.max(0, Math.round((now - e.at) / 1000)),
+      )
+      .join('|')
+    const u =
+      BACKEND +
+      '?action=track&events=' +
+      encodeURIComponent(packed) +
+      '&initData=' +
+      encodeURIComponent(rawInitData()) +
+      '&t=' +
+      now
+    fetch(u, { keepalive: true }).catch(() => {})
+  } catch {
+    /* noop */
+  }
+}
+
 export function track(event: string, detail?: string): void {
   if (DEV) return
   try {
-    let u = BACKEND + '?action=track&event=' + encodeURIComponent(event)
-    if (detail) u += '&detail=' + encodeURIComponent(String(detail).slice(0, 80))
-    u += '&initData=' + encodeURIComponent(rawInitData()) + '&t=' + Date.now()
-    fetch(u).catch(() => {})
+    if (!event) return
+    trackBuffer.push({ ev: event, det: detail ? String(detail).slice(0, 80) : '', at: Date.now() })
+    if (!trackHooked) {
+      trackHooked = true
+      // pagehide срабатывает при закрытии, visibilitychange — при сворачивании.
+      window.addEventListener('pagehide', flushTrack)
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) flushTrack()
+      })
+    }
+    if (trackBuffer.length >= TRACK_MAX_BUFFER) {
+      flushTrack()
+      return
+    }
+    if (!trackTimer) trackTimer = setTimeout(flushTrack, TRACK_FLUSH_MS)
   } catch {
     /* noop */
   }

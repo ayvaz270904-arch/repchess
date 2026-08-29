@@ -679,6 +679,59 @@ html.app-light .mascot-empty img {
   text-transform: none;
   letter-spacing: 0;
 }
+/* Полоска дней недели — якоря по расписанию.
+   Липнет к верху при прокрутке: неделя длинная, и «где сегодня» должно быть
+   доступно в один тап с любого места списка. z-index 2 — как у таббара:
+   выше «простых» элементов telegram-ui, но ниже оверлеев (--tgui--z-index--overlay: 3). */
+.ev-strip {
+  position: sticky;
+  top: var(--pad-top);
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 8px 16px 10px;
+  margin-bottom: 2px;
+  background: var(--rc-bg);
+}
+.ev-strip::-webkit-scrollbar {
+  display: none;
+}
+.ev-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--rc-hairline);
+  background: var(--rc-chip-bg);
+  color: var(--rc-chip-fg);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.ev-chip.on {
+  background: var(--rc-red);
+  border-color: var(--rc-red);
+  color: #fff;
+}
+.ev-chip.past {
+  opacity: 0.45;
+}
+.ev-chip:active {
+  transform: scale(0.96);
+}
+
+/* Прошедшие дни недели видны, но приглушены — так было в старом кабинете.
+   scroll-margin-top: прокрутка по якорю не должна прятать заголовок дня под полоской. */
+.ev-day {
+  scroll-margin-top: calc(var(--pad-top) + 52px);
+}
+.ev-day.past {
+  opacity: 0.45;
+}
+
 /* Баннер главного события (Афиша) */
 .ev-banner {
   position: relative;

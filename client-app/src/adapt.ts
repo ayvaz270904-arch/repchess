@@ -31,7 +31,13 @@ export interface RawCabinet {
     cancellable?: boolean
   }[]
   openGroups?: Omit<GroupLesson, 'canJoin'>[]
-  schedule?: { days: Schedule['days']; note?: { text: string; url?: string } | null; postUrl?: string; imgUrl?: string } | null
+  schedule?: {
+    days: Schedule['days']
+    note?: { text: string; url?: string } | null
+    postUrl?: string
+    imgUrl?: string
+    featured?: Schedule['featured']
+  } | null
   profile?: {
     fio?: string
     email?: string
@@ -98,7 +104,14 @@ export function adapt(raw: RawCabinet): Cabinet {
       cancellable: u.cancellable,
     })),
     openGroups,
-    schedule: raw.schedule ? { days: raw.schedule.days, note: raw.schedule.note || undefined, postUrl: raw.schedule.postUrl } : undefined,
+    schedule: raw.schedule
+      ? {
+          days: raw.schedule.days,
+          note: raw.schedule.note || undefined,
+          postUrl: raw.schedule.postUrl,
+          featured: raw.schedule.featured || undefined,
+        }
+      : undefined,
     lessonHistory: (raw.lessonHistory || []).map((h, i) => ({
       id: h.id || 'h' + i,
       date: h.date,

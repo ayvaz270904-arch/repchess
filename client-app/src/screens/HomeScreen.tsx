@@ -35,7 +35,7 @@ export function HomeScreen({
   async function redeem() {
     const code = cert.toUpperCase().replace(/[^A-Z0-9-]/g, '')
     if (!code) {
-      setCertMsg('Введите код с сертификата')
+      setCertMsg('Введите промокод')
       return
     }
     haptic()
@@ -102,8 +102,10 @@ export function HomeScreen({
             Купить пакет
           </Button>
         )}
+        {/* «Промокод», а не «сертификат»: код один и тот же (REP-XXXX-XX, action=redeemCert),
+            но клиенты получают его как промокод — под этим словом и ищут. */}
         <button className="ghost-btn" onClick={() => { haptic(); setShowCert((v) => !v) }}>
-          Ввести сертификат
+          Ввести промокод
         </button>
         {showCert && (
           <div className="cert-row">

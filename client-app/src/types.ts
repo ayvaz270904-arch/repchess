@@ -82,10 +82,18 @@ export interface ScheduleDay {
   label: string
   items: ScheduleItem[]
 }
+// Главное событие для баннера афиши. Считает бот: закреплённое в /admin, иначе
+// ближайшее непрошедшее (см. _featuredEvent в bot.gs).
+export interface FeaturedEvent extends ScheduleItem {
+  date: string
+  label: string
+  manual?: boolean
+}
 export interface Schedule {
   days: ScheduleDay[]
   note?: { text: string; url?: string }
   postUrl?: string
+  featured?: FeaturedEvent | null
 }
 
 // ── История ──

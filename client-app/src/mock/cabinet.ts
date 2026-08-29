@@ -31,17 +31,34 @@ export const MOCK_CABINET: Cabinet = {
       trainerName: 'Мария', count: 2, max: 8, joined: false, regOpen: false, opensAt: '9 авг, 10:00',
     },
   ],
+  // Неделя целиком, включая уже прошедшие дни — так приходит с бота и так это
+  // должно выглядеть в кабинете (прошедшее приглушено, «Сегодня» в полоске дней).
   schedule: {
     days: [
-      { date: '2026-08-07', label: 'Четверг, 7 авг', items: [
-        { time: '16:00', title: 'Индивидуальные занятия' },
-        { time: '19:00', title: 'Онлайн-лекция: испанская партия', url: 'https://t.me/repchess' },
+      { date: '2026-08-24', label: '24 августа, пн', items: [
+        { time: '20:00', title: 'шахматный турнир для начинающих в Кривоколенном', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
       ] },
-      { date: '2026-08-09', label: 'Суббота, 9 авг', items: [
-        { time: '12:00', title: 'Групповое офлайн, младшая группа' },
-        { time: '18:00', title: 'Турнир выходного дня', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Регистрация' },
+      { date: '2026-08-25', label: '25 августа, вт', items: [
+        { time: '20:00', title: 'обучение шахматам с нуля в Пешке', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
+      ] },
+      { date: '2026-08-26', label: '26 августа, ср', items: [
+        { time: '19:30', title: 'шведки в Trend Island', url: 'https://t.me/repchess' },
+        { time: '20:00', title: 'обучение шахматам для начинающих в Пешке', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
+      ] },
+      { date: '2026-08-29', label: '29 августа, сб', items: [
+        { time: '13:00', title: 'турнир для начинающих в МИРА бистро', url: 'https://t.me/repchess' },
+        { time: '15:00', title: 'занятие «Шахматы с нуля» в КУБе', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
+      ] },
+      { date: '2026-08-30', label: '30 августа, вс', items: [
+        { time: '14:00', title: 'занятие по шахматам для начинающих в Yauza Place', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
+        { time: '15:00', title: 'сеанс одновременной игры на фестивале «Фонарик»', url: 'https://t.me/repchess' },
       ] },
     ],
+    featured: {
+      date: '2026-08-30', label: '30 августа, вс', time: '14:00',
+      title: 'занятие по шахматам для начинающих в Yauza Place',
+      ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты', manual: false,
+    },
     note: { text: 'Приведи друга — занятие в подарок', url: 'https://edu.repchess.ru' },
     postUrl: 'https://t.me/RepChessEducation',
   },
