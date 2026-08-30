@@ -121,9 +121,27 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
 
       <div className="home-sec-title">Групповые занятия</div>
       {data.openGroups.length ? (
-        <Section>
-          {data.openGroups.map((g) => <GroupRow key={g.id} g={g} onJoin={join} onLeave={leave} />)}
-        </Section>
+        // По дням, как в Афише: дата уезжает в заголовок и не повторяется в каждой
+        // строке. Раньше строка несла дату, время, слово «онлайн/офлайн» (дубль
+        // иконки), место, тренера и счётчик мест — семь сущностей одним весом.
+        groupByDay(data.openGroups).map((d) => (
+          <Section
+            key={d.iso}
+            header={
+              d.isToday ? (
+                <span>
+                  {d.label} <span className="ev-badge-today">сегодня</span>
+                </span>
+              ) : (
+                d.label
+              )
+            }
+          >
+            {d.items.map((g) => (
+              <GroupRow key={g.id} g={g} onJoin={join} onLeave={leave} />
+            ))}
+          </Section>
+        ))
       ) : (
         <MascotEmpty text="Сейчас открытых групповых занятий нет — заглядывай позже." />
       )}
@@ -201,6 +219,39 @@ function renderIndiv(
   )
 }
 
+// «01.09.2026» (так шлёт бот, _fmtDate) → ключ для группировки и человеческая подпись дня
+function parseGroupDate(d: string): { iso: string; label: string } {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(d || '')
+  if (!m) return { iso: d || '', label: d || '' }
+  const iso = m[3] + '-' + m[2] + '-' + m[1]
+  // Полдень, чтобы часовой пояс браузера не сдвинул день на соседний
+  const label = new Intl.DateTimeFormat('ru-RU', { weekday: 'short', day: 'numeric', month: 'long' })
+    .format(new Date(iso + 'T12:00:00'))
+  return { iso, label }
+}
+
+type GroupDay = { iso: string; label: string; isToday: boolean; items: GroupLesson[] }
+
+function groupByDay(list: GroupLesson[]): GroupDay[] {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date())
+  const days: GroupDay[] = []
+  for (const g of list) {
+    const { iso, label } = parseGroupDate(g.date)
+    const last = days[days.length - 1]
+    if (last && last.iso === iso) last.items.push(g)
+    else days.push({ iso, label, isToday: iso === today, items: [g] })
+  }
+  return days
+}
+
+function plural(n: number, one: string, few: string, many: string): string {
+  const d10 = n % 10
+  const d100 = n % 100
+  if (d10 === 1 && d100 !== 11) return one
+  if (d10 >= 2 && d10 <= 4 && (d100 < 10 || d100 >= 20)) return few
+  return many
+}
+
 function GroupRow({
   g,
   onJoin,
@@ -211,16 +262,24 @@ function GroupRow({
   onLeave: (g: GroupLesson) => void
 }) {
   const iconName = g.format === 'online' ? 'globe' : 'pin'
-  const spots = g.max ? `${g.count}/${g.max} чел.` : `${g.count} чел.`
-  const sub = [g.venue, g.trainerName, spots].filter(Boolean).join(' · ')
   const full = !!g.max && g.count >= g.max
+  // Счётчик мест показываем только когда он что-то значит: «3/8 чел.» — шум,
+  // «осталось 2 места» — повод записаться сейчас. Порог — две трети занятых.
+  const left = g.max ? g.max - g.count : 0
+  const scarce = !!g.max && !full && g.count / g.max >= 2 / 3
 
   let after: ReactNode
   if (g.joined) {
+    // Раньше здесь стояла одинокая кнопка «Отменить» в bezeled-стиле — на разборе
+    // такие кнопки читались как статус-пилюли. Теперь статус написан словами,
+    // а отмена — отдельным тихим действием.
     after = (
-      <Button size="s" mode="bezeled" onClick={() => onLeave(g)}>
-        Отменить
-      </Button>
+      <div className="grp-after">
+        <span className="grp-joined">✓ Вы записаны</span>
+        <button className="grp-cancel" onClick={() => onLeave(g)}>
+          Отменить
+        </button>
+      </div>
     )
   } else if (g.regOpen === false) {
     after = <span className="grp-status">🔒 {g.opensAt ? `с ${g.opensAt}` : 'скоро'}</span>
@@ -241,9 +300,21 @@ function GroupRow({
 
   return (
     <>
-      <Cell multiline readOnly before={<CellIcon name={iconName} />} subtitle={sub} after={after}>
-        {g.date}
-        {g.time ? ` · ${g.time}` : ''} · {g.format === 'online' ? 'онлайн' : 'офлайн'}
+      <Cell
+        multiline
+        readOnly
+        before={<CellIcon name={iconName} />}
+        subtitle={
+          <>
+            {g.format === 'online' ? 'онлайн' : 'офлайн'}
+            {g.trainerName ? ' · ' + g.trainerName : ''}
+            {scarce && <span className="grp-left"> · осталось {left} {plural(left, 'место', 'места', 'мест')}</span>}
+          </>
+        }
+        after={after}
+      >
+        <span className="grp-time">{g.time || '—'}</span>
+        {g.venue ? ' · ' + g.venue : ''}
       </Cell>
       {showLinks &&
         (linksOpen ? (

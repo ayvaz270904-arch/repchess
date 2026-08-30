@@ -16,19 +16,26 @@ export const MOCK_CABINET: Cabinet = {
     { id: 'u1', date: 'Ср, 7 авг', time: '16:00', type: 'Индивидуальное', trainerName: 'Артём', cancellable: true },
     { id: 'u2', date: 'Пт, 9 авг', time: '18:00', type: 'Групповое онлайн', trainerName: 'Мария' },
   ],
+  // ВАЖНО: дата тут ровно в том виде, в каком её шлёт бот — «dd.MM.yyyy» (_fmtDate).
+  // Раньше в моке лежало «Пт, 9 авг», и он прятал разбор даты, на котором держится
+  // группировка по дням в «Записи».
   openGroups: [
     {
-      id: 'g1', date: 'Пт, 9 авг', time: '18:00', format: 'online', venue: 'Zoom + Lichess',
+      id: 'g1', date: '01.09.2026', time: '18:00', format: 'online', venue: '',
       trainerName: 'Мария', count: 5, max: 8, joined: true, regOpen: true,
       hasLinks: true, linksOpen: true, voiceUrl: 'https://t.me/repchess', studioUrl: 'https://lichess.org/study',
     },
     {
-      id: 'g2', date: 'Сб, 10 авг', time: '12:00', format: 'offline', venue: 'ул. Пушкина, 10',
+      id: 'g2', date: '01.09.2026', time: '20:00', format: 'offline', venue: 'Пешка на Чистых',
+      trainerName: 'Артём', count: 6, max: 8, joined: false, regOpen: true, canJoin: true,
+    },
+    {
+      id: 'g3', date: '03.09.2026', time: '12:00', format: 'offline', venue: 'ул. Пушкина, 10',
       trainerName: 'Артём', count: 6, max: 6, joined: false, regOpen: true, canJoin: false,
     },
     {
-      id: 'g3', date: 'Вс, 11 авг', time: '15:00', format: 'online', venue: 'Zoom + Lichess',
-      trainerName: 'Мария', count: 2, max: 8, joined: false, regOpen: false, opensAt: '9 авг, 10:00',
+      id: 'g4', date: '05.09.2026', time: '15:00', format: 'online', venue: '',
+      trainerName: 'Мария', count: 2, max: 8, joined: false, regOpen: false, opensAt: '03.09 в 10:00',
     },
   ],
   // Неделя целиком, включая уже прошедшие дни — так приходит с бота и так это

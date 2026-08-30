@@ -654,6 +654,39 @@ html.app-light .mascot-empty img {
   text-align: right;
   white-space: nowrap;
 }
+/* Время — якорь строки: дата уехала в заголовок дня, глаз должен цепляться за него */
+.grp-time {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+/* Дефицит мест — единственное красное в строке, поэтому и заметен */
+.grp-left {
+  color: var(--rc-red);
+}
+.grp-after {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+.grp-joined {
+  font-size: 12.5px;
+  color: var(--rc-hint);
+  white-space: nowrap;
+}
+.grp-cancel {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--rc-red);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.grp-cancel:active {
+  transform: scale(0.97);
+}
 
 /* ── Афиша ── */
 .ev-time {
