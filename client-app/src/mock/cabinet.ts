@@ -69,15 +69,22 @@ export const MOCK_CABINET: Cabinet = {
     note: { text: 'Приведи друга — занятие в подарок', url: 'https://edu.repchess.ru' },
     postUrl: 'https://t.me/RepChessEducation',
   },
+  // Даты и подписи — ровно как их шлёт бот: дата dd.MM.yyyy (_fmtDate), тип
+  // «Индив. · офлайн» / «Групповое · онлайн» (fmtItem), заметка тренера коротким
+  // словом (как в жизни — из-за неё в разборе и не поняли строку «тактика»).
   lessonHistory: [
-    { id: 'h1', date: '2 авг', time: '16:00', type: 'Индивидуальное', status: 'done', notes: 'Разобрали дебют, эндшпиль' },
-    { id: 'h2', date: '30 июл', time: '18:00', type: 'Групповое онлайн', status: 'done' },
-    { id: 'h3', date: '26 июл', time: '16:00', type: 'Индивидуальное', status: 'absent' },
+    { id: 'h1', date: '02.08.2026', time: '16:00', type: 'Индив. · офлайн', status: 'done', notes: 'тактика' },
+    { id: 'h2', date: '30.07.2026', time: '18:00', type: 'Групповое · онлайн', status: 'done' },
+    { id: 'h3', date: '26.07.2026', time: '16:00', type: 'Индив. · офлайн', status: 'absent' },
   ],
+  // Подпись покупки собирает identifyProduct: «<категория> ×<занятий>». Строка
+  // с ценой 0 — это сертификат или подарочное занятие, в кабинете она помечается
+  // «подарок», а не «0 ₽».
   purchaseHistory: [
-    { id: 'p1', date: '20 июл', label: 'Индивидуальные, 4 занятия', price: 6000 },
-    { id: 'p2', date: '5 июн', label: 'Групповые онлайн, 10 занятий', price: 8000 },
-    { id: 'p3', date: '12 апр', label: 'Пробное занятие', price: 500, expired: true },
+    { id: 'p1', date: '20.07.2026', label: 'Индив. офлайн ×4', price: 6000 },
+    { id: 'p2', date: '05.06.2026', label: 'Групп. онлайн ×10', price: 8000 },
+    { id: 'p3', date: '01.06.2026', label: 'Групп. онлайн ×1', price: 0 },
+    { id: 'p4', date: '12.04.2026', label: 'Индив. онлайн ×1', price: 500, expired: true },
   ],
   profile: {
     fio: 'Иванов Александр',

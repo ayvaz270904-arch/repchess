@@ -63,6 +63,12 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
       <div className="home-sec-title">Занятия</div>
       {data.lessonHistory.length ? (
         <Section>
+          {/* Подписи под занятием. Раньше сюда падала голая заметка тренера — на разборе
+              человек читал строку «тактика» и не понимал, что это такое; теперь она
+              подписана «тема».
+              И главное: у пропуска сказано, что занятие НЕ списано. Проверено по коду
+              (lessonsInfo): статус 'absent' уходит в историю до used++, то есть с баланса
+              не снимается. Красная пилюля «пропуск» без этой строки читалась как штраф. */}
           {data.lessonHistory.map((h) => (
             <Cell
               key={h.id}
@@ -74,7 +80,9 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
                   tone={h.status === 'absent' ? 'red' : 'neutral'}
                 />
               }
-              subtitle={h.notes}
+              subtitle={[h.status === 'absent' ? 'занятие не списано' : '', h.notes ? 'тема: ' + h.notes : '']
+                .filter(Boolean)
+                .join(' · ') || undefined}
               after={
                 <span className={'pill ' + (h.status === 'absent' ? 'pill-warn' : 'pill-ok')}>
                   {h.status === 'absent' ? 'пропуск' : 'проведено'}
@@ -98,9 +106,13 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
               key={p.id}
               multiline
               readOnly
-              before={<CellIcon name="card" />}
+              before={<CellIcon name={p.price ? 'card' : 'gift'} />}
               subtitle={p.date + (p.expired ? ' · истёк' : '')}
-              after={<span className="cell-price">{money(p.price)}</span>}
+              // Сертификат и подарочное занятие приходят строкой с ценой 0 — и в списке
+              // покупок это выглядело как «0 ₽», то есть как ошибка счёта. Отличить
+              // сертификат от промо-подарка клиент всё равно не может (обе строки
+              // нулевые), поэтому слово нейтральное и верное для обоих случаев.
+              after={p.price ? <span className="cell-price">{money(p.price)}</span> : <span className="pill pill-ok">подарок</span>}
             >
               {p.label}
             </Cell>
