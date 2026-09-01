@@ -932,6 +932,14 @@ html.app-light .mascot-empty img {
 .stat-strip-2 {
   grid-template-columns: repeat(2, 1fr);
 }
+/* Разбивка внутри карточки: «1 платная · 1 подарок». Отдельной карточки не заводим —
+   это уточнение к числу выше, а не самостоятельная цифра. */
+.stat-split {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--rc-hint);
+}
 .stat-card {
   background: var(--rc-surface);
   border: 1px solid var(--rc-hairline);

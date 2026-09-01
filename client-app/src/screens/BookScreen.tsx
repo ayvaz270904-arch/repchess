@@ -6,6 +6,7 @@ import { MascotEmpty } from '../ui/MascotEmpty'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
 import { fetchSlots, getCachedSlots, bookIndiv, joinGroup, leaveGroup, confirmDialog, track, safeAction, ApiError } from '../data'
 import { errText, isBalanceMismatch } from '../errors'
+import { plural } from '../format'
 
 export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => void }) {
   // Стартуем из кэша (мгновенно, без спиннера), свежие слоты подтянем фоном.
@@ -242,14 +243,6 @@ function groupByDay(list: GroupLesson[]): GroupDay[] {
     else days.push({ iso, label, isToday: iso === today, items: [g] })
   }
   return days
-}
-
-function plural(n: number, one: string, few: string, many: string): string {
-  const d10 = n % 10
-  const d100 = n % 100
-  if (d10 === 1 && d100 !== 11) return one
-  if (d10 >= 2 && d10 <= 4 && (d100 < 10 || d100 >= 20)) return few
-  return many
 }
 
 function GroupRow({

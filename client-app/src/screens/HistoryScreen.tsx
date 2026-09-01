@@ -2,6 +2,7 @@ import { List, Section, Cell } from '@telegram-apps/telegram-ui'
 import type { Cabinet } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { MascotEmpty } from '../ui/MascotEmpty'
+import { plural, ruDate, lessonType } from '../format'
 
 function money(n: number): string {
   return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' ₽'
@@ -10,6 +11,10 @@ function money(n: number): string {
 export function HistoryScreen({ data }: { data: Cabinet }) {
   const done = data.lessonHistory.filter((h) => h.status === 'done').length
   const purchases = data.purchaseHistory.length
+  // Сертификаты и подарочные занятия приходят строкой с ценой 0. Считать их
+  // «покупками» молча — неправда, поэтому в той же карточке показываем разбивку.
+  const paid = data.purchaseHistory.filter((p) => p.price > 0).length
+  const gifts = purchases - paid
 
   // Прогресс по остатку. Знаменатель считаем по НЕотрицательному остатку: при долге
   // (остаток < 0) шкала — это только пройденные занятия, полоса заполнена целиком,
@@ -34,6 +39,14 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
           <div className="stat-card">
             <div className="stat-num">{purchases}</div>
             <div className="stat-lbl">Покупок</div>
+            {/* Разбивку показываем, только если подарки вообще есть: у большинства
+                клиентов их нет, и строка «· 0 подарков» была бы шумом. */}
+            {gifts > 0 && (
+              <div className="stat-split">
+                {paid > 0 && <>{paid} {plural(paid, 'платная', 'платные', 'платных')} · </>}
+                {gifts} {plural(gifts, 'подарок', 'подарка', 'подарков')}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -69,30 +82,30 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
               И главное: у пропуска сказано, что занятие НЕ списано. Проверено по коду
               (lessonsInfo): статус 'absent' уходит в историю до used++, то есть с баланса
               не снимается. Красная пилюля «пропуск» без этой строки читалась как штраф. */}
-          {data.lessonHistory.map((h) => (
-            <Cell
-              key={h.id}
-              multiline
-              readOnly
-              before={
-                <CellIcon
-                  name={h.status === 'absent' ? 'clock' : 'check'}
-                  tone={h.status === 'absent' ? 'red' : 'neutral'}
-                />
-              }
-              subtitle={[h.status === 'absent' ? 'занятие не списано' : '', h.notes ? 'тема: ' + h.notes : '']
-                .filter(Boolean)
-                .join(' · ') || undefined}
-              after={
-                <span className={'pill ' + (h.status === 'absent' ? 'pill-warn' : 'pill-ok')}>
-                  {h.status === 'absent' ? 'пропуск' : 'проведено'}
-                </span>
-              }
-            >
-              {h.date}
-              {h.time ? ` · ${h.time}` : ''} · {h.type}
-            </Cell>
-          ))}
+          {data.lessonHistory.map((h) => {
+            const { kind, fmt } = lessonType(h.type)
+            const absent = h.status === 'absent'
+            return (
+              <Cell
+                key={h.id}
+                multiline
+                readOnly
+                before={<CellIcon name={absent ? 'clock' : 'check'} tone={absent ? 'red' : 'neutral'} />}
+                subtitle={
+                  [fmt, h.time, absent ? 'занятие не списано' : '', h.notes ? 'тема: ' + h.notes : '']
+                    .filter(Boolean)
+                    .join(' · ') || undefined
+                }
+                // Пилюля осталась ТОЛЬКО у пропуска. «Проведено» — обычное состояние
+                // каждой строки, и значок слева его уже показывает: badge на норме
+                // отнимал место у заголовка (из-за него «Групповое · онлайн» уезжало
+                // на вторую строку) и глушил единственное, что стоит замечать.
+                after={absent ? <span className="pill pill-warn">пропуск</span> : undefined}
+              >
+                {ruDate(h.date)} · {kind}
+              </Cell>
+            )
+          })}
         </Section>
       ) : (
         <MascotEmpty text="Занятий пока не было — запишись на первое!" />
@@ -107,7 +120,8 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
               multiline
               readOnly
               before={<CellIcon name={p.price ? 'card' : 'gift'} />}
-              subtitle={p.date + (p.expired ? ' · истёк' : '')}
+              // Было просто «истёк» — непонятно, что именно: оплата, доступ, занятия.
+              subtitle={ruDate(p.date) + (p.expired ? ' · срок действия истёк' : '')}
               // Сертификат и подарочное занятие приходят строкой с ценой 0 — и в списке
               // покупок это выглядело как «0 ₽», то есть как ошибка счёта. Отличить
               // сертификат от промо-подарка клиент всё равно не может (обе строки

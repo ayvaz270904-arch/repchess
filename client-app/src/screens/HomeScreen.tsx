@@ -5,6 +5,7 @@ import { CellIcon } from '../ui/CellIcon'
 import { haptic, openUrl, shareReferral } from '../telegram/ui'
 import { redeemCert, cancelIndiv, confirmDialog, track, safeAction, userPhoto } from '../data'
 import { errText } from '../errors'
+import { ruDate, lessonType } from '../format'
 import mascot from '../assets/mascot.svg'
 
 export function HomeScreen({
@@ -153,10 +154,17 @@ export function HomeScreen({
           {data.upcoming.map((u) => (
             <div className="home-next" key={u.id}>
               <div className="next-date">
-                {u.date}
+                {ruDate(u.date)}
                 {u.time ? ` · ${u.time}` : ''}
               </div>
-              <div className="next-meta">{[u.type, u.trainerName].filter(Boolean).join(' · ')}</div>
+              {/* «Индив.» разворачиваем в «Индивидуальное» — то же, что в Истории,
+                  чтобы одно и то же занятие называлось на двух экранах одинаково. */}
+              <div className="next-meta">
+                {(() => {
+                  const { kind, fmt } = lessonType(u.type)
+                  return [kind, fmt, u.trainerName].filter(Boolean).join(' · ')
+                })()}
+              </div>
               {u.cancellable && (
                 <div className="next-foot">
                   <button className="next-cancel" onClick={() => cancel(u)}>
