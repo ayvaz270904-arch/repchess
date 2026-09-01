@@ -113,18 +113,14 @@ export function EventsScreen({ data }: { data: Cabinet }) {
         const past = d.date < today
         if (!d.items.length) return null
         return (
-          <div key={d.date} id={'evday-' + d.date} className={'ev-day' + (past ? ' past' : '')}>
-            <Section
-              header={
-                isToday ? (
-                  <span>
-                    {d.label} <span className="ev-badge-today">сегодня</span>
-                  </span>
-                ) : (
-                  d.label
-                )
-              }
-            >
+          <div key={d.date} id={'evday-' + d.date} className={'ev-day day-sec' + (past ? ' past' : '')}>
+            {/* Свой заголовок вместо header у Section — тот липнет к первой ячейке
+                и по-разному выглядит для строки и для элемента (см. BookScreen). */}
+            <div className={'day-sec-title' + (isToday ? ' today' : '')}>
+              {d.label}
+              {isToday && <span className="ev-badge-today">сегодня</span>}
+            </div>
+            <Section>
               {d.items.map((it, i) => (
                 <Cell
                   key={i}

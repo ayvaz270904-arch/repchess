@@ -126,22 +126,21 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
         // строке. Раньше строка несла дату, время, слово «онлайн/офлайн» (дубль
         // иконки), место, тренера и счётчик мест — семь сущностей одним весом.
         groupByDay(data.openGroups).map((d) => (
-          <Section
-            key={d.iso}
-            header={
-              d.isToday ? (
-                <span>
-                  {d.label} <span className="ev-badge-today">сегодня</span>
-                </span>
-              ) : (
-                d.label
-              )
-            }
-          >
-            {d.items.map((g) => (
-              <GroupRow key={g.id} g={g} onJoin={join} onLeave={leave} />
-            ))}
-          </Section>
+          // Заголовок дня рисуем сами, а не через header у Section: у telegram-ui
+          // между заголовком и первой ячейкой почти нет отступа (заголовок липнет
+          // к карточке), а строку-заголовок и заголовок-элемент он стилизует
+          // по-разному — из-за этого сегодняшний день выглядел крупнее остальных.
+          <div className="day-sec" key={d.iso}>
+            <div className={'day-sec-title' + (d.isToday ? ' today' : '')}>
+              {d.label}
+              {d.isToday && <span className="ev-badge-today">сегодня</span>}
+            </div>
+            <Section>
+              {d.items.map((g) => (
+                <GroupRow key={g.id} g={g} onJoin={join} onLeave={leave} />
+              ))}
+            </Section>
+          </div>
         ))
       ) : (
         <MascotEmpty text="Сейчас открытых групповых занятий нет — заглядывай позже." />

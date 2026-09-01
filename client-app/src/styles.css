@@ -756,6 +756,29 @@ html.app-light .mascot-empty img {
   transform: scale(0.96);
 }
 
+/* Заголовок дня в списках «Запись» и «Афиша». Рисуем его сами: у Section из
+   telegram-ui между собственным заголовком и первой ячейкой почти нет отступа,
+   и заголовок прилипает к карточке. Плюс он по-разному стилизует заголовок-строку
+   и заголовок-элемент, из-за чего сегодняшний день выбивался из ряда. */
+.day-sec-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 20px 9px;
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rc-hint);
+}
+.day-sec-title.today {
+  color: var(--rc-text);
+}
+/* Отступ бейджа задан флексом, собственный margin у него тут лишний */
+.day-sec-title .ev-badge-today {
+  margin-left: 0;
+}
+
 /* Прошедшие дни недели видны, но приглушены — так было в старом кабинете.
    scroll-margin-top: прокрутка по якорю не должна прятать заголовок дня под полоской. */
 .ev-day {
