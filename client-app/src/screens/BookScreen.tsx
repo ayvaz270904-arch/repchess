@@ -20,6 +20,8 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
   const [dayDate, setDayDate] = useState<string>(() => getCachedSlots()?.days[0]?.date ?? '')
   const [bookMsg, setBookMsg] = useState('')
   const [grpMsg, setGrpMsg] = useState('')
+  // Ссылка на покупку — та же, что на Главной (единственная в BUY_LINKS, с UTM).
+  const buyUrl = data.buyLinks[0]?.[1]
 
   useEffect(() => {
     slotsRef.current = slots
@@ -116,7 +118,7 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
             <Spinner size="m" />
           </div>
         ) : (
-          renderIndiv(slots, fmt, dayDate, setFmt, setDayDate, book, bookMsg)
+          renderIndiv(slots, fmt, dayDate, setFmt, setDayDate, book, bookMsg, buyUrl)
         )}
       </Section>
 
@@ -137,7 +139,7 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
             </div>
             <Section>
               {d.items.map((g) => (
-                <GroupRow key={g.id} g={g} onJoin={join} onLeave={leave} />
+                <GroupRow key={g.id} g={g} onJoin={join} onLeave={leave} buyUrl={buyUrl} />
               ))}
             </Section>
           </div>
@@ -150,6 +152,25 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
   )
 }
 
+// Сообщение «пакета нет» + кнопка покупки. Раньше экран сообщал о препятствии
+// и не давал выхода: человек читал «нужен активный пакет» и оставался на месте.
+function NeedPack({ text, buyUrl }: { text: string; buyUrl?: string }): ReactNode {
+  return (
+    <div className="need-pack">
+      <div className="need-pack-txt">{text}</div>
+      {buyUrl && (
+        <Button
+          size="s"
+          stretched
+          onClick={() => { haptic(); track('buy_from_book'); openUrl(buyUrl) }}
+        >
+          Купить пакет
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function renderIndiv(
   s: IndivSlots,
   fmt: 'offline' | 'online',
@@ -158,12 +179,13 @@ function renderIndiv(
   setDayDate: (d: string) => void,
   book: (time: string) => void,
   bookMsg: string,
+  buyUrl?: string,
 ): ReactNode {
   if (!s.canOffline && !s.canOnline) {
-    return <Cell multiline readOnly>Для записи нужен активный пакет индивидуальных занятий.</Cell>
+    return <NeedPack text="Для записи нужен активный пакет индивидуальных занятий." buyUrl={buyUrl} />
   }
   if (s.remaining < 1) {
-    return <Cell multiline readOnly>Занятия на балансе закончились — продлите пакет, и запись откроется.</Cell>
+    return <NeedPack text="Занятия на балансе закончились — продлите пакет, и запись откроется." buyUrl={buyUrl} />
   }
   if (!s.days.length) {
     return <Cell multiline readOnly>У тренера нет свободных слотов на ближайшие 2 недели.</Cell>
@@ -248,10 +270,12 @@ function GroupRow({
   g,
   onJoin,
   onLeave,
+  buyUrl,
 }: {
   g: GroupLesson
   onJoin: (g: GroupLesson) => void
   onLeave: (g: GroupLesson) => void
+  buyUrl?: string
 }) {
   const iconName = g.format === 'online' ? 'globe' : 'pin'
   const full = !!g.max && g.count >= g.max
@@ -268,7 +292,7 @@ function GroupRow({
     after = (
       <div className="grp-after">
         <span className="grp-joined">✓ Вы записаны</span>
-        <button className="grp-cancel" onClick={() => onLeave(g)}>
+        <button className="grp-act" onClick={() => onLeave(g)}>
           Отменить
         </button>
       </div>
@@ -278,7 +302,22 @@ function GroupRow({
   } else if (full) {
     after = <span className="grp-status">мест нет</span>
   } else if (g.canJoin === false) {
-    after = <span className="grp-status">нужен пакет</span>
+    // Сообщать «нужен пакет» и не давать способа его купить — тупик. Ссылка ведёт
+    // туда же, куда «Купить пакет» на Главной; событие отдельное, чтобы было видно,
+    // сколько покупок начинается прямо из экрана записи.
+    after = (
+      <div className="grp-after">
+        <span className="grp-status">нужен пакет</span>
+        {buyUrl && (
+          <button
+            className="grp-act"
+            onClick={() => { haptic(); track('buy_from_book'); openUrl(buyUrl) }}
+          >
+            Купить пакет
+          </button>
+        )}
+      </div>
+    )
   } else {
     after = (
       <Button size="s" onClick={() => onJoin(g)}>

@@ -674,7 +674,9 @@ html.app-light .mascot-empty img {
   color: var(--rc-hint);
   white-space: nowrap;
 }
-.grp-cancel {
+/* Тихое действие под статусом в правой колонке строки: «Отменить» у записанных,
+   «Купить пакет» у тех, кому пакета не хватает. */
+.grp-act {
   border: none;
   background: none;
   padding: 0;
@@ -684,8 +686,19 @@ html.app-light .mascot-empty img {
   cursor: pointer;
   white-space: nowrap;
 }
-.grp-cancel:active {
+.grp-act:active {
   transform: scale(0.97);
+}
+
+/* Блок «нужен пакет» в индивидуальных занятиях: текст + кнопка покупки */
+.need-pack {
+  padding: 14px 16px 16px;
+}
+.need-pack-txt {
+  margin-bottom: 12px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--rc-text);
 }
 
 /* ── Афиша ── */
