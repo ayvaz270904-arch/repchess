@@ -303,11 +303,21 @@ function flushTrack(): void {
   }
 }
 
+// События, которые уходят сразу, не дожидаясь пачки. Пока это только `open`:
+// по нему считается ежедневная статистика открытий кабинета, а пачка может не
+// доехать, если человек открыл приложение и тут же выгрузил Telegram. Стоит это
+// одного запроса на запуск — ровно как было до батчинга; экономию давали
+// переключения вкладок, они в пачке и остаются.
+const TRACK_IMMEDIATE = ['open']
+
 export function track(event: string, detail?: string): void {
   if (DEV) return
   try {
     if (!event) return
     trackBuffer.push({ ev: event, det: detail ? String(detail).slice(0, 80) : '', at: Date.now() })
+    // Подписки вешаем ДО возможного выхода по «немедленному» событию: `open`
+    // приходит первым, и выйди мы раньше — закрытие приложения осталось бы
+    // неотслеженным до первого переключения вкладки.
     if (!trackHooked) {
       trackHooked = true
       // pagehide срабатывает при закрытии, visibilitychange — при сворачивании.
@@ -315,6 +325,10 @@ export function track(event: string, detail?: string): void {
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) flushTrack()
       })
+    }
+    if (TRACK_IMMEDIATE.indexOf(event) >= 0) {
+      flushTrack()
+      return
     }
     if (trackBuffer.length >= TRACK_MAX_BUFFER) {
       flushTrack()
