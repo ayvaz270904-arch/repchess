@@ -20,8 +20,11 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
   const [dayDate, setDayDate] = useState<string>(() => getCachedSlots()?.days[0]?.date ?? '')
   const [bookMsg, setBookMsg] = useState('')
   const [grpMsg, setGrpMsg] = useState('')
-  // Ссылка на покупку — та же, что на Главной (единственная в BUY_LINKS, с UTM).
-  const buyUrl = data.buyLinks[0]?.[1]
+  // Ссылка на покупку — та же, что на Главной, но с меткой места. Тильда кладёт
+  // адрес целиком в колонку `referer` таблицы оплат, поэтому по метке видно, что
+  // человек ушёл покупать именно отсюда, а не с Главной, — и это факт, а не догадка.
+  const buyBase = data.buyLinks[0]?.[1]
+  const buyUrl = buyBase ? buyBase + (buyBase.indexOf('?') >= 0 ? '&' : '?') + 'utm_content=book' : undefined
 
   useEffect(() => {
     slotsRef.current = slots
