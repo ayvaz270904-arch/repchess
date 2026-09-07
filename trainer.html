@@ -537,6 +537,25 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <!-- Group mismatch / pending approval alerts -->
       <div id="admin-group-mismatches"></div>
 
+      <!-- Разовая починка данных: занятия, сохранённые с пустым именем ученика.
+           Появились 07.09.2026, когда в Таблице 2 пропала колонка «Name» и база
+           учеников приехала без имён — занятия тех дней записали пустое ФИО. -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><span class="card-title">🩹 Имена в занятиях</span></div>
+        <div class="card-body">
+          <div class="dim" style="font-size:.78rem;margin-bottom:10px">
+            Занятие сохраняет ФИО ученика внутрь себя. Если оно записывалось, когда база
+            приехала без имён, в списке вместо ФИО стоит «—». Кнопка найдёт такие занятия
+            и подставит имя по почте из базы. Сначала только посчитает.
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn-sm" onclick="scanEmptyLessonNames()">Проверить</button>
+            <button class="btn-sm btn-gold" id="fix-names-btn" style="display:none" onclick="fixEmptyLessonNames()">Дозаполнить</button>
+          </div>
+          <div id="fix-names-out" style="margin-top:10px;font-size:.82rem"></div>
+        </div>
+      </div>
+
       <!-- Trainer stats -->
       <div class="card" style="margin-bottom:14px">
         <div class="card-head">
@@ -2081,6 +2100,90 @@ function lessonItemHTML(l) {
     </div>
     ${actionHTML}
   </div>`;
+}
+
+// ══════════════════════════════════════════════
+//  РАЗОВАЯ ПОЧИНКА: пустое ФИО в занятиях
+// ══════════════════════════════════════════════
+// Занятие хранит имя ученика внутри себя (поле studentName), а список печатает
+// именно его — `l.studentName || '—'`. Пока в Таблице 2 не было колонки «Name»,
+// база учеников приезжала без имён, и занятия сохранялись с пустым ФИО.
+// Переименование колонки чинит базу и все будущие записи, но уже сохранённые
+// занятия остаются с «—» — их и дозаполняем по почте.
+//
+// Работает в два шага: сначала считаем и показываем, потом пишем. Правка данных
+// вслепую — способ получить вторую проблему поверх первой.
+let _fixNamesPlan = null;
+
+function _emptyName(l) {
+  const n = String(l.studentName || '').trim();
+  return !n || n === '—';
+}
+
+async function scanEmptyLessonNames() {
+  const out = document.getElementById('fix-names-out');
+  const btn = document.getElementById('fix-names-btn');
+  btn.style.display = 'none';
+  _fixNamesPlan = null;
+  out.textContent = 'Читаю занятия…';
+  try {
+    if (!students.length) { out.textContent = '⚠️ База учеников не загружена — обнови страницу.'; return; }
+    // Имя ищем по почте; ключ приводим к нижнему регистру, в оплатах регистр гуляет
+    const byEmail = {};
+    students.forEach(s => { if (s.email && s.name) byEmail[String(s.email).toLowerCase().trim()] = s.name; });
+
+    const snap = await db.collection('lessons').get();
+    const fixable = [], noEmail = [], notFound = [];
+    snap.docs.forEach(d => {
+      const l = d.data();
+      if (!_emptyName(l)) return;
+      const em = String(l.studentEmail || '').toLowerCase().trim();
+      if (!em) { noEmail.push(d.id); return; }          // гости и «лишние» участники — у них почты нет по смыслу
+      const name = byEmail[em];
+      if (!name) { notFound.push(em); return; }
+      fixable.push({ ref: d.ref, name });
+    });
+
+    _fixNamesPlan = fixable;
+    const uniqNotFound = Array.from(new Set(notFound));
+    out.innerHTML = `Занятий без имени: <b>${fixable.length + noEmail.length + uniqNotFound.length}</b><br>`
+      + `Можно дозаполнить: <b>${fixable.length}</b><br>`
+      + (noEmail.length ? `Без почты (гости, дополнительные участники) — пропускаем: ${noEmail.length}<br>` : '')
+      + (uniqNotFound.length ? `Почта есть, но в базе не нашлась: ${uniqNotFound.length} (${esc(uniqNotFound.slice(0, 3).join(', '))}${uniqNotFound.length > 3 ? '…' : ''})<br>` : '');
+    if (fixable.length) btn.style.display = '';
+    else out.innerHTML += 'Дозаполнять нечего.';
+  } catch (e) {
+    out.textContent = '⚠️ Ошибка: ' + e.message;
+  }
+}
+
+async function fixEmptyLessonNames() {
+  const out = document.getElementById('fix-names-out');
+  const btn = document.getElementById('fix-names-btn');
+  if (!_fixNamesPlan || !_fixNamesPlan.length) { out.textContent = 'Сначала нажми «Проверить».'; return; }
+  if (!confirm(`Вписать имена в ${_fixNamesPlan.length} занятий?`)) return;
+  btn.disabled = true;
+  out.textContent = 'Записываю…';
+  try {
+    // Пишем ТОЛЬКО studentName. Почту и тренера не трогаем — правило Firestore
+    // запрещает их менять кому угодно, кроме админа, и трогать их тут незачем.
+    let done = 0;
+    for (let i = 0; i < _fixNamesPlan.length; i += 400) {
+      const chunk = _fixNamesPlan.slice(i, i + 400);
+      const batch = db.batch();
+      chunk.forEach(x => batch.update(x.ref, { studentName: x.name }));
+      await batch.commit();
+      done += chunk.length;
+      out.textContent = `Записываю… ${done} из ${_fixNamesPlan.length}`;
+    }
+    out.innerHTML = `✅ Готово: имена вписаны в <b>${done}</b> занятий. Обнови страницу, чтобы увидеть.`;
+    _fixNamesPlan = null;
+    btn.style.display = 'none';
+  } catch (e) {
+    out.textContent = '⚠️ Ошибка записи: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // ══════════════════════════════════════════════
