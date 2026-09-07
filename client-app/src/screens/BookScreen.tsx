@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { List, Section, Cell, Button, SegmentedControl, Spinner } from '@telegram-apps/telegram-ui'
+import { List, Section, Cell, Button, Input, SegmentedControl, Spinner } from '@telegram-apps/telegram-ui'
 import type { Cabinet, GroupLesson, IndivSlots } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { MascotEmpty } from '../ui/MascotEmpty'
@@ -70,16 +70,21 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
     }
   }
 
-  async function join(g: GroupLesson) {
+  async function join(g: GroupLesson, withGuest?: boolean, guestName?: string) {
     haptic()
-    setGrpMsg('Записываю…')
-    const r = await safeAction(joinGroup(g.id))
+    setGrpMsg(withGuest ? 'Записываю двоих…' : 'Записываю…')
+    const r = await safeAction(joinGroup(g.id, withGuest, guestName))
     if (r.ok) {
-      track('group_join')
-      setGrpMsg('✅ Вы записаны!')
+      track(withGuest ? 'group_join_guest' : 'group_join')
+      setGrpMsg(withGuest ? '✅ Вы записаны вдвоём!' : '✅ Вы записаны!')
       onReload()
     } else {
-      setGrpMsg('⚠️ ' + errText(r.error))
+      // При записи вдвоём «нужен активный пакет» читается как ошибка системы —
+      // человек же видит свой баланс. Говорим прямо, чего именно не хватило.
+      const short = withGuest && isBalanceMismatch(r.error)
+        ? 'На двоих не хватает занятий на балансе'
+        : errText(r.error)
+      setGrpMsg('⚠️ ' + short)
       if (isBalanceMismatch(r.error)) onReload()   // экран показывал не то, что на сервере
     }
   }
@@ -276,12 +281,19 @@ function GroupRow({
   buyUrl,
 }: {
   g: GroupLesson
-  onJoin: (g: GroupLesson) => void
+  onJoin: (g: GroupLesson, withGuest?: boolean, guestName?: string) => void
   onLeave: (g: GroupLesson) => void
   buyUrl?: string
 }) {
+  const [guestOpen, setGuestOpen] = useState(false)
+  const [guestName, setGuestName] = useState('')
   const iconName = g.format === 'online' ? 'globe' : 'pin'
   const full = !!g.max && g.count >= g.max
+  // Сколько мест нужно: себе и другу, а если уже записан — только другу.
+  // Занятость в g.count приходит с сервера УЖЕ с гостями, поэтому здесь честно.
+  const needSeats = g.joined ? 1 : 2
+  const roomForGuest = !g.max || g.max - g.count >= needSeats
+  const canBringGuest = g.canJoin !== false && g.regOpen !== false && !g.myGuest && roomForGuest
   // Счётчик мест показываем только когда он что-то значит: «3/8 чел.» — шум,
   // «осталось 2 места» — повод записаться сейчас. Порог — две трети занятых.
   const left = g.max ? g.max - g.count : 0
@@ -294,7 +306,12 @@ function GroupRow({
     // а отмена — отдельным тихим действием.
     after = (
       <div className="grp-after">
-        <span className="grp-joined">✓ Вы записаны</span>
+        <span className="grp-joined">{g.myGuest ? '✓ Вы и друг' : '✓ Вы записаны'}</span>
+        {canBringGuest && !guestOpen && (
+          <button className="grp-act" onClick={() => { haptic(); setGuestOpen(true) }}>
+            + друг
+          </button>
+        )}
         <button className="grp-act" onClick={() => onLeave(g)}>
           Отменить
         </button>
@@ -323,9 +340,16 @@ function GroupRow({
     )
   } else {
     after = (
-      <Button size="s" onClick={() => onJoin(g)}>
-        Записаться
-      </Button>
+      <div className="grp-after">
+        <Button size="s" onClick={() => onJoin(g)}>
+          Записаться
+        </Button>
+        {canBringGuest && !guestOpen && (
+          <button className="grp-act" onClick={() => { haptic(); setGuestOpen(true) }}>
+            с другом
+          </button>
+        )}
+      </div>
     )
   }
 
@@ -350,6 +374,33 @@ function GroupRow({
         <span className="grp-time">{g.time || '—'}</span>
         {g.venue ? ' · ' + g.venue : ''}
       </Cell>
+      {/* Форма друга живёт отдельным блоком под строкой: в правой колонке ячейки
+          поле ввода не поместилось бы, а в модалку Telegram текст не введёшь. */}
+      {guestOpen && (
+        <div className="grp-guest">
+          <div className="grp-guest-note">
+            Друг займёт место в группе, и с вашего баланса спишется второе занятие.
+          </div>
+          <Input
+            className="grp-guest-inp"
+            value={guestName}
+            onChange={(e) => setGuestName(e.currentTarget.value)}
+            placeholder="Имя друга (необязательно)"
+          />
+          <div className="grp-guest-btns">
+            <Button
+              size="s"
+              stretched
+              onClick={() => { setGuestOpen(false); onJoin(g, true, guestName.trim()) }}
+            >
+              {g.joined ? 'Добавить друга' : 'Записаться вдвоём'}
+            </Button>
+            <Button size="s" mode="bezeled" onClick={() => { setGuestOpen(false); setGuestName('') }}>
+              Отмена
+            </Button>
+          </div>
+        </div>
+      )}
       {showLinks &&
         (linksOpen ? (
           <div className="grp-links">

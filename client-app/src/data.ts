@@ -204,12 +204,19 @@ export async function cancelIndiv(lessonId: string): Promise<ActionResult> {
   return api('action=cancelIndiv&lessonId=' + encodeURIComponent(lessonId))
 }
 
-export async function joinGroup(id: string): Promise<ActionResult> {
+// withGuest — записаться вдвоём: гость занимает место в группе, и второе занятие
+// спишется с баланса записавшего при отметке посещаемости. Имя гостя необязательно.
+export async function joinGroup(id: string, withGuest?: boolean, guestName?: string): Promise<ActionResult> {
   if (DEV) {
     await delay(400)
     return { ok: true }
   }
-  return api('action=joinGroup&groupId=' + encodeURIComponent(id))
+  let q = 'action=joinGroup&groupId=' + encodeURIComponent(id)
+  if (withGuest) {
+    q += '&guest=1'
+    if (guestName) q += '&guestName=' + encodeURIComponent(guestName.slice(0, 40))
+  }
+  return api(q)
 }
 
 export async function leaveGroup(id: string): Promise<ActionResult> {

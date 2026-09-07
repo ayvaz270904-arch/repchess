@@ -5215,7 +5215,7 @@ async function openAttendModal(groupId) {
     const extraEl = document.getElementById('attend-extra-list');
     extraEl.innerHTML = '';
     existingExtra.forEach(item => _appendExtraRow(typeof item === 'object' ? item.name : item));
-    (g.guestCharges||[]).forEach(gc => _appendGuestRow(gc.name||'', gc.email||'', gc.studentName||''));
+    _prefillGuests(g);
 
     document.getElementById('attend-submit-btn').disabled = false;
     document.getElementById('attend-submit-btn').textContent = 'Отправить отметки администратору';
@@ -5274,7 +5274,7 @@ async function openAttendModal(groupId) {
       existingExtra.forEach(item => _appendExtraRow(typeof item === 'object' ? item.name : item));
     }
 
-    (g.guestCharges||[]).forEach(gc => _appendGuestRow(gc.name||'', gc.email||'', gc.studentName||''));
+    _prefillGuests(g);
     document.getElementById('attend-add-inp').value = '';
     document.getElementById('attend-add-results').style.display = 'none';
 
@@ -5350,6 +5350,26 @@ function addGuestRow() {
   _appendGuestRow('', '', '');
   const inputs = document.querySelectorAll('#attend-guest-list .guest-name-inp');
   if (inputs.length) inputs[inputs.length-1].focus();
+}
+
+// Заполняет блок «Гости — списать с ученика» при открытии отметки посещаемости.
+// Источников два. Уже сохранённые guestCharges (тренер вбивал руками или отмечал
+// раньше) имеют приоритет. Если их нет, берём гостей, заявленных САМИМИ учениками
+// при записи в кабинете: guestOf[i] — почта пригласившего, guestNames[i] — имя гостя.
+// Без этой подстановки клиент записался бы с другом, а тренер об этом не узнал —
+// и второе занятие не списалось бы.
+function _prefillGuests(g) {
+  const saved = g.guestCharges || [];
+  if (saved.length) {
+    saved.forEach(gc => _appendGuestRow(gc.name || '', gc.email || '', gc.studentName || ''));
+    return;
+  }
+  const of = g.guestOf || [], names = g.guestNames || [];
+  const emails = g.studentEmails || [], snames = g.studentNames || [];
+  of.forEach((email, i) => {
+    const ix = emails.indexOf(email);
+    _appendGuestRow(names[i] || '', email, ix >= 0 ? (snames[ix] || email) : email);
+  });
 }
 
 function _appendGuestRow(name, email, sname) {

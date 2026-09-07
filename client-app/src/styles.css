@@ -690,6 +690,29 @@ html.app-light .mascot-empty img {
   transform: scale(0.97);
 }
 
+/* Форма записи с другом — блок под строкой занятия */
+.grp-guest {
+  padding: 4px 16px 14px;
+}
+.grp-guest-note {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--rc-hint);
+}
+.grp-guest-inp {
+  margin-bottom: 10px;
+}
+.grp-guest-btns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* Кнопка «Записаться вдвоём» тянется, «Отмена» занимает ровно свой размер */
+.grp-guest-btns > *:last-child {
+  flex: 0 0 auto;
+}
+
 /* Блок «нужен пакет» в индивидуальных занятиях: текст + кнопка покупки */
 .need-pack {
   padding: 14px 16px 16px;

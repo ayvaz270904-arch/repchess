@@ -60,6 +60,9 @@ export interface GroupLesson {
   count: number
   max?: number
   joined?: boolean
+  // Этот клиент записался с другом. Гость занимает место в группе и стоит второго
+  // занятия с баланса пригласившего — списывается тренером при отметке.
+  myGuest?: boolean
   regOpen?: boolean
   opensAt?: string
   hasLinks?: boolean
