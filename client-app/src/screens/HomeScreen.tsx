@@ -165,6 +165,9 @@ export function HomeScreen({
                   return [kind, fmt, u.trainerName].filter(Boolean).join(' · ')
                 })()}
               </div>
+              {/* Заметка тренера к БУДУЩЕМУ занятию — «что будет». Показываем сразу,
+                  без раскрытия: ближайших занятий одно-два, прятать там нечего. */}
+              {u.notes && <div className="next-note">{u.notes.trim()}</div>}
               {u.cancellable && (
                 <div className="next-foot">
                   <button className="next-cancel" onClick={() => cancel(u)}>

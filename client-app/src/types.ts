@@ -26,6 +26,8 @@ export interface UpcomingLesson {
   time?: string
   type: string
   trainerName?: string
+  // Заметка тренера к БУДУЩЕМУ занятию — «что будет на занятии»
+  notes?: string
   cancellable?: boolean
 }
 
@@ -107,6 +109,8 @@ export interface LessonHist {
   type: string
   status: 'done' | 'absent'
   notes?: string
+  // Бот присылает имя тренера для каждого занятия — раньше кабинет его выбрасывал
+  trainerName?: string
 }
 export interface PurchaseHist {
   id: string

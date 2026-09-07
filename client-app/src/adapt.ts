@@ -28,6 +28,8 @@ export interface RawCabinet {
     time?: string
     trainerName?: string
     type: string
+    // fmtItem в боте один и тот же для истории и будущих занятий, notes есть у обоих
+    notes?: string
     cancellable?: boolean
   }[]
   openGroups?: Omit<GroupLesson, 'canJoin'>[]
@@ -101,6 +103,7 @@ export function adapt(raw: RawCabinet): Cabinet {
       time: u.time,
       type: u.type,
       trainerName: u.trainerName,
+      notes: u.notes,
       cancellable: u.cancellable,
     })),
     openGroups,
@@ -119,6 +122,7 @@ export function adapt(raw: RawCabinet): Cabinet {
       type: h.type,
       status: h.status === 'absent' ? 'absent' : 'done',
       notes: h.notes,
+      trainerName: h.trainerName,
     })),
     purchaseHistory: (raw.purchaseHistory || []).map((p, i) => ({
       id: 'p' + i,

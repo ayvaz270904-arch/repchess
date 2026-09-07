@@ -1,3 +1,4 @@
+import { Fragment, useState } from 'react'
 import { List, Section, Cell } from '@telegram-apps/telegram-ui'
 import type { Cabinet } from '../types'
 import { CellIcon } from '../ui/CellIcon'
@@ -9,6 +10,9 @@ function money(n: number): string {
 }
 
 export function HistoryScreen({ data }: { data: Cabinet }) {
+  // Раскрыта одна заметка за раз: список остаётся коротким, а «раскрыл и потерял
+  // место» не случается — предыдущая закрывается сама.
+  const [openId, setOpenId] = useState<string | null>(null)
   const done = data.lessonHistory.filter((h) => h.status === 'done').length
   const purchases = data.purchaseHistory.length
   // Сертификаты и подарочные занятия приходят строкой с ценой 0. Считать их
@@ -85,25 +89,45 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
           {data.lessonHistory.map((h) => {
             const { kind, fmt } = lessonType(h.type)
             const absent = h.status === 'absent'
+            // Раскрываем только то, где есть что раскрывать: заметка тренера.
+            // Строка без заметки не должна выглядеть нажимаемой — на разборе
+            // кабинета за это уже отдельно доставалось.
+            const note = (h.notes || '').trim()
+            const open = openId === h.id
             return (
-              <Cell
-                key={h.id}
-                multiline
-                readOnly
-                before={<CellIcon name={absent ? 'clock' : 'check'} tone={absent ? 'red' : 'neutral'} />}
-                subtitle={
-                  [fmt, h.time, absent ? 'занятие не списано' : '', h.notes ? 'тема: ' + h.notes : '']
-                    .filter(Boolean)
-                    .join(' · ') || undefined
-                }
-                // Пилюля осталась ТОЛЬКО у пропуска. «Проведено» — обычное состояние
-                // каждой строки, и значок слева его уже показывает: badge на норме
-                // отнимал место у заголовка (из-за него «Групповое · онлайн» уезжало
-                // на вторую строку) и глушил единственное, что стоит замечать.
-                after={absent ? <span className="pill pill-warn">пропуск</span> : undefined}
-              >
-                {ruDate(h.date)} · {kind}
-              </Cell>
+              <Fragment key={h.id}>
+                <Cell
+                  multiline
+                  readOnly={!note}
+                  onClick={note ? () => setOpenId(open ? null : h.id) : undefined}
+                  before={<CellIcon name={absent ? 'clock' : 'check'} tone={absent ? 'red' : 'neutral'} />}
+                  subtitle={
+                    [fmt, h.time, h.trainerName, absent ? 'занятие не списано' : '']
+                      .filter(Boolean)
+                      .join(' · ') || undefined
+                  }
+                  // Пилюля осталась ТОЛЬКО у пропуска. «Проведено» — обычное состояние
+                  // каждой строки, и значок слева его уже показывает: badge на норме
+                  // отнимал место у заголовка (из-за него «Групповое · онлайн» уезжало
+                  // на вторую строку) и глушил единственное, что стоит замечать.
+                  after={
+                    <span className="les-after">
+                      {absent && <span className="pill pill-warn">пропуск</span>}
+                      {note && <span className={'les-chev' + (open ? ' on' : '')}>⌄</span>}
+                    </span>
+                  }
+                >
+                  {ruDate(h.date)} · {kind}
+                </Cell>
+                {note && open && (
+                  <div className="les-note">
+                    <div className="les-note-cap">Заметка тренера</div>
+                    {/* pre-line сохраняет переносы: тренер пишет списками, а в одну
+                        строку это читалось как сплошная каша */}
+                    <div className="les-note-txt">{note}</div>
+                  </div>
+                )}
+              </Fragment>
             )
           })}
         </Section>

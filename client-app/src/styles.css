@@ -394,6 +394,17 @@ html.app-light .mascot-empty img {
   color: var(--rc-hint);
   margin-top: 3px;
 }
+/* Заметка тренера к ближайшему занятию: «что будет». Отбита линией, чтобы не
+   слипалась с мета-строкой, и с сохранением переносов — тренер пишет списками. */
+.next-note {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--rc-sep);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--rc-text);
+  white-space: pre-line;
+}
 .next-foot {
   display: flex;
   justify-content: flex-end;
@@ -696,6 +707,40 @@ html.app-light .mascot-empty img {
 }
 .grp-act:active {
   transform: scale(0.97);
+}
+
+/* Заметка тренера под занятием в Истории — раскрывается по тапу */
+.les-after {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.les-chev {
+  font-size: 15px;
+  line-height: 1;
+  color: var(--rc-hint);
+  transition: transform 0.15s;
+}
+.les-chev.on {
+  transform: rotate(180deg);
+}
+.les-note {
+  padding: 2px 16px 14px;
+}
+.les-note-cap {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rc-hint);
+  margin-bottom: 5px;
+}
+.les-note-txt {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--rc-text);
+  /* Тренер пишет списками с переносами — в одну строку это каша */
+  white-space: pre-line;
 }
 
 /* Форма записи с другом — блок под строкой занятия */
