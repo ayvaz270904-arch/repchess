@@ -709,6 +709,12 @@ html.app-light .mascot-empty img {
   transform: scale(0.97);
 }
 
+/* «программа ⌄» в подписи группового занятия — подсказка, что строка раскрывается */
+.grp-prog {
+  color: var(--rc-red);
+  white-space: nowrap;
+}
+
 /* Заметка тренера под занятием в Истории — раскрывается по тапу */
 .les-after {
   display: flex;

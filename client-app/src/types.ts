@@ -59,6 +59,9 @@ export interface GroupLesson {
   format: 'online' | 'offline'
   venue?: string
   trainerName?: string
+  // Программа занятия — заметка тренера с групповой карточки. По ней человек
+  // и решает, идти или нет, поэтому показываем прямо в «Записи».
+  notes?: string
   count: number
   max?: number
   joined?: boolean

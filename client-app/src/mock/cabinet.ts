@@ -34,6 +34,7 @@ export const MOCK_CABINET: Cabinet = {
     {
       id: 'g2', date: '01.09.2026', time: '20:00', format: 'offline', venue: 'Пешка на Чистых',
       trainerName: 'Артём', count: 6, max: 8, joined: false, regOpen: true, canJoin: true,
+      notes: 'Элементы стратегии эндшпиля:\n• Централизация короля, легких фигур и ферзя;\n• Убежище и постройка мостов',
     },
     {
       id: 'g3', date: '03.09.2026', time: '12:00', format: 'offline', venue: 'ул. Пушкина, 10',
