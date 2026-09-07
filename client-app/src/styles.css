@@ -709,10 +709,22 @@ html.app-light .mascot-empty img {
   transform: scale(0.97);
 }
 
-/* «программа ⌄» в подписи группового занятия — подсказка, что строка раскрывается */
+/* «Программа занятия ⌄» — отдельной строкой под занятием, во всю ширину.
+   В подписи она обрезалась многоточием: длинное ФИО тренера съедало место. */
 .grp-prog {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 2px 16px 12px;
+  font: inherit;
+  font-size: 12.5px;
   color: var(--rc-red);
-  white-space: nowrap;
+  cursor: pointer;
+}
+.grp-prog:active {
+  transform: scale(0.99);
 }
 
 /* Заметка тренера под занятием в Истории — раскрывается по тапу */

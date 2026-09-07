@@ -310,11 +310,11 @@ function GroupRow({
       <div className="grp-after">
         <span className="grp-joined">{g.myGuest ? '✓ Вы и друг' : '✓ Вы записаны'}</span>
         {canBringGuest && !guestOpen && (
-          <button className="grp-act" onClick={(e) => { e.stopPropagation(); haptic(); setGuestOpen(true) }}>
+          <button className="grp-act" onClick={() => { haptic(); setGuestOpen(true) }}>
             + друг
           </button>
         )}
-        <button className="grp-act" onClick={(e) => { e.stopPropagation(); onLeave(g) }}>
+        <button className="grp-act" onClick={() => onLeave(g)}>
           Отменить
         </button>
       </div>
@@ -333,7 +333,7 @@ function GroupRow({
         {buyUrl && (
           <button
             className="grp-act"
-            onClick={(e) => { e.stopPropagation(); haptic(); track('buy_from_book'); openUrl(buyUrl) }}
+            onClick={() => { haptic(); track('buy_from_book'); openUrl(buyUrl) }}
           >
             Купить пакет
           </button>
@@ -343,11 +343,11 @@ function GroupRow({
   } else {
     after = (
       <div className="grp-after">
-        <Button size="s" onClick={(e) => { e.stopPropagation(); onJoin(g) }}>
+        <Button size="s" onClick={() => onJoin(g)}>
           Записаться
         </Button>
         {canBringGuest && !guestOpen && (
-          <button className="grp-act" onClick={(e) => { e.stopPropagation(); haptic(); setGuestOpen(true) }}>
+          <button className="grp-act" onClick={() => { haptic(); setGuestOpen(true) }}>
             с другом
           </button>
         )}
@@ -362,17 +362,13 @@ function GroupRow({
     <>
       <Cell
         multiline
-        readOnly={!note}
-        // Тапается вся строка, если у занятия есть программа. Кнопки в правой
-        // колонке гасят всплытие сами — иначе «Записаться» заодно раскрывал бы текст.
-        onClick={note ? () => setNoteOpen((v) => !v) : undefined}
+        readOnly
         before={<CellIcon name={iconName} />}
         subtitle={
           <>
             {g.format === 'online' ? 'онлайн' : 'офлайн'}
             {g.trainerName ? ' · ' + g.trainerName : ''}
             {scarce && <span className="grp-left"> · осталось {left} {plural(left, 'место', 'места', 'мест')}</span>}
-            {note && <span className="grp-prog"> · программа {noteOpen ? '⌃' : '⌄'}</span>}
           </>
         }
         after={after}
@@ -380,9 +376,16 @@ function GroupRow({
         <span className="grp-time">{g.time || '—'}</span>
         {g.venue ? ' · ' + g.venue : ''}
       </Cell>
+      {/* Отдельной строкой, а не в подписи: длинное ФИО тренера съедало строку
+          и «программа» обрезалась многоточием. Здесь полная ширина и своя
+          область нажатия — и не нужно гасить всплытие с кнопок записи. */}
+      {note && (
+        <button className="grp-prog" onClick={() => { haptic(); setNoteOpen((v) => !v) }}>
+          {noteOpen ? 'Свернуть программу ⌃' : 'Программа занятия ⌄'}
+        </button>
+      )}
       {note && noteOpen && (
         <div className="les-note">
-          <div className="les-note-cap">Программа занятия</div>
           <div className="les-note-txt">{note}</div>
         </div>
       )}
