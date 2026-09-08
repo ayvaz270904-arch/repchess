@@ -148,6 +148,11 @@ export interface Cabinet {
   profile?: Profile
   email?: string
   emailPending?: boolean
+  // Номер, по которому кабинет ищет оплаты, и номер из заявки на его смену,
+  // ждущей подтверждения администратора (см. claimPhone в bot.gs). Оба — уже
+  // в человеческом виде «+7 999 123-45-67».
+  phone?: string
+  phonePending?: string
   refLink?: string
   buyLinks: [string, string][]
   promoAvailable?: boolean

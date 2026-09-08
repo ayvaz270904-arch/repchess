@@ -51,6 +51,8 @@ export interface RawCabinet {
   } | null
   promoAvailable?: boolean
   emailPending?: boolean
+  phone?: string
+  phonePending?: string
   refLink?: string
 }
 
@@ -144,6 +146,8 @@ export function adapt(raw: RawCabinet): Cabinet {
       : undefined,
     email: raw.email,
     emailPending: !!raw.emailPending,
+    phone: raw.phone || '',
+    phonePending: raw.phonePending || '',
     refLink: raw.refLink,
     buyLinks: BUY_LINKS,
     promoAvailable: !!raw.promoAvailable,

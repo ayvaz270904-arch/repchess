@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { List, Section, Input, Button, Caption, SegmentedControl } from '@telegram-apps/telegram-ui'
 import type { Cabinet } from '../types'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
-import { saveProfile, userPhoto, safeAction } from '../data'
+import { saveProfile, claimPhone, userPhoto, safeAction } from '../data'
 import { errText } from '../errors'
 import { POLICY_URL, OFFER_URL, HELPER_URL } from '../config'
 import mascot from '../assets/mascot.svg'
@@ -32,6 +32,23 @@ function validBdate(s: string): boolean {
 }
 function validEmail(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim())
+}
+
+// Маска российского номера: цифры → +7 999 123-45-67. Ведущую 8 переводим в 7,
+// чтобы «8 912…» и «+7 912…» давали один и тот же номер (бот всё равно сравнивает
+// последние 10 цифр, но человек должен видеть привычный вид).
+function maskPhone(v: string): string {
+  let d = v.replace(/\D/g, '')
+  if (!d) return ''
+  if (d[0] === '8') d = '7' + d.slice(1)
+  if (d[0] !== '7') d = '7' + d
+  const t = d.slice(1, 11)
+  if (!t.length) return '' // осталась одна «семёрка» — поле стирают, не залипаем на «+7»
+  let s = '+7 ' + t.slice(0, 3)
+  if (t.length > 3) s += ' ' + t.slice(3, 6)
+  if (t.length > 6) s += '-' + t.slice(6, 8)
+  if (t.length > 8) s += '-' + t.slice(8, 10)
+  return s
 }
 
 function Field({
@@ -73,7 +90,40 @@ export function ProfileScreen({
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // «Номер покупок»: оплаты с сайта ищутся по телефону, а кабинет привязан к номеру
+  // Telegram-аккаунта. Если они разные — кабинет пуст, и человек должен иметь возможность
+  // сказать об этом сам. Меняет номер не он, а администратор по заявке (claimPhone).
+  const [phoneOpen, setPhoneOpen] = useState(false)
+  const [phone, setPhone] = useState('')
+  const [phoneMsg, setPhoneMsg] = useState('')
+  const [phoneBusy, setPhoneBusy] = useState(false)
+  const [phoneSent, setPhoneSent] = useState('') // до перезагрузки кабинета помним локально
+  const phonePending = phoneSent || data.phonePending || ''
+
   const emailLocked = !!p.email // любая сохранённая почта — менять только через админа
+
+  async function sendPhone() {
+    if (phone.replace(/\D/g, '').length < 11) {
+      setPhoneMsg('⚠️ Введите номер полностью')
+      return
+    }
+    haptic()
+    setPhoneBusy(true)
+    setPhoneMsg('Проверяю номер…')
+    const r = await safeAction(claimPhone(phone))
+    setPhoneBusy(false)
+    // Успехом считаем ТОЛЬКО явное pending. Бот, задеплоенный до этой правки, не знает
+    // action=claimPhone и молча отдаёт обычный кабинет с ok:true — по одному ok мы бы
+    // показали «заявка отправлена», хотя не отправлено ничего.
+    if (r.ok && 'pending' in r && r.pending) {
+      setPhoneSent(r.phone || phone)
+      setPhoneOpen(false)
+      setPhone('')
+      setPhoneMsg('')
+    } else {
+      setPhoneMsg('⚠️ ' + errText(('error' in r && r.error) || 'server'))
+    }
+  }
 
   async function save() {
     if (!fio.trim()) {
@@ -218,6 +268,61 @@ export function ProfileScreen({
           <Input value={level} onChange={(e) => setLevel(e.currentTarget.value)} placeholder="1400 lichess / новичок" />
         </Field>
       </Section>
+
+      {/* Номер, по которому кабинет ищет оплаты. Показываем всем: человек должен видеть,
+          по какому номеру его ищут, — иначе пустой баланс выглядит как поломка. */}
+      {!gate && (
+        <Section footer="Оплаты с сайта кабинет ищет по этому номеру. Если оформляли на другой — укажите его: администратор сверит и привяжет покупки.">
+          <div className="field">
+            <div className="field-lbl">Номер для поиска покупок</div>
+            {phonePending ? (
+              <div className="phone-wait">
+                ⏳ Проверяем номер <b>{phonePending}</b> — администратор подтвердит, и покупки появятся
+                в кабинете.
+              </div>
+            ) : phoneOpen ? (
+              <>
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(maskPhone(e.currentTarget.value))}
+                  placeholder="+7 912 345-67-89"
+                />
+                <div className="phone-acts">
+                  <Button size="m" loading={phoneBusy} onClick={sendPhone}>
+                    Отправить на проверку
+                  </Button>
+                  <button
+                    className="phone-cancel"
+                    onClick={() => {
+                      setPhoneOpen(false)
+                      setPhone('')
+                      setPhoneMsg('')
+                    }}
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="phone-row">
+                <span className="phone-val">{data.phone || '—'}</span>
+                <button
+                  className="phone-edit"
+                  onClick={() => {
+                    haptic()
+                    setPhoneOpen(true)
+                  }}
+                >
+                  Другой номер
+                </button>
+              </div>
+            )}
+            {phoneMsg && <div className="phone-msg">{phoneMsg}</div>}
+          </div>
+        </Section>
+      )}
 
       <div className="screen-foot">
         <Button stretched size="l" loading={busy} onClick={save}>

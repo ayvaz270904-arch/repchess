@@ -107,6 +107,8 @@ export const MOCK_CABINET: Cabinet = {
   },
   email: 'sasha@mail.ru',
   emailPending: false,
+  phone: '+7 999 888-77-66',
+  phonePending: '',
   refLink: 'https://t.me/RepChessEducation_bot?start=ref_6666696537',
   buyLinks: [['Выбрать пакет на сайте', 'https://edu.repchess.ru']],
   promoAvailable: false,

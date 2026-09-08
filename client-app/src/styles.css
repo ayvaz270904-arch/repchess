@@ -1358,3 +1358,67 @@ html.app-light .mascot-empty img {
   padding-left: 0;
   padding-right: 0;
 }
+
+/* ── Номер покупок (профиль) ──
+   Оплаты с сайта кабинет ищет по телефону, а привязка идёт по номеру Telegram.
+   Если они разные, баланс пуст — поэтому номер видно всегда, а рядом честная
+   возможность сказать «покупал с другого». Меняет номер администратор по заявке. */
+.phone-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+}
+.phone-val {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--rc-text);
+  letter-spacing: 0.01em;
+}
+.phone-edit {
+  flex: none;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: var(--rc-fill);
+  border: 1px solid var(--rc-hairline-strong);
+  color: var(--rc-text);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.phone-edit:active {
+  background: var(--rc-chip-bg);
+}
+.phone-acts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+.phone-cancel {
+  padding: 8px 4px;
+  background: none;
+  border: none;
+  color: var(--rc-hint);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.phone-wait {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--rc-text);
+  background: var(--rc-fill);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.phone-msg {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--rc-red);
+  padding-left: 2px;
+}

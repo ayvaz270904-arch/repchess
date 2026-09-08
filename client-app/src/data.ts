@@ -20,6 +20,7 @@ export class ApiError extends Error {
 export type ActionResult = { ok: true } | { ok: false; error?: string; need?: string }
 export type SaveResult = { ok: true; emailPending?: boolean; promoGranted?: boolean } | { ok: false; error?: string }
 export type CertResult = { ok: true; label?: string } | { ok: false; error?: string }
+export type ClaimResult = { ok: true; pending?: boolean; phone?: string } | { ok: false; error?: string }
 
 function rawInitData(): string {
   try {
@@ -241,6 +242,16 @@ export async function saveProfile(p: Profile): Promise<SaveResult> {
     '&city=' + encodeURIComponent(p.city || '') +
     '&level=' + encodeURIComponent(p.level || '')
   return api(q)
+}
+
+// Заявка на смену «номера покупок»: сам номер ничего не меняет до подтверждения
+// администратора — бот только проверяет, что оплаты на нём есть, и шлёт карточку.
+export async function claimPhone(phone: string): Promise<ClaimResult> {
+  if (DEV) {
+    await delay(500)
+    return { ok: true, pending: true, phone: phone }
+  }
+  return api('action=claimPhone&phone=' + encodeURIComponent(phone))
 }
 
 export async function redeemCert(code: string): Promise<CertResult> {
