@@ -351,11 +351,7 @@ h2 em{font-style:normal;color:var(--red)}
 .bar button:hover{border-color:var(--ink)}
 .bar button:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 .count{font-variant-numeric:tabular-nums}
-.clock{margin-left:auto;display:flex;align-items:center;gap:calc(var(--u)*1)}
-.clock .t{font-size:calc(var(--u)*2);color:var(--ink);font-variant-numeric:tabular-nums;
-  letter-spacing:.04em}
-.clock .t.low{color:var(--red)}
-.clock .t.run{font-weight:500}
+#fs{margin-left:auto}
 .progress{position:fixed;top:0;left:0;height:calc(var(--u)*.35);background:var(--red);
   width:0;transition:width .25s ease;z-index:6}
 .notes{position:fixed;left:0;right:0;bottom:calc(var(--u)*4);z-index:4;
@@ -645,13 +641,7 @@ h2 em{font-style:normal;color:var(--red)}
   <button id="next" aria-label="Следующий слайд">→</button>
   <span class="count" id="count">01 / 13</span>
   <span id="label">Титул</span>
-  <button id="notes-btn">Заметки · N</button>
   <button id="fs">Во весь экран · F</button>
-  <span class="clock">
-    <span class="t" id="clock">15:00</span>
-    <button id="clock-btn">Пуск · T</button>
-    <button id="clock-reset">Сброс</button>
-  </span>
 </div>
 
 <script>/* qrcodejs 1.0.0, MIT */
@@ -716,7 +706,6 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
     show(e.clientX < window.innerWidth * 0.15 ? i-1 : i+1);
   });
   document.getElementById('prev').addEventListener('click', function(){ show(i-1); });
-  document.getElementById('notes-btn').addEventListener('click', toggleNotes);
   document.getElementById('fs').addEventListener('click', fs);
 
   function toggleNotes(){ notesEl.hidden = !notesEl.hidden; }
@@ -733,28 +722,6 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
     else if (k === 'End') { show(slides.length-1); }
     else if (k === 'n' || k === 'N' || k === 'т' || k === 'Т') { toggleNotes(); }
     else if (k === 'f' || k === 'F' || k === 'а' || k === 'А') { fs(); }
-    else if (k === 't' || k === 'T' || k === 'е' || k === 'Е') { toggleClock(); }
-  });
-
-  /* chess-clock style talk timer: 15:00 counting down */
-  var TOTAL = 15 * 60, left = TOTAL, timer = null;
-  var clockEl = document.getElementById('clock');
-  var clockBtn = document.getElementById('clock-btn');
-  function paint(){
-    var m = Math.floor(Math.abs(left) / 60), s = Math.abs(left) % 60;
-    clockEl.textContent = (left < 0 ? '−' : '') + pad(m) + ':' + pad(s);
-    clockEl.classList.toggle('low', left <= 120);
-    clockEl.classList.toggle('run', timer !== null);
-  }
-  function toggleClock(){
-    if (timer) { clearInterval(timer); timer = null; clockBtn.textContent = 'Пуск · T'; }
-    else { timer = setInterval(function(){ left--; paint(); }, 1000); clockBtn.textContent = 'Пауза · T'; }
-    paint();
-  }
-  clockBtn.addEventListener('click', toggleClock);
-  document.getElementById('clock-reset').addEventListener('click', function(){
-    if (timer) { clearInterval(timer); timer = null; clockBtn.textContent = 'Пуск · T'; }
-    left = TOTAL; paint();
   });
 
   /* QR to the site; if the library is unavailable the caption still carries the URL */
@@ -768,7 +735,6 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   } catch (err) { /* caption below the block already names the address */ }
 
   show(0);
-  paint();
   window.addEventListener('resize', function(){ fit(slides[i]); });
   if (document.fonts && document.fonts.ready) { document.fonts.ready.then(function(){ fit(slides[i]); }); }
 })();
