@@ -542,6 +542,21 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
       <!-- Group mismatch / pending approval alerts -->
       <div id="admin-group-mismatches"></div>
 
+      <!-- Версия приложения. Нужна потому, что «обновление не доехало» невозможно отличить
+           от «обновление доехало, но не помогло»: тренерка открывается через VPN, а
+           service worker при неудачном запросе молча отдаёт сохранённую копию страницы —
+           внешне это выглядит как рабочее приложение, просто старое. -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><span class="card-title">📦 Версия</span><span class="dim" id="app-version-badge" style="font-size:.8rem"></span></div>
+        <div class="card-body">
+          <div class="dim" style="font-size:.78rem;margin-bottom:10px">
+            Сверяет версию, открытую у вас, с той, что лежит на сервере. Если связи нет —
+            значит вы сейчас смотрите сохранённую копию, и свежие правки до вас не дошли.
+          </div>
+          <button class="btn-sm" id="app-update-btn" onclick="checkAppUpdate(this)">Проверить обновление</button>
+        </div>
+      </div>
+
       <!-- Разовая починка данных: занятия, сохранённые с пустым именем ученика.
            Появились 07.09.2026, когда в Таблице 2 пропала колонка «Name» и база
            учеников приехала без имён — занятия тех дней записали пустое ФИО. -->
@@ -1350,9 +1365,39 @@ function _closeModal(id) {
 // ══════════════════════════════════════════════
 let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
-// Метка сборки: видно в консоли, чтобы всегда понимать, какой код реально загружен
-const APP_VERSION = '08.20-badgefix';
+// Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
+// какой код реально загружен. Обновлять вместе с заметными правками тренерки.
+const APP_VERSION = '09.09-rates';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
+try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
+
+// Сверка с сервером. Service worker при неудачном запросе отдаёт страницу из кэша
+// (см. sw.js) — молча, поэтому «старое приложение» и «новое приложение» выглядят
+// одинаково. Тут это различается явно: не достучались — значит смотрим копию.
+async function checkAppUpdate(btn) {
+  const was = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Проверяю…';
+  try {
+    const res = await fetch('./trainer.html?v=' + Date.now(), { cache: 'no-store' });
+    const m = /APP_VERSION = '([^']+)'/.exec(await res.text());
+    const live = m ? m[1] : '';
+    if (!live) toast('Не смог прочитать версию на сервере', 'err');
+    else if (live === APP_VERSION) toast('У вас последняя версия: ' + APP_VERSION, 'ok');
+    else if (confirm('На сервере версия ' + live + ', у вас ' + APP_VERSION + '.\n\n'
+      + 'Обновить сейчас? Страница перезагрузится.')) {
+      try { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); } catch (e) {}
+      try {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.update()));
+      } catch (e) {}
+      location.reload();
+      return;
+    }
+  } catch (e) {
+    toast('Нет связи с сервером — вы смотрите сохранённую копию, правки не дошли', 'err');
+  }
+  btn.disabled = false; btn.textContent = was;
+}
 
 let students = [];          // from  CSV
 let _nickByEmail = {}, _nickByPhone = {};   // ник ТГ из «Лиды»/«Профили» для поиска учеников по нику
