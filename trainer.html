@@ -234,6 +234,11 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .rem-stat span,.stat-cell span{font-size:.64rem;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
 .si-sec{font-size:.7rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 7px;padding-top:12px;border-top:1px solid color-mix(in srgb, var(--border) 55%, transparent);}
 .si-sec:first-of-type{border-top:none;padding-top:0;margin-top:4px;}
+/* Действия у строки истории ставок — раскрываются по тапу по самой строке */
+.rate-acts{gap:8px;padding:0 0 8px;}
+.rate-act{padding:7px 12px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font:inherit;font-size:.76rem;font-weight:600;cursor:pointer;}
+.rate-act:active{background:var(--border);}
+.rate-del{color:var(--red);border-color:color-mix(in srgb, var(--red) 30%, transparent);background:color-mix(in srgb, var(--red) 10%, transparent);}
 .remind-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent);}
 .remind-item:last-child{border-bottom:none;}
 .copy-btn{background:none;border:1px solid var(--border);border-radius:8px;color:var(--text2);font-size:.72rem;padding:4px 8px;cursor:pointer;white-space:nowrap;}
@@ -4443,6 +4448,34 @@ function _rateAt(rd, dateStr, key) {
   return cur[key] || 0;
 }
 
+// Значения ставок сравниваем ЧИСЛАМИ, а даты — СТРОКАМИ, приводя и то и другое явно:
+// в старых записях цифры могли лечь строками ('1500' вместо 1500) или отсутствовать.
+// На экране это одно и то же число, а строгое === считало такие записи разными.
+function _rateNum(v) { return Number(v) || 0; }
+function _rateFrom(e) { return String((e && e.from) || ''); }
+function _rateNorm(e) {
+  return { from: _rateFrom(e), indivOff: _rateNum(e.indivOff), indivOn: _rateNum(e.indivOn),
+           groupOff: _rateNum(e.groupOff), groupOn: _rateNum(e.groupOn) };
+}
+function _rateSame(a, b) {
+  return !!a && !!b && _rateNum(a.indivOff) === _rateNum(b.indivOff) && _rateNum(a.indivOn) === _rateNum(b.indivOn)
+                    && _rateNum(a.groupOff) === _rateNum(b.groupOff) && _rateNum(a.groupOn) === _rateNum(b.groupOn);
+}
+function _rateFmtDate(d) {
+  return d === '2000-01-01' ? 'изначально'
+    : new Date(d + 'T12:00:00').toLocaleDateString('ru-RU', { day:'numeric', month:'short', year:'numeric' });
+}
+function _rateVals(e) {
+  return 'инд ' + _rateNum(e.indivOff) + '/' + _rateNum(e.indivOn)
+     + ' · групп ' + _rateNum(e.groupOff) + '/' + _rateNum(e.groupOn);
+}
+// День перед датой — чтобы показать, каким числом заканчивается период ставки
+function _ratePrevDay(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() - 1);
+  return _rateFmtDate(localDateStr(d));
+}
+
 // График: выручка (по датам оплат) против выплат тренерам (по датам занятий), 12 месяцев.
 // Считается по всем данным, а не по выбранному периоду — чтобы видеть динамику и сезонность.
 let _finChart = null;
@@ -4745,8 +4778,6 @@ async function _renderRateHistory(tid) {
     const doc = await db.collection('trainerRates').doc(tid).get();
     const h = _rateHistory(doc.exists ? doc.data() : null);
     if (h.length < 1) return;
-    const fmt = d => d === '2000-01-01' ? 'изначально'
-      : new Date(d + 'T12:00:00').toLocaleDateString('ru-RU', { day:'numeric', month:'short', year:'numeric' });
     // ДЕЙСТВУЮЩАЯ = последняя запись с датой не позже сегодняшней — ровно так её выбирает
     // _rateAt, когда считает зарплату. Раньше «· сейчас» доставалось просто самой поздней
     // записи в списке: ставка, назначенная будущим числом, тут же объявлялась действующей,
@@ -4754,23 +4785,104 @@ async function _renderRateHistory(tid) {
     // ради которого поле «действует с» и сделано.
     const today = localDateStr(new Date());
     let actIdx = -1;
-    h.forEach((e, i) => { if ((e.from || '') <= today) actIdx = i; });
+    h.forEach((e, i) => { if (_rateFrom(e) <= today) actIdx = i; });
+    // Действия прячем под тап по строке: список читают чаще, чем правят, а «удалить»
+    // не должно ловиться случайным касанием в узком модале.
     el.innerHTML = `
       <div class="si-sec">История ставок</div>
       ${h.map((e, oi) => ({ e, oi })).reverse().map(({ e, oi }) => {
         const active = oi === actIdx, planned = oi > actIdx;
         const mark = active  ? ' <b style="color:var(--green)">· сейчас</b>'
                    : planned ? ' <b style="color:var(--gold)">· запланирована</b>' : '';
+        const from = _rateFrom(e);
         return `
-        <div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:.8rem;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
-          <span style="color:${active ? 'var(--text)' : 'var(--text2)'}">${fmt(e.from)}${mark}</span>
-          <span style="color:var(--text2);font-variant-numeric:tabular-nums">
-            инд ${e.indivOff||0}/${e.indivOn||0} · групп ${e.groupOff||0}/${e.groupOn||0}
-          </span>
+        <div style="border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
+          <div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:.8rem;cursor:pointer" onclick="_rateRowToggle(this)">
+            <span style="color:${active ? 'var(--text)' : 'var(--text2)'}">${_rateFmtDate(from)}${mark}</span>
+            <span style="color:var(--text2);font-variant-numeric:tabular-nums">${_rateVals(e)}</span>
+          </div>
+          <div class="rate-acts" style="display:none">
+            ${oi < h.length - 1 ? `<button class="rate-act" onclick="event.stopPropagation();_rateMakeActive('${from}')">Сделать активной</button>` : ''}
+            <button class="rate-act rate-del" onclick="event.stopPropagation();_rateDelete('${from}')">Удалить</button>
+          </div>
         </div>`;
       }).join('')}
-      <div style="font-size:.68rem;color:var(--text2);margin-top:6px">офлайн/онлайн, ₽ за занятие</div>`;
+      <div style="font-size:.68rem;color:var(--text2);margin-top:6px">офлайн/онлайн, ₽ за занятие · нажмите на строку, чтобы её изменить</div>`;
   } catch(e) {}
+}
+
+// Раскрыть/свернуть действия у строки истории (открыта всегда одна)
+function _rateRowToggle(row) {
+  const acts = row.parentNode.querySelector('.rate-acts');
+  if (!acts) return;
+  const open = acts.style.display !== 'none';
+  row.closest('#rate-history-wrap').querySelectorAll('.rate-acts').forEach(a => { a.style.display = 'none'; });
+  acts.style.display = open ? 'none' : 'flex';
+}
+
+// Общая запись истории: плоские поля = САМАЯ ПОЗДНЯЯ ставка, поля формы подтягиваем следом,
+// чтобы после правки списка вверху не осталось цифр от прежнего состояния.
+async function _rateSaveHistory(list) {
+  const clean = list.map(_rateNorm);
+  const last = clean[clean.length - 1];
+  await db.collection('trainerRates').doc(_rateTrainerId).set({
+    history: clean,
+    rateIndivOff: last.indivOff, rateIndivOn: last.indivOn,
+    rateGroupOff: last.groupOff, rateGroupOn: last.groupOn
+  }, { merge: true });
+  document.getElementById('rate-indiv-off').value = last.indivOff || '';
+  document.getElementById('rate-indiv-on').value  = last.indivOn  || '';
+  document.getElementById('rate-group-off').value = last.groupOff || '';
+  document.getElementById('rate-group-on').value  = last.groupOn  || '';
+  await _renderRateHistory(_rateTrainerId);
+  loadFinance();
+}
+
+// «Сделать активной»: выбранная ставка действует С ЕЁ СОБСТВЕННОЙ ДАТЫ и дальше, поэтому
+// всё, что стоит после неё, перестаёт применяться и удаляется. Это меняет уже посчитанные
+// выплаты за перекрытый период — показываем, что именно исчезнет, ДО нажатия.
+async function _rateMakeActive(from) {
+  const doc = await db.collection('trainerRates').doc(_rateTrainerId).get();
+  const h = _rateHistory(doc.exists ? doc.data() : null);
+  const i = h.findIndex(e => _rateFrom(e) === from);
+  if (i < 0 || i === h.length - 1) return;
+  const later = h.slice(i + 1);
+  const ok = confirm(
+    'Сделать действующей ставку с ' + _rateFmtDate(from) + '?\n\n'
+    + _rateVals(h[i]) + '\n\n'
+    + 'С этой даты и дальше всё будет считаться по ней.\n\n'
+    + 'Будут удалены записи: ' + later.map(e => _rateFmtDate(_rateFrom(e))).join(', ') + '\n'
+    + 'Занятия с ' + _rateFmtDate(from) + ' пересчитаются по выбранной ставке.');
+  if (!ok) return;
+  try {
+    await _rateSaveHistory(h.slice(0, i + 1));
+    toast('Действует ставка с ' + _rateFmtDate(from), 'ok');
+  } catch (e) { toast('Ошибка: ' + e.message, 'err'); }
+}
+
+// Удаление записи: период, который она покрывала, отходит соседней ставке — предыдущей,
+// а если удаляем самую раннюю, то следующей (_rateAt для дат до первой берёт первую).
+async function _rateDelete(from) {
+  const doc = await db.collection('trainerRates').doc(_rateTrainerId).get();
+  const h = _rateHistory(doc.exists ? doc.data() : null);
+  const i = h.findIndex(e => _rateFrom(e) === from);
+  if (i < 0) return;
+  if (h.length === 1) {
+    toast('Это единственная ставка — её нельзя удалить, поменяйте цифры', 'err');
+    return;
+  }
+  const next = h[i + 1], repl = h[i - 1] || h[i + 1];
+  const ok = confirm(
+    'Удалить ставку с ' + _rateFmtDate(from) + '?\n\n'
+    + _rateVals(h[i]) + '\n\n'
+    + 'Она отвечает за период ' + _rateFmtDate(from) + ' — ' + (next ? _ratePrevDay(_rateFrom(next)) : 'сейчас') + '\n'
+    + 'Вместо неё встанет: ' + _rateVals(repl) + ' (с ' + _rateFmtDate(_rateFrom(repl)) + ')\n\n'
+    + 'Занятия тех дней будут пересчитаны по этой ставке.');
+  if (!ok) return;
+  try {
+    await _rateSaveHistory(h.filter((e, j) => j !== i));
+    toast('Ставка удалена, выплаты пересчитаны', 'ok');
+  } catch (e) { toast('Ошибка: ' + e.message, 'err'); }
 }
 
 async function saveRate() {
@@ -4785,16 +4897,7 @@ async function saveRate() {
     const from = document.getElementById('rate-from').value || localDateStr(new Date());
     const doc = await db.collection('trainerRates').doc(_rateTrainerId).get();
     const prev = _rateHistory(doc.exists ? doc.data() : null);
-    // Значения сравниваем ЧИСЛАМИ, а даты — СТРОКАМИ, приводя и то и другое явно.
-    // В старых записях цифры могли лечь строками ('1500' вместо 1500) или отсутствовать
-    // вовсе: на экране это одно и то же число, а строгое === считало их разными — из-за
-    // этого дубли не схлопывались, хотя выглядели одинаково.
-    const n = v => Number(v) || 0;
-    const df = e => String((e && e.from) || '');
-    const norm = e => ({ from: df(e), indivOff: n(e.indivOff), indivOn: n(e.indivOn), groupOff: n(e.groupOff), groupOn: n(e.groupOn) });
-    const same = (a, b) => !!a && !!b && n(a.indivOff) === n(b.indivOff) && n(a.indivOn) === n(b.indivOn)
-                                      && n(a.groupOff) === n(b.groupOff) && n(a.groupOn) === n(b.groupOn);
-
+    const same = _rateSame, df = _rateFrom;
     const hist = prev.filter(e => df(e) !== from);      // правка той же даты — заменяем запись
     const entry = { from, indivOff: rateIndivOff, indivOn: rateIndivOn, groupOff: rateGroupOff, groupOn: rateGroupOn };
 
@@ -4812,7 +4915,7 @@ async function saveRate() {
     // Выплаты от этого не меняются: у схлопнутых строк цифры и так совпадают.
     // Заодно приводим записи к числам — чтобы в документе не оставалось строк из старых версий.
     const collapsed = [];
-    hist.forEach(e => { if (!same(e, collapsed[collapsed.length - 1])) collapsed.push(norm(e)); });
+    hist.forEach(e => { if (!same(e, collapsed[collapsed.length - 1])) collapsed.push(_rateNorm(e)); });
     const removed = hist.length - collapsed.length;
 
     const last = collapsed[collapsed.length - 1];       // плоские поля = САМАЯ ПОЗДНЯЯ ставка
