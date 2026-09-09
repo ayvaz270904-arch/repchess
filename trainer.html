@@ -4784,25 +4784,34 @@ async function saveRate() {
     const from = document.getElementById('rate-from').value || localDateStr(new Date());
     const doc = await db.collection('trainerRates').doc(_rateTrainerId).get();
     const prev = _rateHistory(doc.exists ? doc.data() : null);
-    const hist = prev.filter(e => e.from !== from);     // правка той же даты — заменяем запись
+    // Значения сравниваем ЧИСЛАМИ, а даты — СТРОКАМИ, приводя и то и другое явно.
+    // В старых записях цифры могли лечь строками ('1500' вместо 1500) или отсутствовать
+    // вовсе: на экране это одно и то же число, а строгое === считало их разными — из-за
+    // этого дубли не схлопывались, хотя выглядели одинаково.
+    const n = v => Number(v) || 0;
+    const df = e => String((e && e.from) || '');
+    const norm = e => ({ from: df(e), indivOff: n(e.indivOff), indivOn: n(e.indivOn), groupOff: n(e.groupOff), groupOn: n(e.groupOn) });
+    const same = (a, b) => !!a && !!b && n(a.indivOff) === n(b.indivOff) && n(a.indivOn) === n(b.indivOn)
+                                      && n(a.groupOff) === n(b.groupOff) && n(a.groupOn) === n(b.groupOn);
+
+    const hist = prev.filter(e => df(e) !== from);      // правка той же даты — заменяем запись
     const entry = { from, indivOff: rateIndivOff, indivOn: rateIndivOn, groupOff: rateGroupOff, groupOn: rateGroupOn };
-    const same = (a, b) => !!a && !!b && a.indivOff === b.indivOff && a.indivOn === b.indivOn
-                                      && a.groupOff === b.groupOff && a.groupOn === b.groupOn;
 
     // Запись в истории имеет смысл, только если она что-то МЕНЯЕТ. Раньше строка заводилась
     // при каждом сохранении, а сверка шла лишь по дате — сохранил те же цифры другим числом,
     // и в истории лёг дубль (так набежали три одинаковые строки подряд). Сравниваем с той
     // ставкой, что действует на выбранную дату: совпало — новую запись не заводим.
     let before = null;
-    hist.forEach(e => { if (e.from <= from) before = e; });   // hist отсортирована по возрастанию
+    hist.forEach(e => { if (df(e) <= from) before = e; });   // hist отсортирована по возрастанию
     const added = !same(entry, before);
     if (added) hist.push(entry);
-    hist.sort((a, b) => a.from < b.from ? -1 : 1);
+    hist.sort((a, b) => df(a) < df(b) ? -1 : 1);
 
     // И схлопываем подряд идущие одинаковые записи — чистим дубли, накопленные до этой правки.
     // Выплаты от этого не меняются: у схлопнутых строк цифры и так совпадают.
+    // Заодно приводим записи к числам — чтобы в документе не оставалось строк из старых версий.
     const collapsed = [];
-    hist.forEach(e => { if (!same(e, collapsed[collapsed.length - 1])) collapsed.push(e); });
+    hist.forEach(e => { if (!same(e, collapsed[collapsed.length - 1])) collapsed.push(norm(e)); });
     const removed = hist.length - collapsed.length;
 
     const last = collapsed[collapsed.length - 1];       // плоские поля = САМАЯ ПОЗДНЯЯ ставка
