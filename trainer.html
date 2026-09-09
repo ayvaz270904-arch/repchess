@@ -1061,9 +1061,9 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
       </div>
       <div class="form-row">
-        <div class="form-label">Действует с</div>
+        <div class="form-label">Новая ставка действует с</div>
         <input class="form-inp" id="rate-from" type="date">
-        <div style="font-size:.72rem;color:var(--text2);margin-top:6px">Занятия до этой даты останутся оплачены по прежней ставке. Прошлые ставки сохраняются.</div>
+        <div style="font-size:.72rem;color:var(--text2);margin-top:6px">Это поле ввода: дата подставлена сегодняшняя, поменяйте её, если ставка вступает в силу позже. Занятия до этой даты останутся оплачены по прежней ставке — какая действует сейчас, видно ниже.</div>
       </div>
       <div id="rate-history-wrap"></div>
     </div>
@@ -4747,15 +4747,28 @@ async function _renderRateHistory(tid) {
     if (h.length < 1) return;
     const fmt = d => d === '2000-01-01' ? 'изначально'
       : new Date(d + 'T12:00:00').toLocaleDateString('ru-RU', { day:'numeric', month:'short', year:'numeric' });
+    // ДЕЙСТВУЮЩАЯ = последняя запись с датой не позже сегодняшней — ровно так её выбирает
+    // _rateAt, когда считает зарплату. Раньше «· сейчас» доставалось просто самой поздней
+    // записи в списке: ставка, назначенная будущим числом, тут же объявлялась действующей,
+    // хотя занятия до её даты оплачивались по прежней. Метка врала именно в том случае,
+    // ради которого поле «действует с» и сделано.
+    const today = localDateStr(new Date());
+    let actIdx = -1;
+    h.forEach((e, i) => { if ((e.from || '') <= today) actIdx = i; });
     el.innerHTML = `
       <div class="si-sec">История ставок</div>
-      ${h.slice().reverse().map((e, i) => `
+      ${h.map((e, oi) => ({ e, oi })).reverse().map(({ e, oi }) => {
+        const active = oi === actIdx, planned = oi > actIdx;
+        const mark = active  ? ' <b style="color:var(--green)">· сейчас</b>'
+                   : planned ? ' <b style="color:var(--gold)">· запланирована</b>' : '';
+        return `
         <div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:.8rem;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
-          <span style="color:${i === 0 ? 'var(--text)' : 'var(--text2)'}">${fmt(e.from)}${i === 0 ? ' <b style="color:var(--green)">· сейчас</b>' : ''}</span>
+          <span style="color:${active ? 'var(--text)' : 'var(--text2)'}">${fmt(e.from)}${mark}</span>
           <span style="color:var(--text2);font-variant-numeric:tabular-nums">
             инд ${e.indivOff||0}/${e.indivOn||0} · групп ${e.groupOff||0}/${e.groupOn||0}
           </span>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
       <div style="font-size:.68rem;color:var(--text2);margin-top:6px">офлайн/онлайн, ₽ за занятие</div>`;
   } catch(e) {}
 }
@@ -4770,18 +4783,38 @@ async function saveRate() {
   try {
     const from = document.getElementById('rate-from').value || localDateStr(new Date());
     const doc = await db.collection('trainerRates').doc(_rateTrainerId).get();
-    const hist = _rateHistory(doc.exists ? doc.data() : null)
-      .filter(e => e.from !== from);                    // правка той же даты — заменяем запись
-    hist.push({ from, indivOff: rateIndivOff, indivOn: rateIndivOn, groupOff: rateGroupOff, groupOn: rateGroupOn });
+    const prev = _rateHistory(doc.exists ? doc.data() : null);
+    const hist = prev.filter(e => e.from !== from);     // правка той же даты — заменяем запись
+    const entry = { from, indivOff: rateIndivOff, indivOn: rateIndivOn, groupOff: rateGroupOff, groupOn: rateGroupOn };
+    const same = (a, b) => !!a && !!b && a.indivOff === b.indivOff && a.indivOn === b.indivOn
+                                      && a.groupOff === b.groupOff && a.groupOn === b.groupOn;
+
+    // Запись в истории имеет смысл, только если она что-то МЕНЯЕТ. Раньше строка заводилась
+    // при каждом сохранении, а сверка шла лишь по дате — сохранил те же цифры другим числом,
+    // и в истории лёг дубль (так набежали три одинаковые строки подряд). Сравниваем с той
+    // ставкой, что действует на выбранную дату: совпало — новую запись не заводим.
+    let before = null;
+    hist.forEach(e => { if (e.from <= from) before = e; });   // hist отсортирована по возрастанию
+    const added = !same(entry, before);
+    if (added) hist.push(entry);
     hist.sort((a, b) => a.from < b.from ? -1 : 1);
-    const last = hist[hist.length - 1];                 // плоские поля = САМАЯ ПОЗДНЯЯ ставка
+
+    // И схлопываем подряд идущие одинаковые записи — чистим дубли, накопленные до этой правки.
+    // Выплаты от этого не меняются: у схлопнутых строк цифры и так совпадают.
+    const collapsed = [];
+    hist.forEach(e => { if (!same(e, collapsed[collapsed.length - 1])) collapsed.push(e); });
+    const removed = hist.length - collapsed.length;
+
+    const last = collapsed[collapsed.length - 1];       // плоские поля = САМАЯ ПОЗДНЯЯ ставка
     await db.collection('trainerRates').doc(_rateTrainerId).set({
-      history: hist,
+      history: collapsed,
       rateIndivOff: last.indivOff, rateIndivOn: last.indivOn,
       rateGroupOff: last.groupOff, rateGroupOn: last.groupOn
     }, { merge: true });
     _closeModal('rate-modal');
-    toast('Ставка сохранена, прежние сохранены в истории', 'ok');
+    toast((added ? 'Ставка сохранена, прежние сохранены в истории'
+                 : 'Цифры те же — новую запись в историю не добавил')
+      + (removed ? ` · убрал повторов: ${removed}` : ''), 'ok');
     loadFinance();
   } catch(e) {
     errEl.textContent = 'Ошибка: ' + e.message;
