@@ -4775,6 +4775,7 @@ async function _renderRateHistory(tid) {
 
 async function saveRate() {
   const errEl = document.getElementById('rate-err');
+  errEl.style.color = '';                             // цвет мог остаться от прошлого сообщения
   const rateIndivOff = parseInt(document.getElementById('rate-indiv-off').value) || 0;
   const rateIndivOn  = parseInt(document.getElementById('rate-indiv-on').value)  || 0;
   const rateGroupOff = parseInt(document.getElementById('rate-group-off').value) || 0;
@@ -4820,12 +4821,25 @@ async function saveRate() {
       rateIndivOff: last.indivOff, rateIndivOn: last.indivOn,
       rateGroupOff: last.groupOff, rateGroupOn: last.groupOn
     }, { merge: true });
+
+    // Сохранение, которое ничего не поменяло, раньше выглядело как поломка: модал
+    // закрывался, список оставался прежним, и объяснение улетало в тост, который легко
+    // не заметить. Теперь окно остаётся открытым и прямо говорит, почему записи нет.
+    if (!added && !removed) {
+      const d = new Date(from + 'T12:00:00').toLocaleDateString('ru-RU', { day:'numeric', month:'short', year:'numeric' });
+      errEl.style.color = 'var(--text2)';
+      errEl.textContent = 'Ничего не изменилось: на ' + d + ' уже действует ставка с этими цифрами. '
+        + 'Поменяйте значения — или дату, если ставка должна начаться с другого дня.';
+      _renderRateHistory(_rateTrainerId);
+      return;
+    }
     _closeModal('rate-modal');
     toast((added ? 'Ставка сохранена, прежние сохранены в истории'
                  : 'Цифры те же — новую запись в историю не добавил')
       + (removed ? ` · убрал повторов: ${removed}` : ''), 'ok');
     loadFinance();
   } catch(e) {
+    errEl.style.color = 'var(--red)';                 // настоящая ошибка — красным, в отличие от пояснения выше
     errEl.textContent = 'Ошибка: ' + e.message;
   }
 }
