@@ -1486,15 +1486,21 @@ function identifyProduct(productStr, price, date) {
   if (!perPack && t) perPack = t.lessons;
   if (!perPack) perPack = 1;
   const lessons = perPack * qty;
-  return { cat: cat || 'Другое', lessons: lessons, label: cat ? `${cat} ×${lessons}` : 'Другое' };
+  // Срок действия пакета. Общее правило: 1 занятие — месяц, 4 — три, 10 — полгода.
+  // ИСКЛЮЧЕНИЕ — подарок ко дню рождения: 3 месяца независимо от размера (два занятия
+  // иначе сгорели бы через месяц). Держать одинаково с bot.gs и trainer.html.
+  const months = p.indexOf('день рождения') >= 0 ? 3 : (lessons >= 10 ? 6 : lessons >= 4 ? 3 : 1);
+  return { cat: cat || 'Другое', lessons: lessons, months: months, label: cat ? `${cat} ×${lessons}` : 'Другое' };
 }
 
 // Классификация платежа с учётом ручных переопределений (_priceOverrides по цене)
 function classifyPayment(productStr, price, date) {
   const key = String(Math.round(price));
-  if (_priceOverrides[key]) return { lessons: _priceOverrides[key].lessons, group: !!_priceOverrides[key].group, cat: _priceOverrides[key].group ? 'Групп. (вручную)' : 'Индив. (вручную)', unknown: false };
+  if (_priceOverrides[key]) { const ol = _priceOverrides[key].lessons;
+    return { lessons: ol, months: ol >= 10 ? 6 : ol >= 4 ? 3 : 1, group: !!_priceOverrides[key].group,
+             cat: _priceOverrides[key].group ? 'Групп. (вручную)' : 'Индив. (вручную)', unknown: false }; }
   const prod = identifyProduct(productStr, price, date);
-  return { lessons: prod.lessons, group: prod.cat.indexOf('Групп') === 0, cat: prod.cat, unknown: prod.cat === 'Другое' };
+  return { lessons: prod.lessons, months: prod.months, group: prod.cat.indexOf('Групп') === 0, cat: prod.cat, unknown: prod.cat === 'Другое' };
 }
 
 async function loadPriceOverrides() {
@@ -1720,7 +1726,7 @@ async function loadStudents() {
             }
           }
           // Срок действия: 1 зан = 1 мес, 4 зан = 3 мес, 10 зан = 6 мес
-          const expiryMonths = cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1;
+          const expiryMonths = cls.months ?? (cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1);
           let expiryDate = null;
           if (date) { expiryDate = new Date(date); expiryDate.setMonth(expiryDate.getMonth() + expiryMonths); }
           const isExpired = expiryDate && expiryDate < new Date();

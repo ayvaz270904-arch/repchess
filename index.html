@@ -436,7 +436,11 @@ function identifyProduct(productStr, price, date) {
   if (!perPack) perPack = 1;
 
   const lessons = perPack * qty;
-  return { cat: cat || 'Другое', lessons: lessons, label: cat ? `${cat} ×${lessons}` : 'Другое' };
+  // Срок действия пакета. Общее правило: 1 занятие — месяц, 4 — три, 10 — полгода.
+  // ИСКЛЮЧЕНИЕ — подарок ко дню рождения: 3 месяца независимо от размера (два занятия
+  // иначе сгорели бы через месяц). Держать одинаково с bot.gs и trainer.html.
+  const months = p.indexOf('день рождения') >= 0 ? 3 : (lessons >= 10 ? 6 : lessons >= 4 ? 3 : 1);
+  return { cat: cat || 'Другое', lessons: lessons, months: months, label: cat ? `${cat} ×${lessons}` : 'Другое' };
 }
 
 // ══════════════════════════════════════════
@@ -562,7 +566,7 @@ function getBalance(key) {
   const siteByCat = {}, siteAfter = {};
   for (const p of s.payments) {
     const cnt = p.prod?.lessons || 1;
-    const expiryMonths = cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1;
+    const expiryMonths = p.prod?.months ?? (cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1);
     let expiry = null;
     if (p.date) { expiry = new Date(p.date); expiry.setMonth(expiry.getMonth() + expiryMonths); }
     const isExpired = expiry && expiry < now;
@@ -589,7 +593,7 @@ function getBalance(key) {
   const used = dates.length;
   const packs = s.payments.filter(p => p.date).map(p => {
     const cnt = p.prod?.lessons || 1;
-    const months = cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1;
+    const months = p.prod?.months ?? (cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1);
     const exp = new Date(p.date); exp.setMonth(exp.getMonth() + months);
     return { d: p.date, exp, n: cnt, cat: p.prod?.cat || '', cap: cnt };
   }).sort((a,b) => a.d - b.d);
