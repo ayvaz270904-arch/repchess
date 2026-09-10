@@ -1487,9 +1487,9 @@ function identifyProduct(productStr, price, date) {
   if (!perPack) perPack = 1;
   const lessons = perPack * qty;
   // Срок действия пакета. Общее правило: 1 занятие — месяц, 4 — три, 10 — полгода.
-  // ИСКЛЮЧЕНИЕ — подарок ко дню рождения: 3 месяца независимо от размера (два занятия
-  // иначе сгорели бы через месяц). Держать одинаково с bot.gs и trainer.html.
-  const months = p.indexOf('день рождения') >= 0 ? 3 : (lessons >= 10 ? 6 : lessons >= 4 ? 3 : 1);
+  // Держать одинаково с bot.gs и trainer.html. Отдельного срока у подарков нет —
+  // они живут по тому же правилу, что и обычные покупки.
+  const months = lessons >= 10 ? 6 : lessons >= 4 ? 3 : 1;
   return { cat: cat || 'Другое', lessons: lessons, months: months, label: cat ? `${cat} ×${lessons}` : 'Другое' };
 }
 
