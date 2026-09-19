@@ -36,6 +36,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .field-inp:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);}
 .field-inp::placeholder{color:var(--text2);}
 .auth-err{color:var(--red);font-size:.82rem;text-align:center;margin-bottom:10px;min-height:18px;}
+.auth-link{display:block;width:100%;margin-top:12px;padding:8px;background:none;border:none;color:var(--text2);font:inherit;font-size:.82rem;text-decoration:underline;cursor:pointer;}
+.auth-link:disabled{opacity:.6;cursor:default;text-decoration:none;}
+.auth-note{font-size:.78rem;line-height:1.5;color:var(--text2);text-align:left;margin-top:4px;}
+.auth-note b{color:var(--text);font-weight:600;}
 .btn-full{width:100%;padding:13px;border-radius:10px;border:none;cursor:pointer;font-size:.95rem;font-weight:700;transition:all .15s;}
 .btn-gold{background:var(--accent);color:#fff;}
 .btn-gold:hover{background:color-mix(in srgb, var(--accent) 82%, #000);}
@@ -321,6 +325,12 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         onkeydown="if(event.key==='Enter')doLogin()">
       <div class="auth-err" id="login-err"></div>
       <button class="btn-full btn-gold" onclick="doLogin()">Войти</button>
+      <!-- Восстановление пароля. Раньше его не было вовсе: тренер, забывший пароль, не мог
+           сделать НИЧЕГО сам, а владелец слал ссылку из консоли Firebase — и она регулярно
+           протухала, пока письмо дойдёт и до него доберутся. Здесь человек запрашивает
+           ссылку сам и открывает её через десять секунд. -->
+      <button class="auth-link" id="reset-btn" onclick="doReset()">Забыли пароль?</button>
+      <div class="auth-note" id="reset-note"></div>
     </div>
   </div>
 </div>
@@ -1367,7 +1377,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '09.09-rates';
+const APP_VERSION = '09.19-resetpw';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1581,6 +1591,50 @@ async function doLogin() {
     errEl.textContent = e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found'
       ? 'Неверный email или пароль' : 'Ошибка: ' + e.message;
   }
+}
+
+// Письмо со ссылкой на смену пароля. Текст ответа важнее самой кнопки: ссылка Firebase
+// ОДНОРАЗОВАЯ и живёт час, и именно на этом всё ломалось — письмо лежало до вечера или
+// его открывали дважды. Поэтому сразу говорим, что делать, а не просто «письмо ушло».
+//
+// «Аккаунт не найден» намеренно НЕ показываем: страница входа открыта всему интернету,
+// и точный ответ превратил бы её в проверялку «есть ли у вас такой пользователь».
+// Опечатку в адресе закрывает подсказка про спам и проверку адреса.
+async function doReset() {
+  const email = document.getElementById('login-email').value.trim();
+  const errEl = document.getElementById('login-err');
+  const noteEl = document.getElementById('reset-note');
+  const btn = document.getElementById('reset-btn');
+  errEl.textContent = '';
+  noteEl.innerHTML = '';
+  if (!email) {
+    errEl.textContent = 'Введите email — на него пришлём ссылку';
+    document.getElementById('login-email').focus();
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Отправляю…';
+  try {
+    await auth.sendPasswordResetEmail(email);
+  } catch (e) {
+    if (e.code === 'auth/invalid-email') {
+      errEl.textContent = 'Проверьте адрес почты';
+      btn.disabled = false; btn.textContent = 'Забыли пароль?';
+      return;
+    }
+    if (e.code !== 'auth/user-not-found') {
+      errEl.textContent = e.code === 'auth/too-many-requests'
+        ? 'Слишком много попыток — попробуйте через несколько минут'
+        : 'Ошибка: ' + e.message;
+      btn.disabled = false; btn.textContent = 'Забыли пароль?';
+      return;
+    }
+  }
+  btn.textContent = 'Письмо отправлено';
+  noteEl.innerHTML = 'Если такой аккаунт есть, письмо уже в пути.<br><br>'
+    + '<b>Ссылка одноразовая и действует час</b> — откройте её сразу и на этом же устройстве. '
+    + 'Если писем несколько, открывайте самое последнее.<br><br>'
+    + 'Не пришло за пару минут — загляните в «Спам» и проверьте, верно ли введён адрес.';
 }
 
 function doLogout() { auth.signOut(); }
