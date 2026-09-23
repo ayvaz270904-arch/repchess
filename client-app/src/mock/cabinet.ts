@@ -44,6 +44,12 @@ export const MOCK_CABINET: Cabinet = {
       id: 'g4', date: '05.09.2026', time: '15:00', format: 'online', venue: '',
       trainerName: 'Мария', count: 2, max: 8, joined: false, regOpen: false, opensAt: '03.09 в 10:00',
     },
+    // Тренер уже сдал посещаемость, а день занятия ещё не кончился: показываем,
+    // но записаться нельзя (сервер такую запись всё равно отклонит).
+    {
+      id: 'g5', date: '05.09.2026', time: '20:00', format: 'offline', venue: 'Пешка',
+      trainerName: 'Тимофей', count: 9, max: 12, joined: false, regOpen: true, attendanceDone: true,
+    },
   ],
   // Неделя целиком, включая уже прошедшие дни — так приходит с бота и так это
   // должно выглядеть в кабинете (прошедшее приглушено, «Сегодня» в полоске дней).

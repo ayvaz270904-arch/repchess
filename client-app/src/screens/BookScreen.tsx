@@ -295,11 +295,13 @@ function GroupRow({
   // Занятость в g.count приходит с сервера УЖЕ с гостями, поэтому здесь честно.
   const needSeats = g.joined ? 1 : 2
   const roomForGuest = !g.max || g.max - g.count >= needSeats
-  const canBringGuest = g.canJoin !== false && g.regOpen !== false && !g.myGuest && roomForGuest
+  const canBringGuest = g.canJoin !== false && g.regOpen !== false && !g.attendanceDone && !g.myGuest && roomForGuest
   // Счётчик мест показываем только когда он что-то значит: «3/8 чел.» — шум,
   // «осталось 2 места» — повод записаться сейчас. Порог — две трети занятых.
   const left = g.max ? g.max - g.count : 0
-  const scarce = !!g.max && !full && g.count / g.max >= 2 / 3
+  // У закрытого занятия счётчик мест не показываем: «осталось 3 места» рядом с
+  // «запись закрыта» — прямое противоречие, человек решит, что что-то сломалось.
+  const scarce = !!g.max && !full && !g.attendanceDone && g.count / g.max >= 2 / 3
 
   let after: ReactNode
   if (g.joined) {
@@ -319,6 +321,11 @@ function GroupRow({
         </button>
       </div>
     )
+  } else if (g.attendanceDone) {
+    // Тренер уже отметил посещаемость. Раньше такое занятие просто исчезало из списка
+    // — человек, собиравшийся прийти, переставал его видеть среди дня. Теперь оно
+    // остаётся до конца дня со внятной причиной, а не растворяется молча.
+    after = <span className="grp-status">запись закрыта</span>
   } else if (g.regOpen === false) {
     after = <span className="grp-status">🔒 {g.opensAt ? `с ${g.opensAt}` : 'скоро'}</span>
   } else if (full) {

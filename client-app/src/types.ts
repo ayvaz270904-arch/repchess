@@ -69,6 +69,9 @@ export interface GroupLesson {
   // занятия с баланса пригласившего — списывается тренером при отметке.
   myGuest?: boolean
   regOpen?: boolean
+  // Тренер уже сдал посещаемость. Занятие остаётся на экране до конца его дня,
+  // но записаться нельзя — сервер такую запись отклонит.
+  attendanceDone?: boolean
   opensAt?: string
   hasLinks?: boolean
   linksOpen?: boolean
