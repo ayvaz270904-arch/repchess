@@ -1377,7 +1377,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '09.29-finperm';
+const APP_VERSION = '09.29-home';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -2048,11 +2048,27 @@ async function loadHomePage(fromCache) {
     indivAll = _homeIndivCache.filter(l => !_deletedLessonIds.has(l.id));
     grpAll   = _homeGrpCache.filter(g => !_deletedGroupIds.has(g.id));
   } else {
+    // Админу раньше грузили `limit(200)` / `limit(100)` БЕЗ сортировки: Firestore отдаёт
+    // документы в порядке случайных id, и на Главную попадали произвольные двести
+    // занятий из всех — свежая запись могла не показаться, а «За неделю / За месяц»
+    // считались по случайной выборке. Теперь берём всё за 30 дней (окно статистики)
+    // вместе с будущим, плюс то, что требует действия в любой давности:
+    // неподтверждённые индив. и группы без посещаемости.
+    const sinceStr = new Date(Date.now() - 30*86400000).toISOString().slice(0,10);
+    const mergeSnaps = (...snaps) => {
+      const byId = new Map();
+      snaps.forEach(s => s.docs.forEach(d => byId.set(d.id, d)));
+      return { docs: [...byId.values()] };
+    };
+
     // Загружаем индивидуальные занятия
     let indivSnap;
     try {
       indivSnap = isAdmin
-        ? await db.collection('lessons').limit(200).get()
+        ? mergeSnaps(...await Promise.all([
+            db.collection('lessons').where('_date','>=',sinceStr).get(),
+            db.collection('lessons').where('status','==','pending').get(),
+          ]))
         : await db.collection('lessons').where('trainerId','==',uid).get();
     } catch(e) { indivSnap = {docs:[]}; }
     indivAll = indivSnap.docs.map(d=>({id:d.id,...d.data()}))
@@ -2063,7 +2079,10 @@ async function loadHomePage(fromCache) {
     let grpSnap;
     try {
       grpSnap = isAdmin
-        ? await db.collection('groupLessons').limit(100).get()
+        ? mergeSnaps(...await Promise.all([
+            db.collection('groupLessons').where('_date','>=',sinceStr).get(),
+            db.collection('groupLessons').where('attendanceMarked','==',false).get(),
+          ]))
         : await db.collection('groupLessons').where('trainerId','==',uid).get();
     } catch(e) { grpSnap = {docs:[]}; }
     grpAll = grpSnap.docs.map(d=>({id:d.id,...d.data(),_isGroup:true}))
