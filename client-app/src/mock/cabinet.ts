@@ -1,5 +1,15 @@
 import type { Cabinet } from '../types'
 
+// Даты афиши считаем от СЕГОДНЯ: с зашитыми августовскими днями вся неделя в превью
+// была «прошедшей» и приглушённой — цвета событий на ней не разглядеть.
+function evDay(offset: number): { date: string; label: string } {
+  const d = new Date(Date.now() + offset * 86400000)
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(d)
+  const dm = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' }).format(d)
+  const wd = new Intl.DateTimeFormat('ru-RU', { weekday: 'short', timeZone: 'Europe/Moscow' }).format(d)
+  return { date, label: dm + ', ' + wd.replace('.', '') }
+}
+
 // Временные данные для превью всех экранов. На фазе бэкенда заменим на реальный ответ GAS.
 export const MOCK_CABINET: Cabinet = {
   name: 'Александр',
@@ -55,27 +65,27 @@ export const MOCK_CABINET: Cabinet = {
   // должно выглядеть в кабинете (прошедшее приглушено, «Сегодня» в полоске дней).
   schedule: {
     days: [
-      { date: '2026-08-24', label: '24 августа, пн', items: [
+      { ...evDay(-1), items: [
         { time: '20:00', title: 'шахматный турнир для начинающих в Кривоколенном', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
       ] },
-      { date: '2026-08-25', label: '25 августа, вт', items: [
+      { ...evDay(0), items: [
         { time: '20:00', title: 'обучение шахматам с нуля в Пешке', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
       ] },
-      { date: '2026-08-26', label: '26 августа, ср', items: [
+      { ...evDay(1), items: [
         { time: '19:30', title: 'шведки в Trend Island', url: 'https://t.me/repchess' },
         { time: '20:00', title: 'обучение шахматам для начинающих в Пешке', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
       ] },
-      { date: '2026-08-29', label: '29 августа, сб', items: [
+      { ...evDay(3), items: [
         { time: '13:00', title: 'турнир для начинающих в МИРА бистро', url: 'https://t.me/repchess' },
         { time: '15:00', title: 'занятие «Шахматы с нуля» в КУБе', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
       ] },
-      { date: '2026-08-30', label: '30 августа, вс', items: [
+      { ...evDay(4), items: [
         { time: '14:00', title: 'занятие по шахматам для начинающих в Yauza Place', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
         { time: '15:00', title: 'сеанс одновременной игры на фестивале «Фонарик»', url: 'https://t.me/repchess' },
       ] },
     ],
     featured: {
-      date: '2026-08-30', label: '30 августа, вс', time: '14:00',
+      ...evDay(4), time: '14:00',
       title: 'занятие по шахматам для начинающих в Yauza Place',
       ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты', manual: false,
     },
@@ -118,4 +128,17 @@ export const MOCK_CABINET: Cabinet = {
   refLink: 'https://t.me/RepChessEducation_bot?start=ref_6666696537',
   buyLinks: [['Выбрать пакет на сайте', 'https://edu.repchess.ru']],
   promoAvailable: false,
+}
+
+// Новый клиент: ноль на балансе, ни занятий, ни покупок, ни записей (dev: ?empty=1).
+// Афишу оставляем — она не зависит от клиента.
+export const MOCK_CABINET_EMPTY: Cabinet = {
+  ...MOCK_CABINET,
+  balanceTotal: 0,
+  nextExpiry: undefined,
+  categories: MOCK_CABINET.categories.map((c) => ({ ...c, count: 0, until: undefined })),
+  upcoming: [],
+  openGroups: [],
+  lessonHistory: [],
+  purchaseHistory: [],
 }

@@ -153,7 +153,7 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
           </div>
         ))
       ) : (
-        <MascotEmpty text="Сейчас открытых групповых занятий нет — заглядывай позже." />
+        <MascotEmpty pic="checker" text="Сейчас открытых групповых занятий нет — заглядывай позже." />
       )}
       {grpMsg && <div className="book-msg" style={{ padding: '0 22px' }}>{grpMsg}</div>}
     </List>
@@ -370,7 +370,7 @@ function GroupRow({
       <Cell
         multiline
         readOnly
-        before={<CellIcon name={iconName} />}
+        before={<CellIcon name={iconName} tone="group" />}
         subtitle={
           <>
             {g.format === 'online' ? 'онлайн' : 'офлайн'}

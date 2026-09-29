@@ -4,6 +4,7 @@ import type { Cabinet } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { MascotEmpty } from '../ui/MascotEmpty'
 import { plural, ruDate, lessonType } from '../format'
+import { lessonTone, purchaseTone } from '../ui/tones'
 
 function money(n: number): string {
   return String(Math.round(n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' ₽'
@@ -100,7 +101,9 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
                   multiline
                   readOnly={!note}
                   onClick={note ? () => setOpenId(open ? null : h.id) : undefined}
-                  before={<CellIcon name={absent ? 'clock' : 'check'} tone={absent ? 'red' : 'neutral'} />}
+                  // Цвет — вид занятия (как везде в кабинете), глиф — статус. Пропуск
+                  // остаётся красным: там важнее «не списано», чем вид занятия.
+                  before={<CellIcon name={absent ? 'clock' : 'check'} tone={absent ? 'red' : lessonTone(h.type)} />}
                   subtitle={
                     [fmt, h.time, h.trainerName, absent ? 'занятие не списано' : '']
                       .filter(Boolean)
@@ -132,7 +135,7 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
           })}
         </Section>
       ) : (
-        <MascotEmpty text="Занятий пока не было — запишись на первое!" />
+        <MascotEmpty pic="sun" text="Занятий пока не было — запишись на первое!" />
       )}
 
       <div className="home-sec-title">Покупки</div>
@@ -143,7 +146,7 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
               key={p.id}
               multiline
               readOnly
-              before={<CellIcon name={p.price ? 'card' : 'gift'} />}
+              before={<CellIcon name={p.price ? 'card' : 'gift'} tone={purchaseTone(p.label)} />}
               // Было просто «истёк» — непонятно, что именно: оплата, доступ, занятия.
               subtitle={ruDate(p.date) + (p.expired ? ' · срок действия истёк' : '')}
               // Сертификат и подарочное занятие приходят строкой с ценой 0 — и в списке
@@ -157,7 +160,7 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
           ))}
         </Section>
       ) : (
-        <MascotEmpty text="Покупок пока нет" />
+        <MascotEmpty pic="checker" text="Покупок пока нет" />
       )}
     </List>
   )

@@ -49,6 +49,21 @@ html.app-dark {
   color-scheme: dark;
 }
 
+/* ══ Цвета направлений (макет дизайнера, 2026-09-29) ══
+   Одна логика на ВСЕ экраны: цвет квадрата = ВИД занятия или события, глиф внутри =
+   формат (pin/globe) или статус. «Группы под одним цветом, индив под другим» —
+   прямая просьба дизайнера, поэтому одно и то же занятие окрашено одинаково на
+   Главной, в Записи, в Истории и в Афише. Красный остаётся цветом ДЕЙСТВИЙ и
+   внимания (кнопки, пропуск, долг) и под направления не занимается.
+   Значения сняты пипеткой с макета; от темы не зависят. */
+:root {
+  --rc-c-group: #4758f9;   /* групповые занятия */
+  --rc-c-indiv: #ed9bff;   /* индивидуальные */
+  --rc-c-tour: #fee99c;    /* турниры, блиц, рапид, шведки */
+  --rc-c-master: #abff4c;  /* мастер-классы, лекции, сеансы */
+  --rc-c-ink: #141416;     /* глиф на светлых заливках: белый на жёлтом не читается */
+}
+
 /* Светлая — белый базис, чёрный текст (чёрные фигуры на белом).
    Рамки/заливки здесь заметно плотнее, чем зеркальные к тёмной: на белом
    полупрозрачный чёрный читается слабее, чем белый на чёрном. */
@@ -127,6 +142,24 @@ body {
   );
 }
 
+/* Зона брови и шапки Telegram (кнопки «Закрыть» и «⋯» в полноэкранном режиме).
+   Страница прокручивается целиком, а отступ сверху у .app-scroll прозрачный — поэтому
+   всё, что уезжало вверх, просвечивало под часами и кнопками Telegram, а в «Афише» —
+   ещё и НАД прилипшей полоской дней (она липнет ровно под этой зоной). Было видно на
+   макете дизайнера (29.09.2026): над полоской торчали заголовок дня и строка события.
+   Закрываем зону фоном страницы. z-index как у полоски и таббара: выше контента,
+   ниже модалок telegram-ui (3). Без полноэкранного режима высота нулевая. */
+.top-cover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--pad-top);
+  background: var(--rc-bg);
+  z-index: 2;
+  pointer-events: none;
+}
+
 /* Прокручиваемая область страницы. Сверху отступаем на бровь, снизу — на таббар + home-индикатор. */
 .app-scroll {
   padding-top: var(--pad-top);
@@ -192,61 +225,32 @@ body {
   opacity: 1;
 }
 
-/* Герой: число + подпись + маскот-водяной-знак (с лицом), узор доски «средней» плотности */
+/* Герой по макету дизайнера (2026-09-29): чистая чёрная карточка с толстой белой
+   рамкой, без узора доски и без водяного знака. Маскот — маленький, по центру под
+   подписью, в полную яркость. В светлой теме зеркально: белая карточка, чёрная
+   рамка («чёрные фигуры на белом»). */
 .home-hero {
   position: relative;
   overflow: hidden;
   margin: 2px 16px 0;
-  border-radius: 18px;
-  background: var(--rc-surface);
-  border: 1px solid var(--rc-hairline);
-  padding: 26px 22px 24px;
-  min-height: 168px;
+  border-radius: 22px;
+  background: #000;
+  border: 3px solid #fff;
+  padding: 28px 22px 22px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.home-hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: conic-gradient(
-    var(--rc-board-sq) 25%,
-    transparent 0 50%,
-    var(--rc-board-sq) 0 75%,
-    transparent 0
-  );
-  background-size: 16px 16px;
-  -webkit-mask-image: radial-gradient(96% 80% at 50% 40%, #000 6%, transparent 74%);
-  mask-image: radial-gradient(96% 80% at 50% 40%, #000 6%, transparent 74%);
-  pointer-events: none;
+html.app-light .home-hero {
+  background: #fff;
+  border-color: var(--rc-text);
 }
 .hero-mascot {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  width: 82px;
+  display: block;
+  width: 58px;
   height: auto;
-  opacity: 0.6;
-  z-index: 0;
+  margin: 16px auto 0;
   pointer-events: none;
-}
-
-/* Маскот нарисован белым телом с чёрным контуром, и на светлой теме тело
-   сливается с карточкой.
-   invert() здесь НЕ годится (так было до 2026-08-24): он переворачивает
-   полярность рисунка — выходит негатив, а под `.prof-ava img` попадало ещё и
-   живое фото профиля, которое уезжало в негатив целиком.
-   Вместо этого гасим яркость: белое тело становится серым, чёрный контур
-   остаётся чёрным — рисунок читается ровно как задуман, просто темнее.
-   `.ava-photo` исключён явно: на фото человека фильтры не вешаем никогда. */
-html.app-light .hero-mascot {
-  filter: brightness(0.62);
-  opacity: 0.5;
-}
-html.app-light .mascot-empty img {
-  filter: brightness(0.72);
-  opacity: 0.6;
 }
 /* Аватар — единственное место, где у маскота есть собственная подложка, поэтому
    фигура там остаётся БЕЛОЙ, а контраст даёт тёмный кружок (белая фигура на
@@ -384,6 +388,11 @@ html.app-light .mascot-empty img {
   border-radius: 14px;
   padding: 15px 16px 13px;
 }
+.next-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .next-date {
   font-size: 17px;
   font-weight: 700;
@@ -509,6 +518,24 @@ html.app-light .mascot-empty img {
 .cell-icon-red {
   background: color-mix(in srgb, var(--rc-red) 15%, transparent);
   color: var(--rc-red);
+}
+/* Направления — сплошная заливка, как на макете. Белый глиф только на синем:
+   на светлых жёлтом/салатовом/сиреневом он пропадал, берём тёмный. */
+.cell-icon-group {
+  background: var(--rc-c-group);
+  color: #fff;
+}
+.cell-icon-indiv {
+  background: var(--rc-c-indiv);
+  color: var(--rc-c-ink);
+}
+.cell-icon-tour {
+  background: var(--rc-c-tour);
+  color: var(--rc-c-ink);
+}
+.cell-icon-master {
+  background: var(--rc-c-master);
+  color: var(--rc-c-ink);
 }
 .cell-count {
   font-size: 16px;
@@ -1137,10 +1164,10 @@ html.app-light .mascot-empty img {
   padding: 26px 20px 30px;
   text-align: center;
 }
+/* Звёзды — цветные иллюстрации, их не приглушаем (маскот раньше был с opacity .5) */
 .mascot-empty img {
-  width: 96px;
+  width: 100px;
   height: auto;
-  opacity: 0.5;
 }
 .mascot-empty-txt {
   font-size: 14px;
@@ -1176,9 +1203,8 @@ html.app-light .mascot-empty img {
   overflow: hidden;
 }
 .prof-ava img {
-  width: 46px;
+  width: 34px;
   height: auto;
-  opacity: 0.9;
 }
 .prof-info {
   min-width: 0;
@@ -1253,8 +1279,9 @@ html.app-light .mascot-empty img {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--rc-chip-bg);
-  color: var(--rc-chip-fg);
+  /* Тренер по индивидуальным — кружок цвета индивидуальных занятий */
+  background: var(--rc-c-indiv);
+  color: var(--rc-c-ink);
   font-weight: 700;
   font-size: 16px;
 }

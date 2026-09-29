@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import type { IconName } from '../types'
+import type { IconTone } from './tones'
 
 // Монохромные белые глифы на цветном квадрате — как иконки в настройках iOS.
 const PATHS: Record<IconName, ReactElement> = {
@@ -60,9 +61,9 @@ const PATHS: Record<IconName, ReactElement> = {
   ),
 }
 
-export function CellIcon({ name, tone = 'neutral' }: { name: IconName; tone?: 'neutral' | 'red' }) {
+export function CellIcon({ name, tone = 'neutral' }: { name: IconName; tone?: IconTone }) {
   return (
-    <span className={'cell-icon' + (tone === 'red' ? ' cell-icon-red' : '')}>
+    <span className={'cell-icon' + (tone === 'neutral' ? '' : ' cell-icon-' + tone)}>
       <svg
         width="17"
         height="17"

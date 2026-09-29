@@ -2,6 +2,7 @@ import { List, Section, Cell, Button } from '@telegram-apps/telegram-ui'
 import type { Cabinet, IconName, FeaturedEvent, ScheduleDay } from '../types'
 import { CellIcon } from '../ui/CellIcon'
 import { MascotEmpty } from '../ui/MascotEmpty'
+import { eventTone } from '../ui/tones'
 import { openUrl, haptic } from '../telegram/ui'
 
 // Иконка категории события по ключевым словам в названии
@@ -48,7 +49,7 @@ export function EventsScreen({ data }: { data: Cabinet }) {
     return (
       <List>
         <div className="screen-title">Афиша</div>
-        <MascotEmpty text="Расписание на неделю появится здесь, как только выйдет в канале." />
+        <MascotEmpty pic="sun" text="Расписание на неделю появится здесь, как только выйдет в канале." />
       </List>
     )
   }
@@ -125,7 +126,11 @@ export function EventsScreen({ data }: { data: Cabinet }) {
                 <Cell
                   key={i}
                   multiline
-                  before={<CellIcon name={eventIcon(it.title)} tone={isToday ? 'red' : 'neutral'} />}
+                  // Цвет — вид события (турнир, мастер-класс, занятие…), тот же, что у
+                  // занятий на других экранах. Раньше у сегодняшних иконки красились в
+                  // красный; «сегодня» и так видно по красному времени и бейджу дня,
+                  // а красная иконка стёрла бы цвет вида.
+                  before={<CellIcon name={eventIcon(it.title)} tone={eventTone(it.title)} />}
                   onClick={it.url ? () => { haptic(); openUrl(it.url!) } : undefined}
                   readOnly={!it.url}
                   after={

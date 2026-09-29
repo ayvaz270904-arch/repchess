@@ -5,7 +5,7 @@ import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
 import { saveProfile, claimPhone, userPhoto, safeAction } from '../data'
 import { errText } from '../errors'
 import { POLICY_URL, OFFER_URL, HELPER_URL } from '../config'
-import mascot from '../assets/mascot.svg'
+import mascot from '../assets/mascot-queen.png'
 
 // Маска ввода даты рождения: цифры → дд.мм.гггг
 function maskBdate(v: string): string {

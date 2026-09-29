@@ -6,7 +6,8 @@ import { haptic, openUrl, shareReferral } from '../telegram/ui'
 import { redeemCert, cancelIndiv, confirmDialog, track, safeAction, userPhoto } from '../data'
 import { errText } from '../errors'
 import { ruDate, lessonType } from '../format'
-import mascot from '../assets/mascot.svg'
+import mascot from '../assets/mascot-queen.png'
+import { kindTone, lessonTone } from '../ui/tones'
 
 export function HomeScreen({
   data,
@@ -81,11 +82,11 @@ export function HomeScreen({
       </div>
 
       <div className="home-hero">
-        <img className="hero-mascot" src={mascot} alt="" aria-hidden="true" />
         <div className="hero-inner">
           <div className="hero-num">{data.balanceTotal}</div>
           <div className="hero-cap">занятий на балансе</div>
           {data.nextExpiry && <div className="hero-pill">действуют до {data.nextExpiry}</div>}
+          <img className="hero-mascot" src={mascot} alt="" aria-hidden="true" />
         </div>
       </div>
 
@@ -135,7 +136,7 @@ export function HomeScreen({
             {cats.map((c) => (
               <div className="home-tile" key={c.key}>
                 <div className="tile-top">
-                  <CellIcon name={c.icon} />
+                  <CellIcon name={c.icon} tone={kindTone(c.group)} />
                   <span className={'tile-count' + (c.count < 0 ? ' debt' : '')}>{c.count}</span>
                 </div>
                 <div className="tile-label">
@@ -151,19 +152,23 @@ export function HomeScreen({
       <div className="home-sec-title">Ближайшее занятие</div>
       {data.upcoming.length ? (
         <div className="home-next-list">
-          {data.upcoming.map((u) => (
+          {data.upcoming.map((u) => {
+            const { kind, fmt } = lessonType(u.type)
+            return (
             <div className="home-next" key={u.id}>
-              <div className="next-date">
-                {ruDate(u.date)}
-                {u.time ? ` · ${u.time}` : ''}
+              {/* Квадрат того же цвета, что у этого вида занятия везде в кабинете:
+                  цвет = индивидуальное/групповое, глиф = формат. */}
+              <div className="next-head">
+                <CellIcon name={/онлайн/i.test(fmt) ? 'globe' : 'pin'} tone={lessonTone(u.type)} />
+                <div className="next-date">
+                  {ruDate(u.date)}
+                  {u.time ? ` · ${u.time}` : ''}
+                </div>
               </div>
               {/* «Индив.» разворачиваем в «Индивидуальное» — то же, что в Истории,
                   чтобы одно и то же занятие называлось на двух экранах одинаково. */}
               <div className="next-meta">
-                {(() => {
-                  const { kind, fmt } = lessonType(u.type)
-                  return [kind, fmt, u.trainerName].filter(Boolean).join(' · ')
-                })()}
+                {[kind, fmt, u.trainerName].filter(Boolean).join(' · ')}
               </div>
               {/* Заметка тренера к БУДУЩЕМУ занятию — «что будет». Показываем сразу,
                   без раскрытия: ближайших занятий одно-два, прятать там нечего. */}
@@ -176,7 +181,8 @@ export function HomeScreen({
                 </div>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       ) : (
         <div className="home-empty">Нет запланированных занятий</div>

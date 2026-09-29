@@ -2,7 +2,7 @@ import { retrieveRawInitData, popup } from '@telegram-apps/sdk-react'
 import { BACKEND } from './config'
 import type { Cabinet, IndivSlots, Profile } from './types'
 import { adapt, type RawCabinet, type RawSlots } from './adapt'
-import { MOCK_CABINET } from './mock/cabinet'
+import { MOCK_CABINET, MOCK_CABINET_EMPTY } from './mock/cabinet'
 import { MOCK_SLOTS } from './mock/slots'
 
 // В dev подпись initData поддельная — реальный GAS вернул бы auth. Поэтому в dev отдаём мок,
@@ -138,7 +138,9 @@ export async function fetchCabinet(): Promise<Cabinet> {
   let c: Cabinet
   if (DEV) {
     await delay(350)
-    c = MOCK_CABINET
+    // ?empty=1 — кабинет нового клиента: ноль на балансе, истории и записей нет.
+    // Ровно это состояние нарисовано на макете дизайнера, иначе его не увидеть.
+    c = new URLSearchParams(window.location.search).has('empty') ? MOCK_CABINET_EMPTY : MOCK_CABINET
   } else {
     const raw = await api<RawCabinet>('')
     if (!raw.ok) throw new ApiError(raw.error || 'server')

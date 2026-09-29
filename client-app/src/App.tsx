@@ -84,6 +84,8 @@ export default function App({
 
   const shell = (children: ReactNode) => (
     <AppRoot className={`app-brand app-${appearance}`} platform={platform} appearance={appearance}>
+      {/* Сплошная плашка над контентом в зоне брови и шапки Telegram — см. .top-cover */}
+      <div className="top-cover" aria-hidden="true" />
       {children}
     </AppRoot>
   )
