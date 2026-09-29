@@ -1391,7 +1391,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '09.29-feedback';
+const APP_VERSION = '09.29-feedback2';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -6433,9 +6433,10 @@ let _certShowArchive = false;
 // владельца 29.09.2026: отзывы видит ТОЛЬКО админ — правила Firestore пускают в коллекцию
 // одного админа, тренерам карточка не показывается (она во вкладке «Админ»).
 // Статусы: asked — спросили, ответа нет; rated — поставил оценку (текст необязателен);
-// undelivered — клиент заблокировал бота. Пробные просьбы из /admin бота помечены demo
-// и в счёт не идут.
-let _fbDocs = [], _fbTrainer = '';
+// undelivered — клиент заблокировал бота. Пробные просьбы из /admin бота помечены demo:
+// в средние и доли они не идут, но в ленте видны с пометкой — по ним админ проверяет,
+// что путь «бот → база → тренерка» работает целиком.
+let _fbDocs = [], _fbDemo = [], _fbTrainer = '';
 
 function toggleFbCard() {
   const body = document.getElementById('fb-card-body');
@@ -6454,7 +6455,9 @@ async function loadFeedback() {
   if (!wrap) return;
   try {
     const snap = await db.collection('lessonFeedback').orderBy('_date', 'desc').limit(300).get();
-    _fbDocs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => !f.demo);
+    const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _fbDocs = all.filter(f => !f.demo);
+    _fbDemo = all.filter(f => f.demo && f.status === 'rated' && f.rating);
     renderFeedback();
   } catch(e) {
     wrap.innerHTML = `<div class="empty" style="color:var(--red)">Ошибка: ${esc(e.message)}</div>`;
@@ -6480,7 +6483,7 @@ function renderFeedback() {
   const reached = _fbDocs.filter(f => f.status === 'asked' || f.status === 'rated').length;   // дошедшие просьбы
   const cnt = document.getElementById('fb-count');
   if (cnt) cnt.textContent = rated.length ? rated.length + ' ' + _fbPlural(rated.length, 'оценка', 'оценки', 'оценок') : '';
-  if (!_fbDocs.length) {
+  if (!_fbDocs.length && !_fbDemo.length) {
     wrap.innerHTML = '<div class="empty">Отзывов пока нет. Бот просит оценку через полтора часа после начала проведённого занятия.</div>';
     return;
   }
@@ -6496,7 +6499,7 @@ function renderFeedback() {
   const trows = Object.entries(byT).map(([k, t]) => ({ k, name: t.name, n: t.list.length, avg: avg(t.list), texts: t.list.filter(f => f.text).length }))
     .sort((a, b) => b.n - a.n);
 
-  const since = dm(_fbDocs[_fbDocs.length - 1]._date);
+  const since = _fbDocs.length ? dm(_fbDocs[_fbDocs.length - 1]._date) : '';
   const share = reached ? Math.round(rated.length / reached * 100) : 0;
   let html = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
@@ -6522,6 +6525,7 @@ function renderFeedback() {
   }
 
   const feed = rated.filter(f => !_fbTrainer || keyOf(f) === _fbTrainer)
+    .concat(_fbTrainer ? [] : _fbDemo)   // пробные — только в общей ленте, у тренера их нет
     .sort((a, b) => String(b.ratedAt || b._date || '') > String(a.ratedAt || a._date || '') ? 1 : -1);
   html += `<div class="form-label" style="margin:14px 0 6px">Последние оценки${_fbTrainer ? ' · ' + esc((byT[_fbTrainer] || {}).name || '') : ''}</div>`;
   html += feed.length ? feed.slice(0, 40).map(f => {
@@ -6531,7 +6535,7 @@ function renderFeedback() {
         <span style="color:${low ? 'var(--red)' : 'var(--orange)'};font-size:.95rem;letter-spacing:1px">${stars(+f.rating || 0)}</span>
         <span class="dim" style="font-size:.72rem;white-space:nowrap">${dm(f._date)}${f.time ? ' ' + esc(f.time) : ''} · ${f.type === 'group' ? 'групп.' : 'индив.'} ${f.format === 'online' ? 'онлайн' : 'офлайн'}</span>
       </div>
-      <div style="font-size:.8rem;margin-top:3px"><b>${esc(f.studentName || 'Клиент')}</b><span class="dim"> · ${esc(f.trainerName || '—')}</span></div>
+      <div style="font-size:.8rem;margin-top:3px"><b>${esc(f.studentName || 'Клиент')}</b><span class="dim"> · ${esc(f.trainerName || '—')}</span>${f.demo ? ' <span class="tag" style="font-size:.66rem;padding:1px 6px">пробная · не в счёт</span>' : ''}</div>
       ${f.text ? `<div style="font-size:.83rem;margin-top:6px;white-space:pre-line">«${esc(f.text)}»</div>` : ''}
     </div>`;
   }).join('') + (feed.length > 40 ? `<div class="dim" style="text-align:center;padding:6px;font-size:.75rem">и ещё ${feed.length - 40}…</div>` : '')
