@@ -668,6 +668,20 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
       </div>
 
+      <!-- Отзывы о занятиях: бот просит оценку после проведённого занятия. Видит только админ. -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head" onclick="toggleFbCard()" style="cursor:pointer;user-select:none">
+          <span class="card-title">⭐ Отзывы о занятиях</span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span class="dim" id="fb-count" style="font-size:.78rem"></span>
+            <span id="fb-card-arrow" class="dim">▸</span>
+          </span>
+        </div>
+        <div class="card-body" id="fb-card-body" style="display:none">
+          <div id="fb-wrap"><div class="empty">Загрузка...</div></div>
+        </div>
+      </div>
+
       <!-- Certificates (promo codes) -->
       <div class="card" style="margin-bottom:14px">
         <div class="card-head" onclick="toggleCertCard()" style="cursor:pointer;user-select:none">
@@ -1377,7 +1391,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '09.29-review';
+const APP_VERSION = '09.29-feedback';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -3384,6 +3398,13 @@ async function loadAdminData() {
   const certArrow = document.getElementById('cert-card-arrow');
   if (certArrow) certArrow.textContent = certOpen ? '▾' : '▸';
   if (certOpen) loadCertCodes();
+  // Отзывы — так же: свёрнуты по умолчанию, читаем базу только при открытой карточке
+  const fbOpen = !!sessionStorage.getItem('_fbOpen');
+  const fbBody = document.getElementById('fb-card-body');
+  if (fbBody) fbBody.style.display = fbOpen ? '' : 'none';
+  const fbArrow = document.getElementById('fb-card-arrow');
+  if (fbArrow) fbArrow.textContent = fbOpen ? '▾' : '▸';
+  if (fbOpen) loadFeedback();
   const from = document.getElementById('adm-from').value;
   const to   = document.getElementById('adm-to').value;
 
@@ -6403,6 +6424,121 @@ async function generateCertCodes() {
 }
 
 let _certShowArchive = false;
+
+// ══════════════════════════════════════════════
+//  ОТЗЫВЫ О ЗАНЯТИЯХ (admin)
+// ══════════════════════════════════════════════
+// Бот после проведённого занятия просит у клиента оценку 1–5 и пару слов (checkFeedback
+// в bot.gs) и пишет в коллекцию lessonFeedback, id документа = id занятия. Решение
+// владельца 29.09.2026: отзывы видит ТОЛЬКО админ — правила Firestore пускают в коллекцию
+// одного админа, тренерам карточка не показывается (она во вкладке «Админ»).
+// Статусы: asked — спросили, ответа нет; rated — поставил оценку (текст необязателен);
+// undelivered — клиент заблокировал бота. Пробные просьбы из /admin бота помечены demo
+// и в счёт не идут.
+let _fbDocs = [], _fbTrainer = '';
+
+function toggleFbCard() {
+  const body = document.getElementById('fb-card-body');
+  if (!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  const arrow = document.getElementById('fb-card-arrow');
+  if (arrow) arrow.textContent = open ? '▾' : '▸';
+  try { sessionStorage.setItem('_fbOpen', open ? '1' : ''); } catch(e) {}
+  if (open) loadFeedback();   // читаем базу только при открытой карточке
+}
+
+async function loadFeedback() {
+  if (currentTrainer?.role !== 'admin') return;
+  const wrap = document.getElementById('fb-wrap');
+  if (!wrap) return;
+  try {
+    const snap = await db.collection('lessonFeedback').orderBy('_date', 'desc').limit(300).get();
+    _fbDocs = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(f => !f.demo);
+    renderFeedback();
+  } catch(e) {
+    wrap.innerHTML = `<div class="empty" style="color:var(--red)">Ошибка: ${esc(e.message)}</div>`;
+  }
+}
+
+function _fbPlural(n, one, few, many) {
+  const d10 = n % 10, d100 = n % 100;
+  if (d10 === 1 && d100 !== 11) return one;
+  if (d10 >= 2 && d10 <= 4 && (d100 < 10 || d100 >= 20)) return few;
+  return many;
+}
+
+function fbFilterTrainer(k) {
+  _fbTrainer = (_fbTrainer === k) ? '' : k;   // повторный тап снимает фильтр
+  renderFeedback();
+}
+
+function renderFeedback() {
+  const wrap = document.getElementById('fb-wrap');
+  if (!wrap) return;
+  const rated = _fbDocs.filter(f => f.status === 'rated' && f.rating);
+  const reached = _fbDocs.filter(f => f.status === 'asked' || f.status === 'rated').length;   // дошедшие просьбы
+  const cnt = document.getElementById('fb-count');
+  if (cnt) cnt.textContent = rated.length ? rated.length + ' ' + _fbPlural(rated.length, 'оценка', 'оценки', 'оценок') : '';
+  if (!_fbDocs.length) {
+    wrap.innerHTML = '<div class="empty">Отзывов пока нет. Бот просит оценку через полтора часа после начала проведённого занятия.</div>';
+    return;
+  }
+  const avg = list => list.reduce((s, f) => s + (+f.rating || 0), 0) / list.length;
+  const fmtAvg = v => v.toFixed(1).replace('.', ',');
+  const stars = r => '★'.repeat(r) + '☆'.repeat(5 - r);
+  const dm = s => { const m = String(s || '').match(/^\d{4}-(\d{2})-(\d{2})/); return m ? m[2] + '.' + m[1] : ''; };
+  const keyOf = f => f.trainerId || f.trainerName || '—';
+
+  // Сводка по тренерам — ключ trainerId (имя могут поправить в карточке тренера)
+  const byT = {};
+  rated.forEach(f => { const k = keyOf(f); (byT[k] = byT[k] || { name: f.trainerName || '—', list: [] }).list.push(f); });
+  const trows = Object.entries(byT).map(([k, t]) => ({ k, name: t.name, n: t.list.length, avg: avg(t.list), texts: t.list.filter(f => f.text).length }))
+    .sort((a, b) => b.n - a.n);
+
+  const since = dm(_fbDocs[_fbDocs.length - 1]._date);
+  const share = reached ? Math.round(rated.length / reached * 100) : 0;
+  let html = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div style="background:var(--surface2);border-radius:10px;padding:10px 12px">
+        <div style="font-size:1.35rem;font-weight:800">${rated.length ? '★ ' + fmtAvg(avg(rated)) : '—'}</div>
+        <div style="font-size:.72rem;color:var(--text2)">средняя · ${rated.length} ${_fbPlural(rated.length, 'оценка', 'оценки', 'оценок')}</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:10px;padding:10px 12px">
+        <div style="font-size:1.35rem;font-weight:800">${share}%</div>
+        <div style="font-size:.72rem;color:var(--text2)">ответили: ${rated.length} из ${reached}${since ? ' · с ' + since : ''}</div>
+      </div>
+    </div>`;
+
+  if (trows.length) {
+    html += `<div class="form-label" style="margin-bottom:6px">По тренерам · нажми — фильтр</div>`;
+    html += trows.map(t => {
+      const on = _fbTrainer === t.k;
+      return `<div onclick="fbFilterTrainer('${escJs(t.k)}')" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;margin-bottom:6px;border-radius:10px;cursor:pointer;border:1px solid ${on ? 'var(--accent)' : 'var(--border)'};background:${on ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'var(--surface2)'}">
+        <span style="font-weight:600;font-size:.85rem;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.name)}</span>
+        <span style="font-size:.8rem;white-space:nowrap"><b>★ ${fmtAvg(t.avg)}</b> <span class="dim">· ${t.n}${t.texts ? ' · 💬 ' + t.texts : ''}</span></span>
+      </div>`;
+    }).join('');
+  }
+
+  const feed = rated.filter(f => !_fbTrainer || keyOf(f) === _fbTrainer)
+    .sort((a, b) => String(b.ratedAt || b._date || '') > String(a.ratedAt || a._date || '') ? 1 : -1);
+  html += `<div class="form-label" style="margin:14px 0 6px">Последние оценки${_fbTrainer ? ' · ' + esc((byT[_fbTrainer] || {}).name || '') : ''}</div>`;
+  html += feed.length ? feed.slice(0, 40).map(f => {
+    const low = (+f.rating || 0) <= 3;   // низкие — заметнее: по ним админ и звонит клиенту
+    return `<div style="padding:10px 12px;margin-bottom:6px;border-radius:10px;background:var(--surface2);border:1px solid ${low ? 'color-mix(in srgb, var(--red) 45%, transparent)' : 'var(--border)'}">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+        <span style="color:${low ? 'var(--red)' : 'var(--orange)'};font-size:.95rem;letter-spacing:1px">${stars(+f.rating || 0)}</span>
+        <span class="dim" style="font-size:.72rem;white-space:nowrap">${dm(f._date)}${f.time ? ' ' + esc(f.time) : ''} · ${f.type === 'group' ? 'групп.' : 'индив.'} ${f.format === 'online' ? 'онлайн' : 'офлайн'}</span>
+      </div>
+      <div style="font-size:.8rem;margin-top:3px"><b>${esc(f.studentName || 'Клиент')}</b><span class="dim"> · ${esc(f.trainerName || '—')}</span></div>
+      ${f.text ? `<div style="font-size:.83rem;margin-top:6px;white-space:pre-line">«${esc(f.text)}»</div>` : ''}
+    </div>`;
+  }).join('') + (feed.length > 40 ? `<div class="dim" style="text-align:center;padding:6px;font-size:.75rem">и ещё ${feed.length - 40}…</div>` : '')
+    : '<div class="empty">Оценок пока нет</div>';
+
+  wrap.innerHTML = html;
+}
 
 function toggleCertCard() {
   const body = document.getElementById('cert-card-body');
