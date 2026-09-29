@@ -1377,7 +1377,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '09.19-resetpw';
+const APP_VERSION = '09.29-finperm';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -4666,10 +4666,18 @@ async function loadFinance() {
   wrap.innerHTML = '<div class="empty" style="color:var(--text2)">Загрузка...</div>';
 
   try {
-    // 1. Загружаем тренеров
-    const trainersSnap = await db.collection('trainers').get();
+    // 1. Загружаем тренеров. Список всей коллекции — только админу: с 28.08.2026
+    // правила Firestore разрешают `list` по trainers одному админу (в документах
+    // лежат закрепления учеников). Тренеру этот запрос возвращал «Missing or
+    // insufficient permissions», и вкладка «Финансы» у тренеров не открывалась.
+    // Ему нужна только своя карточка — она уже прочитана при входе (currentTrainer).
     const trainersList = [];
-    trainersSnap.forEach(d => trainersList.push({ id: d.id, ...d.data() }));
+    if (isAdmin) {
+      const trainersSnap = await db.collection('trainers').get();
+      trainersSnap.forEach(d => trainersList.push({ id: d.id, ...d.data() }));
+    } else {
+      trainersList.push({ ...currentTrainer, id: currentUser.uid });
+    }
 
     // Администратор видит всех тренеров (кроме самого себя-Admin),
     // тренер — только свою карточку
