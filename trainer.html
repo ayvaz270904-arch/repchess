@@ -1377,7 +1377,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '09.29-home';
+const APP_VERSION = '09.29-review';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -3404,6 +3404,7 @@ async function loadAdminData() {
   catch(e) { grpAdmSnap = await db.collection('groupLessons').limit(300).get(); }
   let groupLessons = grpAdmSnap.docs.map(d=>({id:d.id,...d.data(),_isGroup:true}));
   groupLessons.sort((a,b)=>(b._date||'')>(a._date||'')?1:-1);
+  const groupsForReview = groupLessons;   // до фильтра по датам — для «Ожидают подтверждения»
   if (from) groupLessons = groupLessons.filter(g=>g._date>=from);
   if (to)   groupLessons = groupLessons.filter(g=>g._date<=to);
 
@@ -3461,7 +3462,7 @@ async function loadAdminData() {
   await loadTrainerAssignments(trainersSnap);
 
   // Несоответствия и занятия на подтверждении
-  await loadGroupMismatches();
+  loadGroupMismatches(groupsForReview);
 
   // База учеников (рендерим сразу)
   renderStudentDB(document.getElementById('sdb-search')?.value || '');
@@ -5351,32 +5352,36 @@ function openFinDrill(trainerId, type, trainerName) {
 // ══════════════════════════════════════════════
 //  GROUP MISMATCHES (admin)
 // ══════════════════════════════════════════════
-async function loadGroupMismatches() {
+// groups — группы, которые loadAdminData уже прочитал (300 последних по дате).
+// Раньше здесь были свои запросы `where('attendanceMarked','==',true).limit(30)` и
+// `where('mismatch','==',true).limit(20)` без сортировки: Firestore отдавал 30 СЛУЧАЙНЫХ
+// групп из всех отмеченных, а неподтверждённые отсеивались уже после. Когда отмеченных
+// стало больше тридцати, ждущая подтверждения группа могла сюда просто не попасть.
+// Выбрать «отмечено, но не подтверждено» запросом нельзя: у отправленных тренером
+// поля adminApproved нет вовсе (оно появляется только при подтверждении).
+function loadGroupMismatches(groups) {
   const el = document.getElementById('admin-group-mismatches');
   if (!el) return;
   try {
+    const byDate = (a,b) => (a._date||'') > (b._date||'') ? 1 : -1;   // давние — сверху
     // Ждут подтверждения (тренер отправил, admin ещё не подтвердил)
-    const pendingSnap = await db.collection('groupLessons')
-      .where('attendanceMarked','==',true).limit(30).get();
-    const pending = pendingSnap.docs.filter(d => !d.data().adminApproved);
+    const pending = (groups||[]).filter(g => g.attendanceMarked && !g.adminApproved).sort(byDate);
 
     // С несоответствием — только те, что ещё не подтверждены администратором
-    const mismatchSnap = await db.collection('groupLessons').where('mismatch','==',true).limit(20).get();
-    const mismatches = mismatchSnap.docs.filter(d => !d.data().adminApproved);
+    const mismatches = (groups||[]).filter(g => g.mismatch && !g.adminApproved).sort(byDate);
 
     if (!pending.length && !mismatches.length) { el.innerHTML = ''; return; }
 
     let html = '';
 
     if (pending.length) {
-      const items = pending.map(d => {
-        const g = d.data();
+      const items = pending.map(g => {
         const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
         return `<div class="alert" style="background:color-mix(in srgb, var(--accent2) 6%, transparent);border-color:color-mix(in srgb, var(--accent2) 25%, transparent)">
           <div class="alert-icon">📬</div>
           <div class="alert-text">
             <b>${esc(g.venue||'Групповое')}</b> ${dt} (${esc(g.trainerName||'')}) — тренер отправил отметки
-            <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:color-mix(in srgb, var(--accent2) 15%, transparent);border:1px solid color-mix(in srgb, var(--accent2) 30%, transparent);border-radius:6px;color:var(--accent2);font-size:.72rem;padding:2px 8px;cursor:pointer">✅ Подтвердить</button>
+            <button onclick="openAttendModal('${g.id}')" style="margin-left:8px;background:color-mix(in srgb, var(--accent2) 15%, transparent);border:1px solid color-mix(in srgb, var(--accent2) 30%, transparent);border-radius:6px;color:var(--accent2);font-size:.72rem;padding:2px 8px;cursor:pointer">✅ Подтвердить</button>
           </div>
         </div>`;
       }).join('');
@@ -5386,18 +5391,17 @@ async function loadGroupMismatches() {
       </div>`;
     }
 
-    const uniqueMismatch = mismatches.filter(d =>
-      !pending.find(p => p.id === d.id) // не дублировать если уже в pending
+    const uniqueMismatch = mismatches.filter(g =>
+      !pending.find(p => p.id === g.id) // не дублировать если уже в pending
     );
     if (uniqueMismatch.length) {
-      const items = uniqueMismatch.map(d => {
-        const g = d.data();
+      const items = uniqueMismatch.map(g => {
         const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
         return `<div class="alert" style="background:color-mix(in srgb, var(--orange) 6%, transparent);border-color:color-mix(in srgb, var(--orange) 25%, transparent)">
           <div class="alert-icon">⚠️</div>
           <div class="alert-text">
             <b>${esc(g.venue||'Групповое')}</b> ${dt} — <span style="color:var(--orange)">${esc(g.mismatchNote||'несоответствие посещаемости')}</span>
-            <button onclick="openAttendModal('${d.id}')" style="margin-left:8px;background:none;border:1px solid color-mix(in srgb, var(--orange) 30%, transparent);border-radius:6px;color:var(--orange);font-size:.72rem;padding:2px 8px;cursor:pointer">Просмотреть</button>
+            <button onclick="openAttendModal('${g.id}')" style="margin-left:8px;background:none;border:1px solid color-mix(in srgb, var(--orange) 30%, transparent);border-radius:6px;color:var(--orange);font-size:.72rem;padding:2px 8px;cursor:pointer">Просмотреть</button>
           </div>
         </div>`;
       }).join('');
