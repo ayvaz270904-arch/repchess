@@ -60,6 +60,7 @@ export interface RawSlots {
   ok: boolean
   error?: string
   trainer?: string
+  trainerRating?: number | null
   canOffline: boolean
   canOnline: boolean
   remaining: number

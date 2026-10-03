@@ -45,6 +45,9 @@ export interface SlotDay {
 }
 export interface IndivSlots {
   trainer?: string
+  // Средняя оценка тренера по отзывам клиентов (бот, _trRatingForClient). Без числа
+  // оценок — так решил владелец; null, пока оценок меньше пяти.
+  trainerRating?: number | null
   canOffline: boolean
   canOnline: boolean
   remaining: number
@@ -59,6 +62,8 @@ export interface GroupLesson {
   format: 'online' | 'offline'
   venue?: string
   trainerName?: string
+  // Средняя оценка тренера группы (см. IndivSlots.trainerRating)
+  trainerRating?: number | null
   // Программа занятия — заметка тренера с групповой карточки. По ней человек
   // и решает, идти или нет, поэтому показываем прямо в «Записи».
   notes?: string

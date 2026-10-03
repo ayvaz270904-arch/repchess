@@ -160,6 +160,7 @@ export async function fetchSlots(): Promise<IndivSlots> {
     if (!raw.ok) throw new ApiError(raw.error || 'server')
     s = {
       trainer: raw.trainer,
+      trainerRating: raw.trainerRating ?? null,
       canOffline: raw.canOffline,
       canOnline: raw.canOnline,
       remaining: raw.remaining,

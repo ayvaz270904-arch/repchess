@@ -38,12 +38,12 @@ export const MOCK_CABINET: Cabinet = {
   openGroups: [
     {
       id: 'g1', date: '01.09.2026', time: '18:00', format: 'online', venue: '',
-      trainerName: 'Мария', count: 5, max: 8, joined: true, regOpen: true,
+      trainerName: 'Мария', trainerRating: 4.8, count: 5, max: 8, joined: true, regOpen: true,
       hasLinks: true, linksOpen: true, voiceUrl: 'https://t.me/repchess', studioUrl: 'https://lichess.org/study',
     },
     {
       id: 'g2', date: '01.09.2026', time: '20:00', format: 'offline', venue: 'Пешка на Чистых',
-      trainerName: 'Артём', count: 6, max: 8, joined: false, regOpen: true, canJoin: true,
+      trainerName: 'Артём', trainerRating: 4.9, count: 6, max: 8, joined: false, regOpen: true, canJoin: true,
       notes: 'Элементы стратегии эндшпиля:\n• Централизация короля, легких фигур и ферзя;\n• Убежище и постройка мостов',
     },
     {

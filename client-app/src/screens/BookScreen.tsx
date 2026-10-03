@@ -6,7 +6,7 @@ import { MascotEmpty } from '../ui/MascotEmpty'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
 import { fetchSlots, getCachedSlots, bookIndiv, joinGroup, leaveGroup, confirmDialog, track, safeAction, ApiError } from '../data'
 import { errText, isBalanceMismatch } from '../errors'
-import { plural } from '../format'
+import { plural, ratingLabel } from '../format'
 
 export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => void }) {
   // Стартуем из кэша (мгновенно, без спиннера), свежие слоты подтянем фоном.
@@ -113,7 +113,10 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
         <div className="trainer-card">
           <div className="trainer-ava">{slots.trainer.trim().charAt(0).toUpperCase()}</div>
           <div>
-            <div className="trainer-name">{slots.trainer}</div>
+            <div className="trainer-name">
+              {slots.trainer}
+              {ratingLabel(slots.trainerRating) && <span className="tr-rating">{ratingLabel(slots.trainerRating)}</span>}
+            </div>
             <div className="trainer-role">Ваш тренер · индивидуальные занятия</div>
           </div>
         </div>
@@ -375,6 +378,7 @@ function GroupRow({
           <>
             {g.format === 'online' ? 'онлайн' : 'офлайн'}
             {g.trainerName ? ' · ' + g.trainerName : ''}
+            {g.trainerName && ratingLabel(g.trainerRating) && <span className="tr-rating">{ratingLabel(g.trainerRating)}</span>}
             {scarce && <span className="grp-left"> · осталось {left} {plural(left, 'место', 'места', 'мест')}</span>}
           </>
         }

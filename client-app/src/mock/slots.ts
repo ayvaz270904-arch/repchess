@@ -3,6 +3,7 @@ import type { IndivSlots } from '../types'
 // Мок слотов для dev-превью (в проде приходит из GAS action=indivSlots).
 export const MOCK_SLOTS: IndivSlots = {
   trainer: 'Артём',
+  trainerRating: 4.9,
   canOffline: true,
   canOnline: true,
   remaining: 4,

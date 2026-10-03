@@ -2,6 +2,11 @@
 // Все даты приходят с бота строкой «dd.MM.yyyy» (_fmtDate в bot.gs) — разбираем тут,
 // чтобы не плодить копии разбора по экранам.
 
+// Рейтинг тренера: 4.8 → «★ 4,8». Пусто, если рейтинга нет (мало оценок).
+export function ratingLabel(r?: number | null): string {
+  return typeof r === 'number' && r > 0 ? '★ ' + r.toFixed(1).replace('.', ',') : ''
+}
+
 // Русское склонение по числу: plural(2, 'место', 'места', 'мест') → 'места'
 export function plural(n: number, one: string, few: string, many: string): string {
   const d10 = n % 10
