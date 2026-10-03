@@ -1391,7 +1391,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '09.29-feedback2';
+const APP_VERSION = '10.03-ratings';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1902,6 +1902,10 @@ async function populateTrainerSelect(selId) {
   // а модалки открываются раньше. Администратор, зашедший сразу в «Групповые»,
   // видел пустой список тренеров — при том что права на чтение у него есть.
   if (!_trainersCache.length) { try { await loadTrainers(); } catch (e) { console.warn('populateTrainerSelect:', e); } }
+  // Рейтинг рядом с именем — выбирать тренера, видя его оценки (только у кого они есть).
+  // Грузим ДО того, как запомнить выбранное значение: иначе выбор, сделанный за время
+  // загрузки, затёрся бы при перерисовке списка.
+  const ratings = await _loadTrainerRatings();
   const current = sel.value;
   const list = _trainersCache.filter(t => t.role !== 'admin');   // админы занятий не ведут
   if (!list.length) {
@@ -1916,7 +1920,8 @@ async function populateTrainerSelect(selId) {
   for (const t of list) {
     const opt = document.createElement('option');
     opt.value = t.id;
-    opt.textContent = t.name || t.email;
+    const rl = _trRatingLabel(ratings, t.id, true);
+    opt.textContent = (t.name || t.email) + (rl ? ' · ' + rl : '');
     sel.appendChild(opt);
   }
   if (current) sel.value = current;
@@ -3533,8 +3538,10 @@ async function loadTrainerAssignments(trainersSnap) {
     .map(d => ({ id: d.id, ...d.data() }));
 
   if (!nonAdmin.length) { el.innerHTML = '<div class="empty">Нет тренеров</div>'; return; }
+  const ratings = await _loadTrainerRatings();   // звёзды у имени — у кого есть оценки
 
   el.innerHTML = nonAdmin.map(t => {
+    const rLabel = _trRatingLabel(ratings, t.id);
     const assigned = t.assignedStudents || [];
     const tags = assigned.map(email => {
       const s = students.find(x => x.email === _normEmail(email));
@@ -3547,7 +3554,10 @@ async function loadTrainerAssignments(trainersSnap) {
       </div>`;
     }).join('');
     return `<div style="padding:14px 0;border-bottom:1px solid var(--border)">
-      <div style="font-weight:700;margin-bottom:8px">${esc(t.name)}</div>
+      <div style="font-weight:700;margin-bottom:8px;display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+        <span>${esc(t.name)}</span>
+        ${rLabel ? `<span style="font-weight:600;font-size:.78rem;color:var(--orange);white-space:nowrap">${rLabel}</span>` : ''}
+      </div>
       <div id="assign-tags-${t.id}" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
         ${tags || '<span style="color:var(--text2);font-size:.8rem">Ученики не назначены</span>'}
       </div>
@@ -6438,6 +6448,61 @@ let _certShowArchive = false;
 // что путь «бот → база → тренерка» работает целиком.
 let _fbDocs = [], _fbDemo = [], _fbTrainer = '';
 
+// ── Рейтинг тренеров (только админ, с числом оценок) ──
+// Та же логика, что в боте (_trRatingsRecompute): оценка ГРУППОВОГО занятия засчитывается
+// тренеру, который указан в карточке группы СЕЙЧАС. Поставили замену и сменили тренера —
+// оценки (и прошлые тоже) переезжают к нему: в самом отзыве тренер записан на момент
+// просьбы и задним числом не меняется. Решение владельца 03.10.2026.
+// Клиентам рейтинг показывает бот — без числа оценок и только от 5 штук.
+let _trRatings = null, _trRatingsAt = 0;
+const _fbGroupTrainer = {};   // id группы → её тренер сейчас
+
+async function _fbLoadGroupTrainers(list) {
+  let min = '';
+  list.forEach(f => { if (f.type === 'group' && f._date && (!min || f._date < min)) min = f._date; });
+  if (!min) return;
+  const snap = await db.collection('groupLessons').where('_date', '>=', min).get();
+  snap.docs.forEach(d => { const g = d.data(); _fbGroupTrainer[d.id] = { id: g.trainerId || '', name: g.trainerName || '' }; });
+}
+function _fbTrainerOf(f) {
+  const g = (f.type === 'group' && f.groupLessonId) ? _fbGroupTrainer[f.groupLessonId] : null;
+  return (g && g.id) ? { id: g.id, name: g.name || f.trainerName || '' } : { id: f.trainerId || '', name: f.trainerName || '' };
+}
+
+// Средняя и число оценок по тренерам. Список тренеров открывают часто (модалки занятий,
+// назначение учеников) — базу читаем не чаще раза в 10 минут.
+async function _loadTrainerRatings(force) {
+  if (currentTrainer?.role !== 'admin') return {};
+  if (!force && _trRatings && Date.now() - _trRatingsAt < 10 * 60000) return _trRatings;
+  try {
+    const snap = await db.collection('lessonFeedback').where('status', '==', 'rated').get();
+    const rated = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(f => !f.demo && +f.rating >= 1 && +f.rating <= 5);
+    await _fbLoadGroupTrainers(rated);
+    const agg = {};
+    rated.forEach(f => {
+      const t = _fbTrainerOf(f);
+      if (!t.id) return;
+      const a = agg[t.id] = agg[t.id] || { s: 0, n: 0 };
+      a.s += +f.rating; a.n++;
+    });
+    const map = {};
+    Object.keys(agg).forEach(k => { map[k] = { avg: agg[k].s / agg[k].n, n: agg[k].n }; });
+    _trRatings = map; _trRatingsAt = Date.now();
+  } catch (e) {
+    console.warn('рейтинг тренеров:', e);   // без правил на lessonFeedback — просто без звёзд
+    if (!_trRatings) _trRatings = {};
+  }
+  return _trRatings;
+}
+// «★ 4,8 · 21 оценка» (long) или «★ 4,8 (21)» (short); '' — если оценок нет.
+function _trRatingLabel(map, trainerId, short) {
+  const r = map && trainerId && map[trainerId];
+  if (!r || !r.n) return '';
+  const avg = r.avg.toFixed(1).replace('.', ',');
+  return short ? `★ ${avg} (${r.n})` : `★ ${avg} · ${r.n} ${_fbPlural(r.n, 'оценка', 'оценки', 'оценок')}`;
+}
+
 function toggleFbCard() {
   const body = document.getElementById('fb-card-body');
   if (!body) return;
@@ -6458,6 +6523,7 @@ async function loadFeedback() {
     const all = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     _fbDocs = all.filter(f => !f.demo);
     _fbDemo = all.filter(f => f.demo && f.status === 'rated' && f.rating);
+    await _fbLoadGroupTrainers(_fbDocs);   // кому засчитывать групповые — по карточке группы сейчас
     renderFeedback();
   } catch(e) {
     wrap.innerHTML = `<div class="empty" style="color:var(--red)">Ошибка: ${esc(e.message)}</div>`;
@@ -6491,11 +6557,11 @@ function renderFeedback() {
   const fmtAvg = v => v.toFixed(1).replace('.', ',');
   const stars = r => '★'.repeat(r) + '☆'.repeat(5 - r);
   const dm = s => { const m = String(s || '').match(/^\d{4}-(\d{2})-(\d{2})/); return m ? m[2] + '.' + m[1] : ''; };
-  const keyOf = f => f.trainerId || f.trainerName || '—';
+  const keyOf = f => { const t = _fbTrainerOf(f); return t.id || t.name || '—'; };
 
   // Сводка по тренерам — ключ trainerId (имя могут поправить в карточке тренера)
   const byT = {};
-  rated.forEach(f => { const k = keyOf(f); (byT[k] = byT[k] || { name: f.trainerName || '—', list: [] }).list.push(f); });
+  rated.forEach(f => { const k = keyOf(f); (byT[k] = byT[k] || { name: _fbTrainerOf(f).name || '—', list: [] }).list.push(f); });
   const trows = Object.entries(byT).map(([k, t]) => ({ k, name: t.name, n: t.list.length, avg: avg(t.list), texts: t.list.filter(f => f.text).length }))
     .sort((a, b) => b.n - a.n);
 
@@ -6535,7 +6601,7 @@ function renderFeedback() {
         <span style="color:${low ? 'var(--red)' : 'var(--orange)'};font-size:.95rem;letter-spacing:1px">${stars(+f.rating || 0)}</span>
         <span class="dim" style="font-size:.72rem;white-space:nowrap">${dm(f._date)}${f.time ? ' ' + esc(f.time) : ''} · ${f.type === 'group' ? 'групп.' : 'индив.'} ${f.format === 'online' ? 'онлайн' : 'офлайн'}</span>
       </div>
-      <div style="font-size:.8rem;margin-top:3px"><b>${esc(f.studentName || 'Клиент')}</b><span class="dim"> · ${esc(f.trainerName || '—')}</span>${f.demo ? ' <span class="tag" style="font-size:.66rem;padding:1px 6px">пробная · не в счёт</span>' : ''}</div>
+      <div style="font-size:.8rem;margin-top:3px"><b>${esc(f.studentName || 'Клиент')}</b><span class="dim"> · ${esc(_fbTrainerOf(f).name || '—')}</span>${f.demo ? ' <span class="tag" style="font-size:.66rem;padding:1px 6px">пробная · не в счёт</span>' : ''}</div>
       ${f.text ? `<div style="font-size:.83rem;margin-top:6px;white-space:pre-line">«${esc(f.text)}»</div>` : ''}
     </div>`;
   }).join('') + (feed.length > 40 ? `<div class="dim" style="text-align:center;padding:6px;font-size:.75rem">и ещё ${feed.length - 40}…</div>` : '')
