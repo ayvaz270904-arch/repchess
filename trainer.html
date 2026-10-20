@@ -1391,7 +1391,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '10.03-ratings';
+const APP_VERSION = '10.20-promo';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -6621,18 +6621,61 @@ function toggleCertCard() {
   if (open) loadCertCodes();   // грузим коды только когда карточка открыта (экономия чтений)
 }
 
+// Последний снимок certCodes: выбор кодов и спойлер архива перерисовывают список БЕЗ новых чтений
+let _certDocs = [];
+let _certSelectMode = false;          // режим «выбрать коды для удаления»
+const _certSelected = new Set();
+const CERT_OLD_DAYS = 14;             // свободные коды старше — кнопка массового удаления
+
 async function loadCertCodes() {
   if (currentTrainer?.role !== 'admin') return;
   const el = document.getElementById('cert-list');
   if (!el) return;
   try {
     const snap = await db.collection('certCodes').orderBy('createdAt', 'desc').limit(300).get();
-    const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _certDocs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    // из выбора выпадают коды, которые уже не свободны (активировали или удалили)
+    const freeIds = new Set(_certDocs.filter(c => !c.usedBy && !c.archived).map(c => c.id));
+    [..._certSelected].forEach(id => { if (!freeIds.has(id)) _certSelected.delete(id); });
+    renderCertCodes();
+  } catch(e) {
+    el.innerHTML = `<div class="empty">Ошибка загрузки кодов: ${esc(e.message)}</div>`;
+  }
+}
+
+function _certIsOldFree(c) {
+  const t = c.createdAt && c.createdAt.toDate ? c.createdAt.toDate().getTime() : 0;
+  return !c.usedBy && !c.archived && t > 0 && Date.now() - t > CERT_OLD_DAYS * 864e5;
+}
+
+function renderCertCodes() {
+  const el = document.getElementById('cert-list');
+  if (!el) return;
+  {
+    const docs = _certDocs;
     const free = docs.filter(c => !c.usedBy && !c.archived);
     const used = docs.filter(c => c.usedBy && !c.archived);
     const arch = docs.filter(c => c.archived);
     const cnt = document.getElementById('cert-count');
     if (cnt) cnt.textContent = free.length + ' свободных';
+    const oldN = free.filter(_certIsOldFree).length;
+    const btnS = 'font-size:.72rem;background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:6px;cursor:pointer';
+
+    // Панель удаления: выбор конкретных кодов + все свободные старше CERT_OLD_DAYS дней
+    let html = '';
+    if (free.length) {
+      html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <button onclick="toggleCertSelect()" style="${btnS};color:var(--text2)">${_certSelectMode ? '✕ Отменить выбор' : '☑ Выбрать коды для удаления'}</button>
+        ${_certSelectMode ? '' : `<button onclick="deleteOldFreeCerts()" style="${btnS};color:var(--red)">🗑 Свободные старше ${CERT_OLD_DAYS} дней${oldN ? ' · ' + oldN : ''}</button>`}
+      </div>`;
+    }
+    if (_certSelectMode) {
+      const n = _certSelected.size;
+      html += `<div style="position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;margin-bottom:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border)">
+        <span style="font-size:.78rem;min-width:0">Выбрано: <b>${n}</b><br><span class="dim" style="font-size:.7rem">нажимай на коды ниже</span></span>
+        <button onclick="deleteSelectedCerts()" ${n ? '' : 'disabled'} style="${btnS};white-space:nowrap;flex:none;color:var(--red)${n ? '' : ';opacity:.45;cursor:default'}">🗑 Удалить выбранные</button>
+      </div>`;
+    }
 
     // Свободные — группами по номиналу
     const byNominal = {};
@@ -6640,17 +6683,29 @@ async function loadCertCodes() {
       const k = `${c.kind || ''} ${c.format || ''} ×${c.lessons || 0}`;
       (byNominal[k] = byNominal[k] || []).push(c.id);
     });
-    let html = Object.keys(byNominal).sort().map(k => `
+    const chipS = 'font-family:monospace;font-size:.75rem;border-radius:6px;padding:3px 8px;cursor:pointer;';
+    html += Object.keys(byNominal).sort().map(k => {
+      const ids = byNominal[k];
+      const allSel = ids.every(id => _certSelected.has(id));
+      return `
       <div style="margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <span style="font-size:.8rem;font-weight:700">${esc(k)} <span class="dim">· ${byNominal[k].length} шт</span></span>
-          <button onclick="navigator.clipboard.writeText('${byNominal[k].join('\\n')}').then(()=>toast('Скопированы все (${byNominal[k].length})','ok'))"
-            style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--accent);padding:3px 9px;border-radius:6px;cursor:pointer">📋 все</button>
+          <span style="font-size:.8rem;font-weight:700">${esc(k)} <span class="dim">· ${ids.length} шт</span></span>
+          ${_certSelectMode
+            ? `<button onclick="toggleCertGroup('${ids.join(',')}')"
+                style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:3px 9px;border-radius:6px;cursor:pointer">${allSel ? '☐ снять все' : '☑ все'}</button>`
+            : `<button onclick="navigator.clipboard.writeText('${ids.join('\\n')}').then(()=>toast('Скопированы все (${ids.length})','ok'))"
+                style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--accent);padding:3px 9px;border-radius:6px;cursor:pointer">📋 все</button>`}
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:5px">${byNominal[k].map(code =>
-          `<span onclick="navigator.clipboard.writeText('${code}').then(()=>toast('${code} скопирован','ok'))"
-            style="font-family:monospace;font-size:.75rem;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;cursor:pointer">${code}</span>`).join('')}</div>
-      </div>`).join('') || '<div class="dim" style="font-size:.8rem;margin-bottom:10px">Свободных кодов нет</div>';
+        <div style="display:flex;flex-wrap:wrap;gap:5px">${ids.map(code => {
+          if (!_certSelectMode) return `<span onclick="navigator.clipboard.writeText('${code}').then(()=>toast('${code} скопирован','ok'))"
+            style="${chipS}background:var(--surface2);border:1px solid var(--border)">${code}</span>`;
+          const sel = _certSelected.has(code);
+          return `<span onclick="toggleCertPick('${code}')"
+            style="${chipS}${sel ? 'background:color-mix(in srgb, var(--red) 16%, var(--surface2));border:1px solid var(--red);color:var(--red)' : 'background:var(--surface2);border:1px solid var(--border)'}">${sel ? '✓ ' : ''}${code}</span>`;
+        }).join('')}</div>
+      </div>`;
+    }).join('') || '<div class="dim" style="font-size:.8rem;margin-bottom:10px">Свободных кодов нет</div>';
 
     // Активированные (не в архиве)
     if (used.length) {
@@ -6668,7 +6723,7 @@ async function loadCertCodes() {
 
     // Архив — спойлером
     if (arch.length) {
-      html += `<div style="margin-top:12px"><button onclick="_certShowArchive=!_certShowArchive;loadCertCodes()"
+      html += `<div style="margin-top:12px"><button onclick="_certShowArchive=!_certShowArchive;renderCertCodes()"
         style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.75rem;padding:0">${_certShowArchive ? '▾' : '▸'} Архив (${arch.length})</button></div>`;
       if (_certShowArchive) {
         html += arch.map(c => `<div style="display:flex;justify-content:space-between;gap:8px;padding:4px 0;font-size:.73rem;opacity:.5">
@@ -6679,9 +6734,69 @@ async function loadCertCodes() {
       }
     }
     el.innerHTML = html;
-  } catch(e) {
-    el.innerHTML = `<div class="empty">Ошибка загрузки кодов: ${esc(e.message)}</div>`;
   }
+}
+
+function toggleCertSelect() {
+  _certSelectMode = !_certSelectMode;
+  if (!_certSelectMode) _certSelected.clear();
+  renderCertCodes();
+}
+function toggleCertPick(code) {
+  if (_certSelected.has(code)) _certSelected.delete(code); else _certSelected.add(code);
+  renderCertCodes();
+}
+function toggleCertGroup(idsStr) {
+  const ids = idsStr.split(',');
+  const all = ids.every(id => _certSelected.has(id));
+  ids.forEach(id => { if (all) _certSelected.delete(id); else _certSelected.add(id); });
+  renderCertCodes();
+}
+
+// Безвозвратное удаление СВОБОДНЫХ кодов. Кандидаты перечитываются из базы прямо перед
+// удалением: код, который успели активировать после открытия карточки, не трогаем —
+// в нём история активации (кто и когда). Начисленные занятия живут в Таблице 2 и не зависят от кода.
+async function _certDeleteFree(loadDocs, title) {
+  if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
+  let ids;
+  try {
+    const snaps = await loadDocs();
+    ids = snaps.filter(d => d.exists).map(d => ({ id: d.id, ...d.data() }))
+      .filter(c => !c.usedBy && !c.archived).map(c => c.id);
+  } catch(e) { toast('Ошибка: ' + e.message, 'err'); return; }
+  if (!ids.length) { toast('Удалять нечего', 'ok'); loadCertCodes(); return; }
+  const list = ids.slice(0, 15).join('\n') + (ids.length > 15 ? `\n… и ещё ${ids.length - 15}` : '');
+  if (!confirm(`${title}: ${ids.length} шт.\n\n${list}\n\nУдалить безвозвратно? Эти коды больше нельзя будет активировать.`)) return;
+  try {
+    for (let i = 0; i < ids.length; i += 400) {          // лимит пачки Firestore — 500 операций
+      const batch = db.batch();
+      ids.slice(i, i + 400).forEach(id => batch.delete(db.collection('certCodes').doc(id)));
+      await batch.commit();
+    }
+    const gone = new Set(ids);
+    _certDocs = _certDocs.filter(c => !gone.has(c.id));
+    ids.forEach(id => _certSelected.delete(id));
+    if (!_certSelected.size) _certSelectMode = false;
+    toast(`Удалено кодов: ${ids.length} ✓`, 'ok');
+  } catch(e) { toast('Ошибка удаления: ' + e.message, 'err'); }
+  renderCertCodes();
+}
+
+// Все свободные старше CERT_OLD_DAYS дней — отдельным запросом по дате, а не из списка
+// на 300 последних: самые старые коды как раз могут в него не попасть
+function deleteOldFreeCerts() {
+  const cutoff = new Date(Date.now() - CERT_OLD_DAYS * 864e5);
+  return _certDeleteFree(
+    async () => (await db.collection('certCodes').where('createdAt', '<', cutoff).get()).docs,
+    `Свободные коды, созданные до ${cutoff.toLocaleDateString('ru-RU')}`);
+}
+
+function deleteSelectedCerts() {
+  const ids = [..._certSelected];
+  if (!ids.length) return;
+  return _certDeleteFree(
+    () => Promise.all(ids.map(id => db.collection('certCodes').doc(id).get())),
+    'Выбранные коды');
 }
 
 async function archiveCert(code) {
