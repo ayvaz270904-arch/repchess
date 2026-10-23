@@ -595,7 +595,9 @@ function getBalance(key) {
     const cnt = p.prod?.lessons || 1;
     const months = p.prod?.months ?? (cnt >= 10 ? 6 : cnt >= 4 ? 3 : 1);
     const exp = new Date(p.date); exp.setMonth(exp.getMonth() + months);
-    return { d: p.date, exp, n: cnt, cat: p.prod?.cat || '', cap: cnt };
+    // границы — календарные дни: занятие вечером в день покупки оплачено этой покупкой
+    const d0 = new Date(p.date); d0.setHours(0, 0, 0, 0); exp.setHours(23, 59, 59, 999);
+    return { d: d0, exp, n: cnt, cat: p.prod?.cat || '', cap: cnt };
   }).sort((a,b) => a.d - b.d);
   let unpaid = 0;
   dates.forEach(ds => {
@@ -617,6 +619,9 @@ function getBalance(key) {
   let remaining = 0; for (const c in remByCat) remaining += remByCat[c];
   remaining -= unpaid;
   if (s.sharedEmail) remaining = Math.max(0, remaining);   // почта общая → долг недостоверен
+  // Срок — ближайший пакет, где ОСТАЛИСЬ занятия (а не самая ранняя покупка, уже израсходованная)
+  nextExpiry = null;
+  packs.forEach(p => { if (p.cap > 0 && p.exp >= now && (!nextExpiry || p.exp < nextExpiry)) nextExpiry = p.exp; });
   return { purchased, used, remaining: Math.max(0, remaining), remainingRaw: remaining, nextExpiry };
 }
 
@@ -774,15 +779,16 @@ function parseDate(s){
   if(!s)return null;
   s=String(s).trim().replace(/^"+|"+$/g,'').trim();
   if(!s)return null;
+  // Русский DD.MM.YYYY[ HH:MM:SS] — ПЕРВЫМ: new Date('07.10.2026') в V8 = 10 ИЮЛЯ (месяц.день)
+  const m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[T ](\d{2}:\d{2}(?::\d{2})?))?/);
+  let d;
+  if(m){d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}${m[4]?'T'+m[4]:''}`);if(!isNaN(d.getTime()))return d;}
   // JS Date.toString() формат: "Thu Jun 18 2026 18:40:29 GMT+0300 (...)" + ISO с T/пробелом
-  let d=new Date(s);
+  d=new Date(s);
   if(!isNaN(d.getTime()))return d;
   // ISO с пробелом: YYYY-MM-DD HH:MM:SS
   d=new Date(s.replace(' ','T'));
   if(!isNaN(d.getTime()))return d;
-  // Русский: DD.MM.YYYY[ HH:MM:SS]
-  const m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[T ](\d{2}:\d{2}(?::\d{2})?))?/);
-  if(m){d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}${m[4]?'T'+m[4]:''}`);if(!isNaN(d.getTime()))return d;}
   return null;
 }
 // Оплата = есть транзакция (paymentid tinkoff/sber). «Оплачено» без paymentid (напр. заявка без оплаты) НЕ считаем приходом.

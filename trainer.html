@@ -1400,7 +1400,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '10.23-certarch';
+const APP_VERSION = '10.23-balance';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1947,6 +1947,9 @@ const _USED_CACHE_KEY = 'repchess_used_v3';   // v3: храним ДАТЫ за�
 // МОДЕЛЬ C (единое правило с ботом и кабинетом): занятие гасит пакет, действовавший
 // НА ЕГО ДАТУ; если живого не было — оплаченный остаток истёкшего; и только потом долг.
 // usedMap: email → массив дат проведённых занятий (не счётчик — нужна хронология).
+const _dayStart = x => { const t = new Date(x); t.setHours(0, 0, 0, 0); return t; };
+const _dayEnd   = x => { const t = new Date(x); t.setHours(23, 59, 59, 999); return t; };
+
 function _applyUsedMap(usedMap) {
   const now = new Date();
   students.forEach(s => {
@@ -1957,7 +1960,9 @@ function _applyUsedMap(usedMap) {
       s.remainingRaw = Math.max(0, (s.purchased||0) - Math.max(0, dates.length - (s.purchasedExpired||0)));
       s.remaining = s.remainingRaw; return;
     }
-    const packs = (s.packs || []).map(p => ({ ...p, cap: p.n })).sort((a,b) => a.d - b.d);
+    // Границы пакета — календарные дни: с начала дня покупки до конца дня истечения.
+    // Иначе вечернее занятие в день покупки (купила 17:52, пришла в 19:00) выходит «раньше оплаты» → долг.
+    const packs = (s.packs || []).map(p => ({ ...p, d: _dayStart(p.d), exp: _dayEnd(p.exp), cap: p.n })).sort((a,b) => a.d - b.d);
     let unpaid = 0;
     dates.forEach(ds => {
       const ld = new Date(ds + 'T12:00:00');
@@ -1977,6 +1982,10 @@ function _applyUsedMap(usedMap) {
       byCat[c] = Math.max(0, before + ov[c].delta) + after;
     }
     s.remainByCat = byCat;
+    // «Пакет истекает» — срок ближайшего пакета, где ОСТАЛИСЬ занятия, а не самой ранней покупки
+    let nx = null;
+    packs.forEach(p => { if (p.cap > 0 && p.exp >= now && (!nx || p.exp < nx)) nx = p.exp; });
+    s.nextExpiry = nx;
     let rem = 0; for (const c in byCat) rem += byCat[c];
     rem -= unpaid;
     if (s.sharedEmail) rem = Math.max(0, rem);               // почта общая → долг недостоверен
@@ -4366,12 +4375,14 @@ function parseSentDate(s){
   if(!s)return null;
   s=String(s).trim().replace(/^"+|"+$/g,'').trim();
   if(!s)return null;
-  let d=new Date(s);                          // JS-формат "Thu Jun 18 2026 ... (Москва)" + ISO
+  // DD.MM.YYYY — ПЕРВЫМ: new Date('07.10.2026') в V8 = 10 ИЮЛЯ (месяц.день), до русского разбора не доходило
+  const m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[T ](\d{2}:\d{2}(?::\d{2})?))?/);
+  let d;
+  if(m){d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}${m[4]?'T'+m[4]:''}`);if(!isNaN(d.getTime()))return d;}
+  d=new Date(s);                              // JS-формат "Thu Jun 18 2026 ... (Москва)" + ISO
   if(!isNaN(d.getTime()))return d;
   d=new Date(s.replace(' ','T'));             // ISO с пробелом
   if(!isNaN(d.getTime()))return d;
-  const m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[T ](\d{2}:\d{2}(?::\d{2})?))?/); // DD.MM.YYYY
-  if(m){d=new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}${m[4]?'T'+m[4]:''}`);if(!isNaN(d.getTime()))return d;}
   return null;
 }
 function parseCSV(txt){
