@@ -648,9 +648,10 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
         </div>
         <div class="card-body" style="overflow-x:auto">
           <table class="tbl">
-            <thead><tr><th>Имя</th><th>Email</th><th>Роль</th><th></th></tr></thead>
+            <thead><tr><th>Тренер</th><th>Роль</th><th></th></tr></thead>
             <tbody id="adm-trainers-body"></tbody>
           </table>
+          <div id="adm-removed-trainers"></div>
         </div>
       </div>
 
@@ -1400,7 +1401,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '10.23-balance';
+const APP_VERSION = '10.26-trdel';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1585,7 +1586,13 @@ auth.onAuthStateChanged(async user => {
     currentUser = user;
     try {
       const doc = await db.collection('trainers').doc(user.uid).get();
-      if (!doc.exists) { auth.signOut(); return; }
+      if (!doc.exists) {
+        // Карточки нет — тренера удалили в админке. Без объяснения человека
+        // молча выкидывало на экран входа, и он думал, что ошибся паролем.
+        await auth.signOut();
+        document.getElementById('login-err').textContent = 'Доступ к журналу закрыт — обратитесь к администратору';
+        return;
+      }
       currentTrainer = { uid: user.uid, ...doc.data() };
       document.getElementById('page-loading').style.display = 'none';
       showApp();
@@ -3491,16 +3498,10 @@ async function loadAdminData() {
   ].sort((a,b)=>(b._date||'')>(a._date||'')?1:-1);
   renderAdmLessons();
 
-  // Trainer list
+  // Список тренеров: админ первой строкой, у остальных — кнопка удаления
   const trainersSnap = await db.collection('trainers').get();
-  document.getElementById('adm-trainers-body').innerHTML = trainersSnap.docs.map(d=>{
-    const t = d.data();
-    return`<tr>
-      <td><b>${esc(t.name||'')}</b></td>
-      <td class="dim" style="font-size:.78rem">${esc(t.email||'')}</td>
-      <td><span class="badge ${t.role==='admin'?'badge-empty':'badge-active'}" style="${t.role==='admin'?'background:color-mix(in srgb, var(--red) 12%, transparent);color:var(--red)':'background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2)'}">${t.role==='admin'?'Админ':'Тренер'}</span></td>
-      <td></td>
-    </tr>`;}).join('');
+  _renderTrainersTable(trainersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+  _renderRemovedTrainers();
 
   // Назначение учеников
   await loadTrainerAssignments(trainersSnap);
@@ -3510,6 +3511,122 @@ async function loadAdminData() {
 
   // База учеников (рендерим сразу)
   renderStudentDB(document.getElementById('sdb-search')?.value || '');
+}
+
+// ══════════════════════════════════════════════
+//  УДАЛЕНИЕ ТРЕНЕРА
+// ══════════════════════════════════════════════
+// Удалить аккаунт в Firebase мало: список тренеров, закрепления и бот читают
+// коллекцию trainers, и карточка уволенного висела везде (26.10.2026, Ерохин).
+// Поэтому удаляем саму карточку trainers/{uid}. Без неё тренер не войдёт
+// (onAuthStateChanged не пускает без документа), CRM-прокси не отдаст ему
+// учеников, а бот перестанет предлагать его закреплённым клиентам (кэш бота — 10 мин).
+// Копия карточки ложится в settings/removedTrainers — из неё тренера можно вернуть.
+// Ставки (trainerRates) и занятия не трогаем: по ним считается выплата за
+// отработанный период, а имя в Историю и Финансы берётся из самих занятий.
+function _renderTrainersTable(list) {
+  // Админ всегда первой строкой, остальные — по алфавиту
+  const rows = list.slice().sort((a, b) =>
+    (b.role === 'admin') - (a.role === 'admin') || String(a.name || '').localeCompare(String(b.name || ''), 'ru'));
+  document.getElementById('adm-trainers-body').innerHTML = rows.map(t => {
+    const adm = t.role === 'admin';
+    return `<tr>
+      <td><b>${esc(t.name||'')}</b><div class="dim" style="font-size:.74rem;font-weight:400;word-break:break-all">${esc(t.email||'')}</div></td>
+      <td><span class="badge ${adm?'badge-empty':'badge-active'}" style="${adm?'background:color-mix(in srgb, var(--red) 12%, transparent);color:var(--red)':'background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2)'}">${adm?'Админ':'Тренер'}</span></td>
+      <td>${adm || t.id === currentUser.uid ? '' : `<button class="btn-sm" onclick="removeTrainer('${escJs(t.id)}')" title="Удалить тренера" style="color:var(--red)">🗑</button>`}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function _renderRemovedTrainers() {
+  const el = document.getElementById('adm-removed-trainers');
+  if (!el) return;
+  let map = {};
+  try {
+    const doc = await db.collection('settings').doc('removedTrainers').get();
+    map = doc.exists ? (doc.data() || {}) : {};
+  } catch (e) { el.innerHTML = ''; return; }
+  const ids = Object.keys(map).sort((a, b) => String(map[b].removedAt || '').localeCompare(String(map[a].removedAt || '')));
+  if (!ids.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<details style="margin-top:12px">
+      <summary style="cursor:pointer;font-size:.8rem;color:var(--text2)">Удалённые тренеры (${ids.length})</summary>
+      ${ids.map(id => {
+        const t = map[id];
+        const d = t.removedAt ? new Date(t.removedAt).toLocaleDateString('ru-RU') : '';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
+          <div style="min-width:0">
+            <div style="font-weight:600;font-size:.85rem">${esc(t.name || t.email || id)}</div>
+            <div style="font-size:.72rem;color:var(--text2)">${esc(t.email || '')}${d ? ' · удалён ' + d : ''}</div>
+          </div>
+          <button class="btn-sm" style="flex-shrink:0" onclick="restoreTrainer('${escJs(id)}')">↩ Вернуть</button>
+        </div>`;
+      }).join('')}
+    </details>`;
+}
+
+async function removeTrainer(uid) {
+  if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
+  try {
+    const ref = db.collection('trainers').doc(uid);
+    const snap = await ref.get();
+    if (!snap.exists) { toast('Тренер уже удалён', 'ok'); loadAdminData(); return; }
+    const t = snap.data();
+    if (t.role === 'admin' || uid === currentUser.uid) { toast('Администратора удалить нельзя', 'err'); return; }
+
+    // Что повиснет без тренера — закреплённые ученики и будущие занятия: говорим ДО удаления
+    const today = localDateStr(new Date());
+    const [ls, gs] = await Promise.all([
+      db.collection('lessons').where('trainerId', '==', uid).get(),
+      db.collection('groupLessons').where('trainerId', '==', uid).get(),
+    ]);
+    const upcoming = ls.docs.filter(d => { const x = d.data(); return (x._date || '') >= today && (x.status === 'pending' || x.status === 'rescheduled'); }).length
+      + gs.docs.filter(d => (d.data()._date || '') >= today).length;
+    const assigned = t.assignedStudents || [];
+    const names = assigned.map(e => (students.find(s => _normEmail(s.email) === _normEmail(e)) || {}).name || e);
+    const msg = `Удалить тренера «${t.name || t.email}»?\n\n`
+      + '• Пропадёт из тренерки и из записи в боте, войти больше не сможет.\n'
+      + (assigned.length ? `• Открепятся ученики (${assigned.length}): ${names.slice(0, 5).join(', ')}${assigned.length > 5 ? ' и ещё ' + (assigned.length - 5) : ''}. Закрепите их за другим тренером.\n` : '')
+      + (upcoming ? `• Будущих занятий: ${upcoming}. Отмените их или передайте другому тренеру.\n` : '')
+      + '• Проведённые занятия и выплаты останутся в Истории и Финансах.\n\n'
+      + 'Вернуть можно внизу карточки «Тренеры» → «Удалённые тренеры».';
+    if (!confirm(msg)) return;
+
+    const copy = { ...t, removedAt: new Date().toISOString(), removedBy: currentTrainer.name || '' };
+    const batch = db.batch();
+    batch.set(db.collection('settings').doc('removedTrainers'), { [uid]: copy }, { merge: true });
+    batch.delete(ref);
+    await batch.commit();
+    _trainersCache = _trainersCache.filter(x => x.id !== uid);
+    toast('Тренер удалён: ' + (t.name || t.email), 'ok');
+    loadAdminData();
+  } catch (e) { toast('Ошибка: ' + e.message, 'err'); }
+}
+
+async function restoreTrainer(uid) {
+  if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
+  try {
+    const setRef = db.collection('settings').doc('removedTrainers');
+    const doc = await setRef.get();
+    const t = doc.exists ? (doc.data() || {})[uid] : null;
+    if (!t) { toast('Нет данных для восстановления', 'err'); _renderRemovedTrainers(); return; }
+    const ref = db.collection('trainers').doc(uid);
+    if ((await ref.get()).exists) { toast('Этот тренер уже в списке', 'err'); return; }
+    // Учеников, которых за это время закрепили за другими, у новых тренеров не забираем
+    await loadTrainers();
+    const mine = (t.assignedStudents || []).filter(e => !_trainersCache.some(x => assignedHas(x.assignedStudents, e)));
+    if (!confirm(`Вернуть тренера «${t.name || t.email}»?`
+      + (mine.length ? `\n\nВернутся закреплённые ученики: ${mine.length}.` : '')
+      + '\n\nЕсли его аккаунт удаляли в Firebase, войти он не сможет — тогда создайте тренера заново через «+ Добавить».')) return;
+    const data = { ...t, assignedStudents: mine, role: 'trainer', active: true, restoredAt: new Date().toISOString() };
+    delete data.removedAt; delete data.removedBy;
+    const batch = db.batch();
+    batch.set(ref, data);
+    batch.update(setRef, { [uid]: firebase.firestore.FieldValue.delete() });
+    await batch.commit();
+    toast('Тренер возвращён: ' + (t.name || t.email), 'ok');
+    await loadTrainers();
+    loadAdminData();
+  } catch (e) { toast('Ошибка: ' + e.message, 'err'); }
 }
 
 async function loadBalanceAlerts() {
@@ -4822,6 +4939,16 @@ async function loadFinance() {
       counts[tid][k]++;
       payouts[tid] = (payouts[tid] || 0) + _rateAt(ratesMap[tid], date, k);
     });
+
+    // Удалённые тренеры: карточки в trainers уже нет, а занятия за период есть.
+    // Без этого их выплата пропадала и из карточек, и из «тренерам» в итоге.
+    if (isAdmin) {
+      Object.keys(counts).forEach(tid => {
+        if (trainersList.some(t => t.id === tid)) return;
+        const src = _finLessonsCache.find(l => l._resolvedTid === tid) || _finGroupsCache.find(g => g._resolvedTid === tid) || {};
+        toShow.push({ id: tid, name: (src.trainerName || 'Тренер') + ' · удалён' });
+      });
+    }
 
     // 4. Рендерим карточки
     let totalPayout = 0;
