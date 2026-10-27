@@ -345,7 +345,7 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </div>
     <div style="display:flex;align-items:center;gap:8px">
       <button id="refresh-btn" onclick="refreshCurrentPage()" title="Обновить" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:4px 6px;border-radius:8px;color:var(--text2);transition:transform .3s">🔄</button>
-      <span class="trainer-badge" id="user-badge"></span>
+      <span class="trainer-badge" id="user-badge" onclick="openChangePass()" title="Сменить пароль" style="cursor:pointer"></span>
       <button class="btn-sm" onclick="doLogout()">Выйти</button>
     </div>
   </div>
@@ -1028,7 +1028,11 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     </div>
     <div class="form-row">
       <div class="form-label">Временный пароль</div>
-      <input class="form-inp" id="new-trainer-pass" type="text" placeholder="Минимум 6 символов">
+      <div style="display:flex;gap:8px">
+        <input class="form-inp" id="new-trainer-pass" type="text" placeholder="Минимум 6 символов" style="flex:1;min-width:0;font-family:ui-monospace,monospace" autocomplete="off">
+        <button class="btn-sm" type="button" onclick="document.getElementById('new-trainer-pass').value=_genTempPass()" title="Другой пароль" style="font-size:1rem">↻</button>
+      </div>
+      <div style="color:var(--text2);font-size:.75rem;margin-top:5px">Придуман автоматически. Тренеру уйдёт письмо — по ссылке он задаст свой пароль.</div>
     </div>
     <div class="form-row">
       <div class="form-label">Telegram username <span style="color:var(--text2);text-transform:none;font-size:.72rem">(необязательно, без @)</span></div>
@@ -1038,6 +1042,48 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
     <button class="btn-full btn-gold" onclick="addTrainer()">Создать аккаунт</button>
     <div style="height:10px"></div>
     <button class="btn-full btn-ghost" onclick="_closeModal('add-trainer-modal')">Отмена</button>
+  </div>
+</div>
+
+<!-- TRAINER CREATED MODAL -->
+<div class="overlay" id="trainer-created-modal" style="display:none" onclick="if(event.target===this)_closeModal('trainer-created-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✅ Тренер создан</div>
+    <div id="tc-mail-status" style="font-size:.85rem;line-height:1.45;border-radius:10px;padding:10px 12px;margin-bottom:12px"></div>
+    <div class="form-label">Сообщение тренеру</div>
+    <div id="tc-msg" style="white-space:pre-wrap;word-break:break-word;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:.85rem;line-height:1.5;user-select:text;-webkit-user-select:text"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-full btn-ghost" style="flex:1" onclick="copyTrainerInvite()">📋 Скопировать</button>
+      <button class="btn-full btn-gold" style="flex:1" onclick="shareTrainerInvite()">✈️ В Telegram</button>
+    </div>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('trainer-created-modal')">Готово</button>
+  </div>
+</div>
+
+<!-- CHANGE PASSWORD MODAL -->
+<div class="overlay" id="change-pass-modal" style="display:none" onclick="if(event.target===this)_closeModal('change-pass-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔒 Сменить пароль</div>
+    <div class="form-row">
+      <div class="form-label">Текущий пароль</div>
+      <input class="form-inp" id="cp-old" type="password" placeholder="Пароль, с которым вы вошли" autocomplete="current-password">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Новый пароль</div>
+      <input class="form-inp" id="cp-new" type="password" placeholder="Минимум 6 символов" autocomplete="new-password">
+    </div>
+    <div class="form-row">
+      <div class="form-label">Повторите новый пароль</div>
+      <input class="form-inp" id="cp-new2" type="password" placeholder="Ещё раз" autocomplete="new-password" onkeydown="if(event.key==='Enter')saveChangePass()">
+    </div>
+    <div class="auth-err" id="cp-err"></div>
+    <button class="btn-full btn-gold" id="cp-btn" onclick="saveChangePass()">Сохранить</button>
+    <div style="color:var(--text2);font-size:.75rem;margin-top:10px;line-height:1.4">Не помните текущий? Нажмите «Выйти», затем «Забыли пароль?» на экране входа.</div>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('change-pass-modal')">Отмена</button>
   </div>
 </div>
 
@@ -1401,7 +1447,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '10.26-trdel';
+const APP_VERSION = '10.27-invite';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -3533,7 +3579,7 @@ function _renderTrainersTable(list) {
     return `<tr>
       <td><b>${esc(t.name||'')}</b><div class="dim" style="font-size:.74rem;font-weight:400;word-break:break-all">${esc(t.email||'')}</div></td>
       <td><span class="badge ${adm?'badge-empty':'badge-active'}" style="${adm?'background:color-mix(in srgb, var(--red) 12%, transparent);color:var(--red)':'background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2)'}">${adm?'Админ':'Тренер'}</span></td>
-      <td>${adm || t.id === currentUser.uid ? '' : `<button class="btn-sm" onclick="removeTrainer('${escJs(t.id)}')" title="Удалить тренера" style="color:var(--red)">🗑</button>`}</td>
+      <td style="white-space:nowrap">${adm || t.id === currentUser.uid ? '' : `<button class="btn-sm" onclick="sendTrainerInvite('${escJs(t.email||'')}')" title="Письмо со ссылкой для пароля" style="padding:6px 8px">✉️</button> <button class="btn-sm" onclick="removeTrainer('${escJs(t.id)}')" title="Удалить тренера" style="color:var(--red);padding:6px 8px">🗑</button>`}</td>
     </tr>`;
   }).join('');
 }
@@ -3966,6 +4012,19 @@ async function confirmDeleteLesson() {
 function openAddTrainerModal() {
   _openModal('add-trainer-modal');
   document.getElementById('add-trainer-err').textContent = '';
+  const passEl = document.getElementById('new-trainer-pass');
+  if (!passEl.value) passEl.value = _genTempPass();
+}
+
+// Временный пароль нового тренера. Один и тот же «123456» у всех — это вход для
+// любого, кто знает почту тренера: страница входа открыта всему интернету.
+// Без похожих символов (0/O, 1/l), чтобы пароль можно было продиктовать.
+function _genTempPass() {
+  const dig = '23456789', abc = 'abcdefghjkmnpqrstuvwxyz';
+  const r = new Uint32Array(6);
+  crypto.getRandomValues(r);
+  const d = i => dig[r[i] % dig.length], a = i => abc[r[i] % abc.length];
+  return 'rc-' + d(0) + d(1) + d(2) + d(3) + '-' + a(4) + a(5);
 }
 
 async function addTrainer() {
@@ -3993,18 +4052,119 @@ async function addTrainer() {
     await db.collection('trainers').doc(cred.user.uid).set(trainerDoc);
     await secondaryApp.auth().signOut();
     await secondaryApp.delete();
-    toast('Тренер создан: ' + name, 'ok');
+    // То же письмо, что по «Забыли пароль?»: ссылка, по которой тренер задаёт свой
+    // пароль. Раньше его отправляли руками из консоли Firebase. Не ушло — не страшно:
+    // временный пароль всё равно есть в сообщении для Telegram.
+    let mailOk = true;
+    try { await auth.sendPasswordResetEmail(email); }
+    catch (mailErr) { mailOk = false; console.warn('Письмо тренеру не ушло:', mailErr); }
     document.getElementById('new-trainer-name').value = '';
     document.getElementById('new-trainer-email').value = '';
     document.getElementById('new-trainer-pass').value = '';
     document.getElementById('new-trainer-tg').value = '';
     _closeModal('add-trainer-modal');
+    _showTrainerInvite(email, pass, mailOk);
     loadAdminData();
   } catch(e) {
     if (e.code === 'auth/email-already-in-use') errEl.textContent = 'Email уже используется';
     else if (e.code === 'auth/admin-restricted-operation') errEl.textContent = 'В Firebase выключена регистрация. Включи на время: Firebase Console → Authentication → Settings → User actions → Enable create (sign-up), создай тренера и выключи обратно.';
     else errEl.textContent = 'Ошибка: ' + e.message;
     try { await secondaryApp.delete(); } catch(_) {}
+  }
+}
+
+// Сообщение новому тренеру. Письмо Firebase может не дойти: Mail.ru (mail.ru, bk.ru,
+// inbox.ru, list.ru) часто прячет письма с адреса noreply@…firebaseapp.com в спам.
+// Поэтому логин и временный пароль админ пересылает сам — в Telegram или как удобно.
+let _invite = { url: '', text: '' };
+function _showTrainerInvite(email, pass, mailOk) {
+  const url = location.origin + location.pathname;
+  const tail = [
+    'Логин: ' + email,
+    'Временный пароль: ' + pass,
+    '',
+    mailOk
+      ? 'На почту пришло письмо со ссылкой — по ней можно задать свой пароль (ссылка одноразовая и действует час). Если письма нет, проверьте «Спам» или просто войдите с временным паролем.'
+      : 'Войдите с временным паролем.',
+    'Сменить пароль потом: нажмите на своё имя вверху экрана.',
+  ];
+  _invite = {
+    url,
+    text: ['Здравствуйте! Вам открыт доступ к Журналу тренера Rep Chess.', '', 'Вход: ' + url].concat(tail).join('\n'),
+    // t.me/share сам ставит ссылку первой строкой, текст идёт под ней
+    share: ['Вам открыт доступ к Журналу тренера Rep Chess — вход по ссылке выше.'].concat(tail).join('\n'),
+  };
+  const st = document.getElementById('tc-mail-status');
+  st.style.background = `color-mix(in srgb, var(${mailOk ? '--green' : '--orange'}) 12%, transparent)`;
+  st.style.color = `var(${mailOk ? '--green' : '--orange'})`;
+  st.innerHTML = mailOk
+    ? `📧 Письмо со ссылкой для своего пароля ушло на <b>${esc(email)}</b>. Если не дойдёт — хватит сообщения ниже.`
+    : '⚠️ Письмо не отправилось. Перешлите тренеру сообщение ниже — в нём логин и временный пароль.';
+  document.getElementById('tc-msg').textContent = _invite.text;
+  _openModal('trainer-created-modal');
+}
+function copyTrainerInvite() {
+  navigator.clipboard.writeText(_invite.text)
+    .then(() => toast('Сообщение скопировано', 'ok'))
+    .catch(() => toast('Не скопировалось — выделите текст вручную', 'err'));
+}
+function shareTrainerInvite() {
+  window.open('https://t.me/share/url?url=' + encodeURIComponent(_invite.url)
+    + '&text=' + encodeURIComponent(_invite.share), '_blank');
+}
+
+// «✉️» в списке тренеров — то, что раньше делали в консоли Firebase
+// (Users → ⋮ → Reset password). Старый пароль работает, пока тренер не задаст новый.
+async function sendTrainerInvite(email) {
+  if (currentTrainer?.role !== 'admin' || !email) return;
+  if (!confirm('Отправить на ' + email + ' письмо со ссылкой для нового пароля?\n\n'
+    + 'Ссылка одноразовая и действует час. Старый пароль работает, пока тренер не задаст новый.')) return;
+  try {
+    await auth.sendPasswordResetEmail(email);
+    toast('Письмо отправлено на ' + email, 'ok');
+  } catch (e) {
+    toast(e.code === 'auth/too-many-requests'
+      ? 'Слишком много писем подряд — попробуйте через несколько минут'
+      : 'Письмо не ушло: ' + e.message, 'err');
+  }
+}
+
+// Смена пароля самим тренером (тап по имени в шапке). Firebase меняет пароль
+// только после свежего входа, поэтому сначала подтверждаем текущий.
+function openChangePass() {
+  if (!currentUser) return;
+  ['cp-old', 'cp-new', 'cp-new2'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('cp-err').textContent = '';
+  _openModal('change-pass-modal');
+}
+async function saveChangePass() {
+  const old = document.getElementById('cp-old').value;
+  const p1 = document.getElementById('cp-new').value;
+  const p2 = document.getElementById('cp-new2').value;
+  const errEl = document.getElementById('cp-err');
+  const btn = document.getElementById('cp-btn');
+  errEl.textContent = '';
+  if (!old) { errEl.textContent = 'Введите текущий пароль'; return; }
+  if (p1.length < 6) { errEl.textContent = 'Новый пароль — минимум 6 символов'; return; }
+  if (p1 !== p2) { errEl.textContent = 'Новые пароли не совпадают'; return; }
+  if (p1 === old) { errEl.textContent = 'Новый пароль совпадает с текущим'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Сохраняю…';
+  try {
+    const cred = firebase.auth.EmailAuthProvider.credential(currentUser.email, old);
+    await currentUser.reauthenticateWithCredential(cred);
+    await currentUser.updatePassword(p1);
+    _closeModal('change-pass-modal');
+    toast('Пароль изменён', 'ok');
+  } catch (e) {
+    errEl.textContent = ['auth/wrong-password', 'auth/invalid-credential', 'auth/invalid-login-credentials'].includes(e.code)
+      ? 'Неверный текущий пароль'
+      : e.code === 'auth/too-many-requests' ? 'Слишком много попыток — попробуйте через несколько минут'
+      : e.code === 'auth/weak-password' ? 'Слишком простой пароль'
+      : 'Ошибка: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Сохранить';
   }
 }
 
