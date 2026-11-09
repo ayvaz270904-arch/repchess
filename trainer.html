@@ -1447,7 +1447,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.09-profiles';
+const APP_VERSION = '11.09-cats';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1996,7 +1996,42 @@ async function populateTrainerSelect(selId) {
 // Одним запросом к Firestore считает использованные занятия для всех учеников.
 // Результат: s.used и s.remaining = s.purchased - used (не меньше 0).
 let _enrichedAt = 0;
-const _USED_CACHE_KEY = 'repchess_used_v3';   // v3: храним ДАТЫ занятий (модель C), а не счётчики
+// ── Гашение по типам пакетов (решение владельца 09.11.2026) ──
+// Занятие с датой от STRICT_CAT_FROM гасит только пакет СВОЕГО типа (индив./групп. × офлайн/онлайн):
+// групповой пакет больше не покрывает индивидуальные занятия и наоборот. Занятия до этой даты
+// считаются по-старому (любой пакет, действовавший на дату) — сегодняшние балансы не меняются.
+// Держать ОДИНАКОВО в trainer.html, index.html (CRM) и gas/bot.gs.
+const STRICT_CAT_FROM = '2026-11-09';
+const _STD_CATS = ['Индив. офлайн', 'Индив. онлайн', 'Групп. офлайн', 'Групп. онлайн'];
+function _lessonCat(type, format) {
+  if (format !== 'online' && format !== 'offline') return '';   // формат неизвестен — подойдёт любой пакет
+  return (type === 'group' ? 'Групп. ' : 'Индив. ') + (format === 'online' ? 'онлайн' : 'офлайн');
+}
+// Подходит ли пакет занятию (date — 'гггг-мм-дд', cat — из _lessonCat). Пакеты нестандартных
+// категорий («Гроссмейстер», «Другое») и занятия без формата — по-старому, к любому.
+function _packFits(p, date, cat) {
+  return !cat || date < STRICT_CAT_FROM || p.cat === cat || _STD_CATS.indexOf(p.cat) < 0;
+}
+function _isStrict(date, cat) { return !!cat && date >= STRICT_CAT_FROM; }
+// Долг — в плитки по типам, чтобы их сумма совпадала с итогом (сам итог считается как раньше:
+// остаток минус долг). Каждое неоплаченное занятие снимаем: с остатка своего типа; нет его —
+// для занятий до перехода с самого раннего живого пакета, где ещё есть занятия; нет и его —
+// минусом в своём типе. packs — отсортированы по дате покупки; cap уменьшаем (для «действуют до»).
+function _spreadDebt(byCat, packs, unpaid, now) {
+  const live = packs.filter(function(p){ return p.exp >= now; });
+  unpaid.forEach(function(u){
+    let c = (u.cat && byCat[u.cat] > 0) ? u.cat : '';
+    if (!c && !u.strict) {
+      for (let i = 0; i < live.length; i++) if (live[i].cap > 0 && byCat[live[i].cat] > 0) { c = live[i].cat; break; }
+      if (!c) for (const k in byCat) if (byCat[k] > 0) { c = k; break; }   // остаток из ручной правки
+    }
+    if (!c) c = u.cat || 'Другое';
+    byCat[c] = (byCat[c] || 0) - 1;
+    for (let i = 0; i < live.length; i++) if (live[i].cat === c && live[i].cap > 0) { live[i].cap--; break; }
+  });
+}
+
+const _USED_CACHE_KEY = 'repchess_used_v4';   // v4: 'дата|тип' — тип нужен гашению по типам (с 09.11.2026)
 
 // МОДЕЛЬ C (единое правило с ботом и кабинетом): занятие гасит пакет, действовавший
 // НА ЕГО ДАТУ; если живого не было — оплаченный остаток истёкшего; и только потом долг.
@@ -2007,6 +2042,7 @@ const _dayEnd   = x => { const t = new Date(x); t.setHours(23, 59, 59, 999); ret
 function _applyUsedMap(usedMap) {
   const now = new Date();
   students.forEach(s => {
+    // Записи 'гггг-мм-дд|Индив. онлайн' (тип — для гашения по типам); сортировка строк = по дате
     const dates = (usedMap[s.email] || []).slice().sort();
     s.used = dates.length;
     if (!s.packs && s.purchased) {   // битый/старый кэш: пакетов нет — не выдумываем долг
@@ -2017,15 +2053,17 @@ function _applyUsedMap(usedMap) {
     // Границы пакета — календарные дни: с начала дня покупки до конца дня истечения.
     // Иначе вечернее занятие в день покупки (купила 17:52, пришла в 19:00) выходит «раньше оплаты» → долг.
     const packs = (s.packs || []).map(p => ({ ...p, d: _dayStart(p.d), exp: _dayEnd(p.exp), cap: p.n })).sort((a,b) => a.d - b.d);
-    let unpaid = 0;
-    dates.forEach(ds => {
+    const unpaidList = [];
+    dates.forEach(entry => {
+      const [ds, lc = ''] = String(entry).split('|');
       const ld = new Date(ds + 'T12:00:00');
-      for (let i=0;i<packs.length;i++)                       // 1) действовавший на дату занятия
-        if (packs[i].cap>0 && packs[i].d<=ld && ld<=packs[i].exp) { packs[i].cap--; return; }
+      for (let i=0;i<packs.length;i++)                       // 1) действовавший на дату занятия (с 09.11 — своего типа)
+        if (_packFits(packs[i], ds, lc) && packs[i].cap>0 && packs[i].d<=ld && ld<=packs[i].exp) { packs[i].cap--; return; }
       for (let j=0;j<packs.length;j++)                       // 2) милосердие: оплаченный остаток
-        if (packs[j].cap>0 && packs[j].d<=ld) { packs[j].cap--; return; }
-      unpaid++;                                              // 3) платить было нечем — долг
+        if (_packFits(packs[j], ds, lc) && packs[j].cap>0 && packs[j].d<=ld) { packs[j].cap--; return; }
+      unpaidList.push({ cat: lc, strict: _isStrict(ds, lc) });   // 3) платить было нечем — долг
     });
+    const unpaid = unpaidList.length;
     const byCat = {};
     packs.forEach(p => { if (p.exp >= now) byCat[p.cat] = (byCat[p.cat]||0) + p.cap; });
     const ov = s.overrideFull;                               // ручные правки: минус не съедает будущие покупки
@@ -2035,13 +2073,14 @@ function _applyUsedMap(usedMap) {
         if (ov[c].date && p.d > ov[c].date) after += p.cap; else before += p.cap; });
       byCat[c] = Math.max(0, before + ov[c].delta) + after;
     }
+    let rem = 0; for (const c in byCat) rem += byCat[c];
+    rem -= unpaid;
+    _spreadDebt(byCat, packs, unpaidList, now);              // долг — и в плитки по типам: их сумма = итог
     s.remainByCat = byCat;
     // «Пакет истекает» — срок ближайшего пакета, где ОСТАЛИСЬ занятия, а не самой ранней покупки
     let nx = null;
     packs.forEach(p => { if (p.cap > 0 && p.exp >= now && (!nx || p.exp < nx)) nx = p.exp; });
     s.nextExpiry = nx;
-    let rem = 0; for (const c in byCat) rem += byCat[c];
-    rem -= unpaid;
     if (s.sharedEmail) rem = Math.max(0, rem);               // почта общая → долг недостоверен
     s.usedActive = Math.max(0, s.used - (s.purchasedExpired || 0));
     s.remainingRaw = rem;                                    // без зажима — админу виден долг
@@ -2078,7 +2117,7 @@ async function _enrichStudentsWithRemaining() {
       if (data.studentEmail && data._date) {
         const _em = String(data.studentEmail).toLowerCase().trim();
         const _rep = _emailAlias[_em] || _em;   // фолдим все email человека к его представительскому
-        (usedMap[_rep] = usedMap[_rep] || []).push(data._date);   // даты, а не счётчик — нужна хронология
+        (usedMap[_rep] = usedMap[_rep] || []).push(data._date + '|' + _lessonCat(data.type, data.format));   // дата|тип — хронология и гашение по типам
       }
     });
     _applyUsedMap(usedMap);
