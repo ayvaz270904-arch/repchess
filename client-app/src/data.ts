@@ -140,14 +140,59 @@ export async function fetchCabinet(): Promise<Cabinet> {
     await delay(350)
     // ?empty=1 — кабинет нового клиента: ноль на балансе, истории и записей нет.
     // Ровно это состояние нарисовано на макете дизайнера, иначе его не увидеть.
-    c = new URLSearchParams(window.location.search).has('empty') ? MOCK_CABINET_EMPTY : MOCK_CABINET
+    const q = new URLSearchParams(window.location.search)
+    c = q.has('empty') ? MOCK_CABINET_EMPTY : MOCK_CABINET
+    // ?fserror=1 — база не ответила боту (кэш есть: показываем его); ?fserror=2 — и кэша нет
+    if (q.has('fserror')) {
+      if (q.get('fserror') === '2') clearCachedCabinet()
+      else {
+        const tmr = new Date(Date.now() + 86400000)
+        const d = String(tmr.getDate()).padStart(2, '0') + '.' + String(tmr.getMonth() + 1).padStart(2, '0') + '.' + tmr.getFullYear()
+        saveCabinetCache({ ...c, upcoming: c.upcoming.map((u) => ({ ...u, date: d })), savedAt: Date.now() - 47 * 60000 })
+      }
+      c = { ...c, fsError: true, balanceTotal: c.balanceTotal + 5, upcoming: [], openGroups: [], lessonHistory: [] }
+    }
   } else {
     const raw = await api<RawCabinet>('')
     if (!raw.ok) throw new ApiError(raw.error || 'server')
     c = adapt(raw)
   }
-  saveCabinetCache(c)
+  if (c.fsError) {
+    // База занятий не ответила боту. Вместо пустоты и завышенного остатка берём занятия,
+    // группы и баланс из последней полной копии на устройстве. Неполные данные в кэш не пишем.
+    const prev = getCachedCabinet()
+    if (prev && !prev.fsError) c = mergeStale(c, prev)
+  } else {
+    c = { ...c, savedAt: Date.now() }
+    saveCabinetCache(c)
+  }
   return c
+}
+
+// дд.мм.гггг → гггг-мм-дд (для сравнения с сегодняшним днём); нераспознанное — ''
+function dateKey(d: string): string {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})/.exec(d || '')
+  return m ? m[3] + '-' + m[2] + '-' + m[1] : ''
+}
+
+// Свежее (покупки, профиль, афиша) — из ответа; занятия, группы и остаток — из кэша.
+// Прошедшие занятия и группы из кэша убираем: «ближайшее» вчерашнее хуже, чем пусто.
+function mergeStale(fresh: Cabinet, prev: Cabinet): Cabinet {
+  const t = new Date()
+  const today = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0')
+  const notPast = (d: string) => { const k = dateKey(d); return !k || k >= today }
+  return {
+    ...fresh,
+    balanceTotal: prev.balanceTotal,
+    nextExpiry: prev.nextExpiry,
+    categories: prev.categories,
+    upcoming: prev.upcoming.filter((u) => notPast(u.date)),
+    openGroups: prev.openGroups.filter((g) => notPast(g.date)),
+    lessonHistory: prev.lessonHistory,
+    fsError: true,
+    staleAt: prev.savedAt || 0,
+    newPurchases: Math.max(0, fresh.purchaseHistory.length - prev.purchaseHistory.length),
+  }
 }
 
 export async function fetchSlots(): Promise<IndivSlots> {

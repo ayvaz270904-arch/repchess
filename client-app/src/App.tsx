@@ -28,6 +28,35 @@ function initialTab(): Tab {
   return (['home', 'book', 'events', 'history', 'profile'] as string[]).includes(h) ? (h as Tab) : 'home'
 }
 
+// Плашка «сервер занятий не отвечает». Есть сохранённая копия — спокойный тон и время копии;
+// копии нет (первое открытие на устройстве) — красная: показать нечего.
+function FsAlert({ data, onReload }: { data: Cabinet; onReload: () => void }) {
+  const stale = data.staleAt !== undefined
+  let when = ''
+  if (data.staleAt) {
+    const d = new Date(data.staleAt)
+    const p = (n: number) => String(n).padStart(2, '0')
+    when = ` на ${p(d.getDate())}.${p(d.getMonth() + 1)} в ${p(d.getHours())}:${p(d.getMinutes())}`
+  }
+  return (
+    <div className={'fs-alert' + (stale ? ' fs-alert-soft' : '')} role="status">
+      <div className="fs-alert-text">
+        {stale ? (
+          <>
+            <b>{when ? 'Показаны данные' + when : 'Показаны последние сохранённые данные'}.</b> Сервер занятий временно не отвечает — обновим сами, как только он ответит.
+            {data.newPurchases ? ' Новая покупка уже видна в истории, в балансе она появится после обновления.' : ''}
+          </>
+        ) : (
+          <>
+            <b>Не удалось загрузить занятия.</b> Сервер временно не отвечает — попробуем снова через пару минут.
+          </>
+        )}
+      </div>
+      <button className="fs-alert-btn" onClick={onReload}>Обновить</button>
+    </div>
+  )
+}
+
 type State = { status: 'loading' } | { status: 'error'; code: string } | { status: 'ready'; data: Cabinet }
 
 export default function App({
@@ -74,6 +103,20 @@ export default function App({
     track('open')
     reload()
   }, [reload])
+
+  // Пока база занятий не отвечает — сами пробуем снова: раз в 3 минуты и при возврате
+  // в кабинет. Как только ответ полный, плашка исчезает и данные заменяются свежими.
+  const fsDown = state.status === 'ready' && !!state.data.fsError
+  useEffect(() => {
+    if (!fsDown) return
+    const t = window.setInterval(reload, 3 * 60000)
+    const onVis = () => { if (document.visibilityState === 'visible') reload() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.clearInterval(t)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [fsDown, reload])
 
   function go(t: Tab) {
     haptic()
@@ -131,6 +174,7 @@ export default function App({
   return shell(
     <>
       <div className="app-scroll">
+        {data.fsError && <FsAlert data={data} onReload={reload} />}
         {tab === 'home' && <HomeScreen data={data} onGoBook={() => go('book')} onReload={reload} />}
         {tab === 'book' && <BookScreen data={data} onReload={reload} />}
         {tab === 'events' && <EventsScreen data={data} />}

@@ -156,7 +156,7 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
           </div>
         ))
       ) : (
-        <MascotEmpty pic="checker" text="Сейчас открытых групповых занятий нет — заглядывай позже." />
+        <MascotEmpty pic="checker" text={data.fsError && data.staleAt === undefined ? 'Не удалось загрузить групповые занятия — попробуйте чуть позже.' : 'Сейчас открытых групповых занятий нет — заглядывай позже.'} />
       )}
       {grpMsg && <div className="book-msg" style={{ padding: '0 22px' }}>{grpMsg}</div>}
     </List>

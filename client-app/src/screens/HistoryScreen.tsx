@@ -135,7 +135,7 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
           })}
         </Section>
       ) : (
-        <MascotEmpty pic="sun" text="Занятий пока не было — запишись на первое!" />
+        <MascotEmpty pic="sun" text={data.fsError && data.staleAt === undefined ? 'Не удалось загрузить историю занятий — попробуйте чуть позже.' : 'Занятий пока не было — запишись на первое!'} />
       )}
 
       <div className="home-sec-title">Покупки</div>

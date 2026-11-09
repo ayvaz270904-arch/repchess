@@ -51,6 +51,7 @@ export interface RawCabinet {
   } | null
   promoAvailable?: boolean
   emailPending?: boolean
+  fsError?: boolean
   phone?: string
   phonePending?: string
   refLink?: string
@@ -152,5 +153,6 @@ export function adapt(raw: RawCabinet): Cabinet {
     refLink: raw.refLink,
     buyLinks: BUY_LINKS,
     promoAvailable: !!raw.promoAvailable,
+    fsError: !!raw.fsError,
   }
 }

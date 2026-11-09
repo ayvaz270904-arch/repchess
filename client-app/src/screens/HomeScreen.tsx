@@ -32,7 +32,9 @@ export function HomeScreen({
   // из четырёх — нули, и четыре почти одинаковые плитки только мешают читать
   // первый экран. Сравнение именно с нулём, а не «> 0»: остаток может быть
   // отрицательным (долг), и его прятать нельзя.
-  const cats = data.categories.filter((c) => c.count !== 0)
+  // При сбое базы без копии остаток от бота завышен (без проведённых занятий) — не показываем его
+  const noData = !!data.fsError && data.staleAt === undefined   // сбой базы и нет сохранённой копии
+  const cats = noData ? [] : data.categories.filter((c) => c.count !== 0)
 
   async function redeem() {
     const code = cert.toUpperCase().replace(/[^A-Z0-9-]/g, '')
@@ -83,9 +85,9 @@ export function HomeScreen({
 
       <div className="home-hero">
         <div className="hero-inner">
-          <div className="hero-num">{data.balanceTotal}</div>
-          <div className="hero-cap">занятий на балансе</div>
-          {data.nextExpiry && <div className="hero-pill">действуют до {data.nextExpiry}</div>}
+          <div className="hero-num">{noData ? '—' : data.balanceTotal}</div>
+          <div className="hero-cap">{noData ? 'баланс временно недоступен' : 'занятий на балансе'}</div>
+          {data.nextExpiry && !noData && <div className="hero-pill">действуют до {data.nextExpiry}</div>}
           <img className="hero-mascot" src={mascot} alt="" aria-hidden="true" />
         </div>
       </div>
@@ -185,7 +187,7 @@ export function HomeScreen({
           })}
         </div>
       ) : (
-        <div className="home-empty">Нет запланированных занятий</div>
+        <div className="home-empty">{noData ? 'Не удалось загрузить занятия' : 'Нет запланированных занятий'}</div>
       )}
       {homeMsg && (
         <div className="book-msg" style={{ padding: '6px 20px 0' }}>

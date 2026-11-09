@@ -164,4 +164,12 @@ export interface Cabinet {
   refLink?: string
   buyLinks: [string, string][]
   promoAvailable?: boolean
+  // База занятий (Firebase) не ответила боту: занятия, группы и остаток неполные.
+  // Показываем ошибку, а не «занятий нет» и не завышенный баланс (случай 09.11.2026).
+  fsError?: boolean
+  // Когда кабинет сохранён в кэш (мс). При сбое базы показываем этот кэш вместо пустоты:
+  // staleAt = savedAt той копии, newPurchases = сколько покупок пришло после неё.
+  savedAt?: number
+  staleAt?: number
+  newPurchases?: number
 }
