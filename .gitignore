@@ -2,3 +2,8 @@ gas/
 .DS_Store
 *.pptx
 *.docx
+
+# API: зависимости и локальные секреты wrangler (пароль базы — только у владельца)
+api/node_modules
+api/.dev.vars
+api/.wrangler

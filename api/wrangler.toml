@@ -1,0 +1,17 @@
+# Cloudflare Worker «repchess-api» — API между тренеркой/CRM/ботом и Postgres.
+# Отдельный проект, не сайт: выкладывается командой `npx wrangler deploy` из папки api/.
+# Секреты задаёт владелец (значения в репозиторий не попадают):
+#   npx wrangler secret put DATABASE_URL — строка подключения к базе postgresql://…
+#   npx wrangler secret put SERVICE_KEY  — служебный ключ для бота и CRM-прокси
+# Адрес и логин базы тоже только в секрете: репозиторий публичный.
+name = "repchess-api"
+main = "src/worker.js"
+compatibility_date = "2026-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Пока перенос не завершён — тестовая копия. На этапе 6 сменить на рабочую схему.
+PGSCHEMA = "staging"
+FIREBASE_PROJECT_ID = "repchess-trainer"
+ALLOWED_ORIGINS = "https://repchess.ayvaz-270904.workers.dev,https://ayvaz270904-arch.github.io"
+AUTH_PROVIDERS = "firebase,service"
