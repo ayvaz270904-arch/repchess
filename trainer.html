@@ -1447,7 +1447,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '10.27-invite';
+const APP_VERSION = '11.09-profiles';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1919,6 +1919,7 @@ async function loadStudents() {
 
     // Сохраняем в sessionStorage
     try { sessionStorage.setItem(_CACHE_KEY, JSON.stringify({ data: students, pays: _allPayments, ts: Date.now() })); } catch(e) {}
+    _addProfileOnlyStudents();   // база перечитана — заново добавляем «только анкета» (если анкеты уже есть)
     _applyRealNames();   // если анкеты уже загружены — сразу подставляем реальные ФИО бот-гостям
 
   } catch(e) {
@@ -2467,6 +2468,48 @@ function _applyRealNames(){
     renderStudentDB(document.getElementById('sdb-search')?.value || '');
   }
 }
+// Анкета в боте есть, покупок нет — тоже ученик (решение владельца 09.11.2026: «Реп Чесс Хелпер»
+// заполнил анкету, а в базе его не было). Только у админа: листы «Профили»/«Лиды» тренерам не отдаются.
+// Совпадение с уже известным учеником — по почте из базы бота, телефону (Лиды по Chat ID) или
+// анкетной почте; анкетную почту тренера/админа не считаем (хелпер указал почту админа).
+// Почта карточки — служебная, по правилу бота для гостей: cert-<10 цифр>@repchess.local, без
+// телефона tg-<Chat ID>@repchess.local. Анкетную почту не берём: она не подтверждена.
+function _addProfileOnlyStudents(){
+  if (currentTrainer?.role !== 'admin' || !_insData || !Array.isArray(students)) return 0;
+  const chatPhone = {}, chatTgName = {};
+  (_insData.leads || []).forEach(function(l){
+    const cid = String(l['Chat ID'] || '').trim(); if (!cid) return;
+    const ph = _np(l['Телефон']); if (ph) chatPhone[cid] = ph;
+    if (l['Имя (Telegram)']) chatTgName[cid] = String(l['Имя (Telegram)']).trim();
+  });
+  const staff = new Set((_trainersCache || []).map(t => String(t.email || '').toLowerCase()).filter(Boolean));
+  const emails = new Set(), phones = new Set(), chats = new Set();
+  students.forEach(function(x){
+    if (x.email) emails.add(String(x.email).toLowerCase());
+    const ph = _np(x.phone); if (ph) phones.add(ph);
+    if (x.profileOnly && x.chatId) chats.add(String(x.chatId));
+  });
+  Object.keys(_emailAlias || {}).forEach(e => emails.add(e));
+  let added = 0, n = students.filter(x => x.profileOnly).length;
+  (_insData.profiles || []).forEach(function(p){
+    const cid = String(p['Chat ID'] || '').trim();
+    const e1 = String(p['Почта'] || '').toLowerCase().trim();
+    const e2 = String(p['Email в базе'] || '').toLowerCase().trim();
+    const ph = chatPhone[cid] || '';
+    if (cid && chats.has(cid)) return;
+    if ((e2 && emails.has(e2)) || (ph && phones.has(ph)) || (e1 && !staff.has(e1) && emails.has(e1))) return;
+    const email = e2 || (ph ? 'cert-' + ph + '@repchess.local' : (cid ? 'tg-' + cid + '@repchess.local' : ''));
+    if (!email || emails.has(email)) return;
+    n++; added++;
+    students.push({ name: String(p['ФИО'] || '').trim() || chatTgName[cid] || 'Без имени', email, key: ph || email,
+      phone: ph ? '7' + ph : '', tgNick: String(p['Ник'] || '').replace(/^@/, ''), chatId: cid,
+      id: 'RC-A' + String(n).padStart(3, '0'), profileOnly: true,
+      purchased: 0, purchasedExpired: 0, purchasedGroup: 0, purchasedIndiv: 0, byCat: {}, packs: [],
+      remaining: 0, remainingRaw: 0, used: 0, remainByCat: {}, firstDate: null, nextExpiry: null });
+    emails.add(email); if (ph) phones.add(ph); if (cid) chats.add(cid);
+  });
+  return added;
+}
 async function loadNickMap(){
   if (currentTrainer?.role !== 'admin') return;
   try {
@@ -2477,7 +2520,9 @@ async function loadNickMap(){
     const d = JSON.parse(txt);
     _insData = d;   // переиспользуется карточкой «Лиды и профили»
     _buildNickMaps(d);
+    const _pAdded = _addProfileOnlyStudents();   // анкета без покупок — тоже в базу
     _applyRealNames();   // подставляем реальные ФИО бот-гостям и перерисовываем базу
+    if (_pAdded && document.getElementById('sdb-list')) renderStudentDB(document.getElementById('sdb-search')?.value || '');
   } catch (e) {}
 }
 
@@ -7309,7 +7354,7 @@ function renderStudentDB(q) {
         <div style="margin-top:3px">${trainerLabel}</div>
       </div>
       <div style="flex-shrink:0;margin-left:10px">
-        <span class="balance-badge ${balClass}">${bal} ост.</span>
+        <span class="balance-badge ${s.profileOnly ? 'balance-empty' : balClass}">${s.profileOnly ? 'без пакета' : bal + ' ост.'}</span>
       </div>
     </div>`;
   }).join('');
