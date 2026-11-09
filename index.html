@@ -209,7 +209,7 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
   <div class="header-right">
     <span id="status-pill" class="status-pill spin">Загрузка...</span>
     <span id="next-refresh" class="status-pill" style="display:none"></span>
-    <button class="btn btn-gold" onclick="doRefresh()">🔄 Обновить</button>
+    <button class="btn btn-gold" onclick="doRefresh(true)">🔄 Обновить</button>
     <button class="btn btn-ghost" onclick="doLogout()">Выйти</button>
   </div>
 </div>
@@ -242,7 +242,7 @@ body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui
   <div class="err-card">
     <h3>⚠ Не удалось загрузить данные</h3>
     <p id="err-msg">Проверь подключение к интернету и попробуй снова.</p>
-    <br><button class="btn btn-gold" onclick="doRefresh()">Попробовать снова</button>
+    <br><button class="btn btn-gold" onclick="doRefresh(true)">Попробовать снова</button>
   </div>
 </div>
 
@@ -452,6 +452,11 @@ let _tab='all', _sSort={key:'lastPay',dir:-1}, _aSort={key:'totalSpent',dir:-1};
 let _lastRefresh=0, _timer=null;
 let _dateFrom=null, _dateTo=null;
 let usedLessonsMap={};  // representative-email → кол-во проведённых занятий
+// Сырые проведённые занятия [email, _date] — читаем всю коллекцию lessons не чаще раза в 30 минут.
+// Раньше читали на каждом автообновлении (каждые 5 мин) — это тысячи чтений в час из лимита
+// Firebase Spark 50K/сутки; 09.11.2026 лимит кончился, и встали бот, кабинет и CRM.
+let _usedRaw=null, _usedAt=0, _usedErr=false;
+const USED_TTL_MS = 30 * 60 * 1000;
 let _emailAlias={};     // email → представительский email того же человека (склейка по телефону)
 // ЕДИНЫЙ КЛЮЧ ЛИЧНОСТИ (одна логика с тренеркой, ботом, клиентом): телефон (последние 10 цифр), иначе email.
 function personKey(email, phone){
@@ -532,26 +537,36 @@ async function doLogin() {
 
 function doLogout() { auth.signOut(); }
 
-async function loadUsedLessons() {
-  try {
-    const db = firebase.firestore();
-    const snap = await db.collection('lessons').get();
-    usedLessonsMap = {};
-    snap.forEach(doc => {
-      const d = doc.data();
-      // Списывают баланс только ПРОВЕДЁННЫЕ: done или старые записи без статуса.
-      // pending/rescheduled/cancelled/absent НЕ списывают (единое правило CRM/тренер/бот)
-      if (d.status && d.status !== 'done') return;
-      const email = (d.studentEmail||'').toLowerCase().trim();
-      if (!email) return;
-      // Фолдим все email человека к его представительскому (карточки склеены по телефону)
-      const rep = _emailAlias[email] || email;
-      if (!d._date) return;                       // без даты в хронологию не поставить
-      (usedLessonsMap[rep] = usedLessonsMap[rep] || []).push(d._date);
-    });
-    // Групповые занятия отдельно НЕ считаем: у каждого участника группы и так
-    // создаётся индивидуальная запись в lessons — иначе был бы двойной счёт
-  } catch(e) { console.warn('Firestore read:', e); }
+async function loadUsedLessons(force) {
+  if (force || !_usedRaw || Date.now() - _usedAt > USED_TTL_MS) {
+    try {
+      const db = firebase.firestore();
+      const snap = await db.collection('lessons').get();
+      const raw = [];
+      snap.forEach(doc => {
+        const d = doc.data();
+        // Списывают баланс только ПРОВЕДЁННЫЕ: done или старые записи без статуса.
+        // pending/rescheduled/cancelled/absent НЕ списывают (единое правило CRM/тренер/бот)
+        if (d.status && d.status !== 'done') return;
+        const email = (d.studentEmail||'').toLowerCase().trim();
+        if (!email || !d._date) return;             // без почты некому, без даты в хронологию не поставить
+        raw.push([email, d._date]);
+      });
+      _usedRaw = raw; _usedAt = Date.now(); _usedErr = false;
+    } catch(e) {
+      console.warn('Firestore read:', e);
+      _usedErr = true;   // оставляем прошлую копию, если она была
+    }
+  }
+  // Карту строим заново каждый раз: склейка почт (_emailAlias) могла измениться с новыми оплатами.
+  // Фолдим все email человека к его представительскому (карточки склеены по телефону).
+  // Групповые занятия отдельно НЕ считаем: у каждого участника группы и так
+  // создаётся индивидуальная запись в lessons — иначе был бы двойной счёт
+  usedLessonsMap = {};
+  (_usedRaw || []).forEach(([email, date]) => {
+    const rep = _emailAlias[email] || email;
+    (usedLessonsMap[rep] = usedLessonsMap[rep] || []).push(date);
+  });
 }
 
 function getBalance(key) {
@@ -715,7 +730,10 @@ function computeFiltered() {
 // ══════════════════════════════════════════
 //  FETCH
 // ══════════════════════════════════════════
-async function doRefresh() {
+// force = кнопка «Обновить»: перечитать и занятия из Firebase (иначе — раз в 30 мин)
+let _forceUsed=false;
+async function doRefresh(force) {
+  _forceUsed = force === true;
   setPill('Загружаю...','spin');
   try {
     const user = auth.currentUser;
@@ -862,7 +880,10 @@ function processCSV(txt) {
   computeFiltered();
   renderAll();
   // Подгружаем баланс занятий из Firebase асинхронно
-  loadUsedLessons().then(()=>renderAll());
+  loadUsedLessons(_forceUsed).then(()=>{
+    renderAll();
+    if (_usedErr) setPill(`⚠ ${dt} · ${rows.length} записей · списания из Firebase не загрузились`,'err');
+  });
 }
 
 function isActiveDate(d){return!!d&&(Date.now()-d.getTime())<=30*86400000;}
@@ -1101,7 +1122,8 @@ function fmt(d){return d.toISOString().slice(0,10);}
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 // Экранирование для JS-строки внутри HTML-атрибута (onclick="fn('...')") — esc() НЕ экранирует одинарную кавычку
 function escJs(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r?\n/g,'\\n').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function show(id){document.getElementById(id).style.display='';}
+// Сброс inline-стиля возвращает CSS-значение; у #error-state в CSS display:none — тогда показываем явно
+function show(id){const el=document.getElementById(id);el.style.display='';if(getComputedStyle(el).display==='none')el.style.display='block';}
 function hide(id){document.getElementById(id).style.display='none';}
 function setPill(t,cls){const el=document.getElementById('status-pill');el.textContent=t;el.className='status-pill '+(cls||'');}
 
