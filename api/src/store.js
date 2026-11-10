@@ -18,20 +18,23 @@ export class ApiError extends Error {
   constructor(code, message) { super(message); this.code = code }
 }
 
+// Время последней правки строкой с микросекундами (как updateTime у Firestore)
+export const UT = `to_char(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`
+
 const FIELD = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/
 const ID = /^[A-Za-z0-9_.@+-]{1,200}$/
 const MAX_LIMIT = 5000
 const MAX_WRITES = 500   // как у пакета Firestore
 
-function table(coll) {
+export function table(coll) {
   if (!COLLECTIONS.includes(coll)) throw new ApiError('invalid-argument', `неизвестная коллекция ${coll}`)
   return TABLES[coll]
 }
-function checkId(id) {
+export function checkId(id) {
   if (typeof id !== 'string' || !ID.test(id)) throw new ApiError('invalid-argument', 'недопустимый id документа')
   return id
 }
-function checkField(f) {
+export function checkField(f) {
   if (typeof f !== 'string' || !FIELD.test(f)) throw new ApiError('invalid-argument', `недопустимое поле ${f}`)
   return f
 }
@@ -61,11 +64,11 @@ export function autoId() {
 
 export async function getDoc(client, auth, coll, id) {
   const t = table(coll); checkId(id)
-  const r = await client.query(`SELECT doc FROM ${t} WHERE id = $1`, [id])
+  const r = await client.query(`SELECT doc, ${UT} AS ut FROM ${t} WHERE id = $1`, [id])
   const data = r.rows[0] ? r.rows[0].doc : null
   // Как Firestore: правило проверяется и для несуществующего документа (по id)
   if (!canRead(auth, coll, id, data || {}, 'get')) throw new ApiError('permission-denied', 'нет доступа')
-  return data ? { id, data } : null
+  return data ? { id, data, updateTime: r.rows[0].ut } : null
 }
 
 export async function queryDocs(client, auth, coll, { where = [], orderBy = [], limit } = {}) {
@@ -92,28 +95,43 @@ export async function queryDocs(client, auth, coll, { where = [], orderBy = [], 
     } else throw new ApiError('invalid-argument', `оператор ${op} не поддерживается`)
   }
   const order = []
-  for (const o of orderBy) {
+  // Как Firestore: без явной сортировки запрос с неравенством отдаётся по этому полю,
+  // а при равных значениях — по id в направлении последней сортировки (побайтово).
+  let sort = orderBy
+  if (!sort.length) {
+    const ineq = where.find(w => ['>=', '<=', '>', '<'].includes(w[1]))
+    if (ineq) sort = [[ineq[0], 'asc']]
+  }
+  let lastDir = 'ASC'
+  for (const o of sort) {
     const [f, dir = 'asc'] = Array.isArray(o) ? o : [o]
     checkField(f)
     const d = dir === 'desc' ? 'DESC' : 'ASC'
+    lastDir = d
     conds.push(`doc ? '${f}'`)   // как Firestore: без поля сортировки документ не выдаётся
     order.push(`CASE WHEN jsonb_typeof(doc->'${f}') = 'number' THEN (doc->>'${f}')::numeric END ${d}`,
-               `(doc->>'${f}') COLLATE "C" ${d}`)
+               `coalesce(doc->'${f}'->>'__ts', doc->>'${f}') COLLATE "C" ${d}`)
   }
-  order.push('id ASC')
+  order.push(`id COLLATE "C" ${lastDir}`)
   let lim = ''
   if (limit !== undefined) {
     if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) throw new ApiError('invalid-argument', `limit 1–${MAX_LIMIT}`)
     lim = ` LIMIT ${limit}`
   }
-  const sql = `SELECT id, doc FROM ${t}${conds.length ? ' WHERE ' + conds.join(' AND ') : ''} ORDER BY ${order.join(', ')}${lim}`
+  const sql = `SELECT id, doc, ${UT} AS ut FROM ${t}${conds.length ? ' WHERE ' + conds.join(' AND ') : ''} ORDER BY ${order.join(', ')}${lim}`
   const rows = (await client.query(sql, params)).rows
   // Вторая линия защиты: каждый документ выдачи ещё раз через правило чтения
   for (const r of rows) {
     if (!canRead(auth, coll, r.id, r.doc, 'list')) throw new ApiError('permission-denied', 'нет доступа к документу выдачи')
   }
-  return rows.map(r => ({ id: r.id, data: r.doc }))
+  return rows.map(r => ({ id: r.id, data: r.doc, updateTime: r.ut }))
 }
+
+// ── Отметки времени ──
+// Timestamp Firestore хранится в документе как { "__ts": "2026-11-09T20:37:20.273Z" }: тип
+// нельзя терять — тренерка зовёт у таких полей .toDate(), бот читает timestampValue.
+// Обычная строка с датой (askedAt у отзывов, _date занятий) остаётся строкой.
+export const isTs = v => !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.__ts === 'string' && Object.keys(v).length === 1
 
 // ── Служебные значения (то, что в Firestore — FieldValue) ──
 // В JSON приходят как { "__op": "serverTimestamp" | "delete" | "arrayUnion" | "arrayRemove", "values": [...] }
@@ -124,7 +142,7 @@ const DELETE = Symbol('delete')
 
 function applyOp(op, current, now) {
   switch (op.__op) {
-    case 'serverTimestamp': return now
+    case 'serverTimestamp': return { __ts: now }
     case 'delete': return DELETE
     case 'arrayUnion': {
       const base = Array.isArray(current) ? current.slice() : []
@@ -221,8 +239,8 @@ export async function commit(client, auth, writes) {
         throw new ApiError('permission-denied', `нет прав: ${kind} ${w.coll}/${id}`)
       }
       if (kind === 'delete') await client.query(`DELETE FROM ${t} WHERE id = $1`, [id])
-      else if (kind === 'create') await client.query(`INSERT INTO ${t} (id, doc) VALUES ($1, $2)`, [id, after])
-      else await client.query(`UPDATE ${t} SET doc = $2, updated_at = now() WHERE id = $1`, [id, after])
+      else if (kind === 'create') await client.query(`INSERT INTO ${t} (id, doc, updated_at) VALUES ($1, $2, clock_timestamp())`, [id, after])
+      else await client.query(`UPDATE ${t} SET doc = $2, updated_at = clock_timestamp() WHERE id = $1`, [id, after])
       results.push({ id, op: kind })
     }
     await client.query('COMMIT')

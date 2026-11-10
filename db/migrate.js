@@ -28,6 +28,24 @@ const TABLES = {
 }
 const NEVER_DELETE = new Set(['cert_codes'])
 
+// Отметки времени Firestore (Timestamp) хранятся как { "__ts": "<ISO>" } — тип терять нельзя:
+// тренерка зовёт у них .toDate(), бот читает timestampValue. Снимок версии 2 уже несёт их
+// в таком виде (db/export-snippet.js). Снимок версии 1 (09.11.2026) записал их строками —
+// для него список полей ниже; он снят с базы проходом по всем документам 10.11.2026
+// (вложенных отметок времени нет).
+const TS_FIELDS_V1 = {
+  trainers: ['createdAt'], lessons: ['createdAt'], groupLessons: ['createdAt'],
+  certCodes: ['createdAt', 'usedAt', 'archivedAt'], trainerSchedules: ['updatedAt'],
+}
+function upgradeV1(snap) {
+  for (const [coll, fields] of Object.entries(TS_FIELDS_V1)) {
+    for (const d of snap.collections[coll] || []) {
+      for (const f of fields) if (typeof d.data[f] === 'string') d.data[f] = { __ts: d.data[f] }
+    }
+  }
+  snap.format = 2
+}
+
 // Ключи объектов по алфавиту — чтобы сравнивать документы независимо от порядка полей
 function canon(v) {
   if (Array.isArray(v)) return v.map(canon)
@@ -53,6 +71,7 @@ async function main() {
   if (!file) throw new Error('укажи файл снимка')
   if (!/^[a-z_]+$/.test(schema)) throw new Error('недопустимое имя схемы')
   const snap = JSON.parse(fs.readFileSync(file, 'utf8'))
+  if (snap.format !== 2) upgradeV1(snap)
   for (const v of ['PGHOST', 'PGDATABASE', 'PGUSER']) if (!process.env[v]) throw new Error(`не задана переменная ${v}`)
   const c = new Client({ ssl: { rejectUnauthorized: false }, application_name: 'repchess-migrate' })
   await c.connect()

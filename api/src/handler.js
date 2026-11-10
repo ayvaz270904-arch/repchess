@@ -5,11 +5,14 @@
 //   POST /v1/get     { coll, id }       — документ или null
 //   POST /v1/query   { coll, where, orderBy, limit } — список { id, data }
 //   POST /v1/commit  { writes: [...] }  — пакет записей одной транзакцией
+//   *    /fs/documents…                 — вход в формате Firestore REST для бота и прокси
+//                                         (fsrest.js), только по служебному ключу
 //
 // Ответ — JSON. Ошибка — { error: { code, message } } с кодом HTTP по смыслу.
 
 import { identify, AuthError } from './auth.js'
 import { getDoc, queryDocs, commit, ApiError } from './store.js'
+import { handleFs, FsError } from './fsrest.js'
 
 const STATUS = {
   'invalid-argument': 400, unauthenticated: 401, 'permission-denied': 403,
@@ -24,7 +27,7 @@ function corsHeaders(request, env) {
   if (origin && allowed.includes(origin)) {
     h['access-control-allow-origin'] = origin
     h['access-control-allow-headers'] = 'authorization, content-type, x-service-key'
-    h['access-control-allow-methods'] = 'GET, POST, OPTIONS'
+    h['access-control-allow-methods'] = 'GET, POST, OPTIONS'   // /fs/* — не для браузера, PATCH/DELETE тут не нужны
     h['access-control-max-age'] = '600'
   }
   return h
@@ -44,6 +47,35 @@ function fail(e, request, env, log) {
   return json({ error: { code, message } }, STATUS[code] || 500, request, env)
 }
 
+const FS_PREFIX = '/fs/documents'
+const FS_STATUS = { 'invalid-argument': [400, 'INVALID_ARGUMENT'], 'permission-denied': [403, 'PERMISSION_DENIED'],
+  'not-found': [404, 'NOT_FOUND'], 'already-exists': [409, 'ALREADY_EXISTS'], unauthenticated: [401, 'UNAUTHENTICATED'] }
+
+// Ошибки — в виде Firestore: { error: { code, message, status } }. Бот различает ответы по коду HTTP.
+async function fsRoute(request, env, deps, url) {
+  const out = (status, body) => json(body, status, request, env)
+  try {
+    const who = await identify(request, env, deps)
+    if (!who) throw new AuthError('нужен служебный ключ')
+    if (!who.isService) throw new ApiError('permission-denied', 'этот вход — только для бота и прокси')
+    let body
+    if (request.method === 'POST' || request.method === 'PATCH') {
+      const text = await request.text()
+      if (text.length > MAX_BODY) throw new ApiError('invalid-argument', 'слишком большой запрос')
+      try { body = JSON.parse(text || '{}') } catch { throw new ApiError('invalid-argument', 'тело — не JSON') }
+    }
+    const auth = { uid: who.uid, isService: true, role: null }
+    const r = await deps.withClient(c => handleFs(c, auth, env, request.method, url.pathname.slice(FS_PREFIX.length), url.searchParams, body))
+    return out(r.status, r.body)
+  } catch (e) {
+    if (e instanceof FsError) return out(e.http, { error: { code: e.http, message: e.message, status: e.status } })
+    const m = e && e.code && FS_STATUS[e.code]
+    if (m) return out(m[0], { error: { code: m[0], message: e.message, status: m[1] } })
+    ;(deps.log || (x => console.error(x)))(e)
+    return out(500, { error: { code: 500, message: 'внутренняя ошибка', status: 'INTERNAL' } })
+  }
+}
+
 export async function handle(request, env, deps) {
   const url = new URL(request.url)
   const log = deps.log || (e => console.error(e))
@@ -54,6 +86,7 @@ export async function handle(request, env, deps) {
       const v = await deps.withClient(c => c.query(`SELECT value FROM schema_meta WHERE key = 'schema_version'`))
       return json({ ok: true, schema: v.rows[0] ? v.rows[0].value : null }, 200, request, env)
     }
+    if (url.pathname.startsWith(FS_PREFIX)) return await fsRoute(request, env, deps, url)
     if (request.method !== 'POST' || !['/v1/get', '/v1/query', '/v1/commit'].includes(url.pathname)) {
       return json({ error: { code: 'not-found', message: 'нет такого адреса' } }, 404, request, env)
     }

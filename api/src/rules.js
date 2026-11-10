@@ -63,6 +63,9 @@ export function canQuery(auth, coll, where) {
 // after — документ после (null при delete).
 export function canWrite(auth, coll, id, op, before, after) {
   if (!signedIn(auth)) return false
+  // Промокоды не удаляет никто — ни админ, ни бот: только архив (правило владельца после
+  // 20.10.2026, когда чистка «старше 14 дней» стёрла выданные коды). Строже, чем было в Firestore.
+  if (coll === 'certCodes' && op === 'delete') return false
   if (auth.isService) return true
   const admin = isAdmin(auth)
   switch (coll) {
