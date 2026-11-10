@@ -154,14 +154,19 @@
     return o
   }
 
-  function Query(coll, where, orderBy, limit) { this._coll = coll; this._where = where; this._orderBy = orderBy; this._limit = limit }
-  Query.prototype.where = function (f, op, v) { return new Query(this._coll, this._where.concat([[f, op, wire(v)]]), this._orderBy, this._limit) }
-  Query.prototype.orderBy = function (f, dir) { return new Query(this._coll, this._where, this._orderBy.concat([[f, dir === 'desc' ? 'desc' : 'asc']]), this._limit) }
-  Query.prototype.limit = function (n) { return new Query(this._coll, this._where, this._orderBy, n) }
+  function Query(coll, where, orderBy, limit, select) { this._coll = coll; this._where = where; this._orderBy = orderBy; this._limit = limit; this._select = select }
+  Query.prototype.where = function (f, op, v) { return new Query(this._coll, this._where.concat([[f, op, wire(v)]]), this._orderBy, this._limit, this._select) }
+  Query.prototype.orderBy = function (f, dir) { return new Query(this._coll, this._where, this._orderBy.concat([[f, dir === 'desc' ? 'desc' : 'asc']]), this._limit, this._select) }
+  Query.prototype.limit = function (n) { return new Query(this._coll, this._where, this._orderBy, n, this._select) }
+  // select('поле', …) — в ответе только эти поля. Своё расширение: у запросов Firestore SDK
+  // в браузере такого метода нет, поэтому страница проверяет typeof q.select === 'function'
+  // и в режиме Firestore читает документы целиком.
+  Query.prototype.select = function () { return new Query(this._coll, this._where, this._orderBy, this._limit, Array.prototype.slice.call(arguments)) }
   Query.prototype.get = function () {
     var coll = this._coll
     var body = { coll: coll, where: this._where, orderBy: this._orderBy }
     if (this._limit !== undefined) body.limit = this._limit
+    if (this._select) body.select = this._select
     return call('/v1/query', body).then(function (j) {
       return new QuerySnap(j.docs.map(function (d) { return new DocSnap(new DocRef(coll, d.id), d.data) }))
     })

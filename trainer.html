@@ -10,12 +10,11 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Журнал">
 <link rel="apple-touch-icon" href="icon.svg">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <!-- Слой данных: при переезде на свою базу подменяет firebase.firestore() на API (см. datalayer.js) -->
-<script src="datalayer.js?v=2"></script>
+<script src="datalayer.js?v=3"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1449,7 +1448,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.10-fastload';
+const APP_VERSION = '11.10-quick';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1756,17 +1755,22 @@ async function showApp() {
   // «Главная» рисуется сразу по занятиям, а блок «Баланс кончился» и база учеников
   // в «Админе» дорисовываются, когда она придёт. Другие сохранённые вкладки, как раньше,
   // открываются после базы.
+  // Всё, что не зависит друг от друга, стартует сразу: база учеников и анкеты из Apps Script,
+  // цены и тренеры из API и занятия для «Главной» (лента от цен и тренеров не зависит).
+  // Анкеты и база могут прийти в любом порядке: loadStudents в конце сам подставляет
+  // анкеты и ФИО, если они пришли раньше.
   _unknownPayments = [];
   _studentsReady = false;
   const _pricesReady = loadPriceOverrides();
   const _studentsLoad = loadStudents(_pricesReady);   // самое долгое — запускаем первым и не ждём
+  loadNickMap();   // анкеты и ники ТГ из Apps Script (админ), не блокируем загрузку
   // Список всех тренеров — только админу: правила Firestore не отдают его тренеру
   // (в документах лежат assignedStudents — почты чужих учеников). Тренеру он и не нужен:
   // выбор тренера в модалках админский, а своё закрепление есть в currentTrainer.
-  await Promise.all([_pricesReady, currentTrainer.role === 'admin' ? loadTrainers() : null]);
-  loadNickMap();   // карта ников ТГ для поиска (админ, не блокируем загрузку)
+  const _trainersReady = currentTrainer.role === 'admin' ? loadTrainers() : null;
   const _savedPage = sessionStorage.getItem('_activePage') || 'home';
   if (_savedPage === 'home') { await loadHomePage(); showPage('home'); }
+  await Promise.all([_pricesReady, _trainersReady]);
   await _studentsLoad;
   await _enrichStudentsWithRemaining(); // обогащаем s.remaining для всех учеников
   _studentsReady = true;
@@ -2125,7 +2129,11 @@ async function _enrichStudentsWithRemaining() {
     // Админ читает занятия ВСЕХ тренеров; тренер — только свои (ограничение Firestore-правил)
     const isAdmin = currentTrainer?.role === 'admin';
     const base = db.collection('lessons');
-    const snap = await (isAdmin ? base : base.where('trainerId', '==', currentUser.uid)).get();
+    let q = isAdmin ? base : base.where('trainerId', '==', currentUser.uid);
+    // В своей базе берём только поля, нужные для подсчёта: ~0,1 МБ вместо ~0,5 МБ на 651 занятие.
+    // В Firestore у запроса нет select — там документы читаются целиком, как раньше.
+    if (typeof q.select === 'function') q = q.select('status', 'studentEmail', '_date', 'type', 'format');
+    const snap = await q.get();
     const usedMap = {};
     snap.docs.forEach(d => {
       const data = d.data();
@@ -5034,10 +5042,28 @@ function _ratePrevDay(dateStr) {
 // График: выручка (по датам оплат) против выплат тренерам (по датам занятий), 12 месяцев.
 // Считается по всем данным, а не по выбранному периоду — чтобы видеть динамику и сезонность.
 let _finChart = null;
+// Chart.js (~200 КБ) нужен только этому графику — грузим его при первом показе «Финансов»,
+// а не при каждом открытии тренерки.
+let _chartJsLoading = null;
+function _loadChartJs() {
+  if (typeof Chart !== 'undefined') return Promise.resolve();
+  if (!_chartJsLoading) _chartJsLoading = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js';
+    s.onload = resolve;
+    s.onerror = () => { _chartJsLoading = null; reject(new Error('Chart.js не загрузился')); };
+    document.head.appendChild(s);
+  });
+  return _chartJsLoading;
+}
 function _renderFinChart(lessonsSnap, groupSnap, ratesMap, nameToId, norm) {
   const card = document.getElementById('fin-chart-card');
   const cv = document.getElementById('fin-chart');
-  if (!card || !cv || typeof Chart === 'undefined') return;
+  if (!card || !cv) return;
+  if (typeof Chart === 'undefined') {
+    _loadChartJs().then(() => _renderFinChart(lessonsSnap, groupSnap, ratesMap, nameToId, norm)).catch(() => {});
+    return;
+  }
 
   const months = [];                                   // последние 12 месяцев, включая текущий
   const d0 = new Date();
