@@ -10,8 +10,8 @@ compatibility_date = "2026-07-01"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
-# Пока перенос не завершён — тестовая копия. На этапе 6 сменить на рабочую схему.
-PGSCHEMA = "staging"
+# Рабочая схема (переключение 10.11.2026). staging — тестовая копия на 09.11, не трогать в работе.
+PGSCHEMA = "prod"
 FIREBASE_PROJECT_ID = "repchess-trainer"
 ALLOWED_ORIGINS = "https://repchess.ayvaz-270904.workers.dev,https://ayvaz270904-arch.github.io"
 AUTH_PROVIDERS = "firebase,service"

@@ -13,7 +13,7 @@
 (function () {
   'use strict'
 
-  var RC_BACKEND_DEFAULT = 'firestore'   // переключение: 'api'
+  var RC_BACKEND_DEFAULT = 'api'   // с 10.11.2026 — своя база; откат: 'firestore'
   var RC_API_BASE = 'https://repchess-api.ayvaz-270904.workers.dev'
 
   var backend = RC_BACKEND_DEFAULT
