@@ -78,9 +78,17 @@ export async function getDoc(client, auth, coll, id) {
   return data ? { id, data, updateTime: r.rows[0].ut } : null
 }
 
-export async function queryDocs(client, auth, coll, { where = [], orderBy = [], limit } = {}) {
+// select — необязательный список полей верхнего уровня: в ответе остаются только они.
+// Так тренерка берёт для подсчёта остатков 5 полей занятия вместо всего документа
+// (651 занятие: ~0,5 МБ → ~0,1 МБ). Права проверяются по полному документу, как без select.
+export async function queryDocs(client, auth, coll, { where = [], orderBy = [], limit, select } = {}) {
   const t = table(coll)
   if (!Array.isArray(where) || !Array.isArray(orderBy)) throw new ApiError('invalid-argument', 'where/orderBy — массивы')
+  let pick = null
+  if (select !== undefined) {
+    if (!Array.isArray(select) || select.length === 0 || select.length > 20) throw new ApiError('invalid-argument', 'select — список из 1–20 полей')
+    pick = select.map(f => { if (f === '__proto__') throw new ApiError('invalid-argument', 'недопустимое поле'); return checkField(f) })
+  }
   if (!canQuery(auth, coll, where)) throw new ApiError('permission-denied', 'нет доступа к такому запросу')
   const params = []
   const conds = []
@@ -131,7 +139,8 @@ export async function queryDocs(client, auth, coll, { where = [], orderBy = [], 
   for (const r of rows) {
     if (!canRead(auth, coll, r.id, r.doc, 'list')) throw new ApiError('permission-denied', 'нет доступа к документу выдачи')
   }
-  return rows.map(r => ({ id: r.id, data: r.doc, updateTime: r.ut }))
+  const only = doc => { const o = {}; for (const f of pick) if (Object.prototype.hasOwnProperty.call(doc, f)) o[f] = doc[f]; return o }
+  return rows.map(r => ({ id: r.id, data: pick ? only(r.doc) : r.doc, updateTime: r.ut }))
 }
 
 // ── Отметки времени ──

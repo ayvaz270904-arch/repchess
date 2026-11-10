@@ -125,6 +125,19 @@ async function main() {
     eq(ids(r), ['L2', 'L1', 'L4'])
   })
   await t('тренер: занятия без фильтра — отказ', async () => eq((await call('/v1/query', q('lessons'), 't1')).status, 403))
+  await t('выборка полей: только нужные поля, те же документы и порядок', async () => {
+    const r = await call('/v1/query', q('lessons', { where: [['trainerId', '==', 'uidT1']], orderBy: [['_date', 'desc']], select: ['studentEmail', '_date', 'status', 'format', 'noSuchField'] }), 't1')
+    eq(ids(r), ['L2', 'L1', 'L4'])
+    eq(r.body.docs.map(d => Object.keys(d.data).sort().join(',')), ['_date,format,status,studentEmail', '_date,format,status,studentEmail', '_date,format,status,studentEmail'])
+    eq(r.body.docs[1].data, { studentEmail: 's1@x.ru', _date: '2026-11-01', status: 'done', format: 'online' })
+  })
+  await t('выборка полей: права те же, недопустимый select — 400', async () => {
+    eq((await call('/v1/query', q('lessons', { select: ['_date'] }), 't1')).status, 403)
+    eq((await call('/v1/query', q('lessons', { select: ['__proto__'] }), 'admin')).status, 400)
+    eq((await call('/v1/query', q('lessons', { select: [] }), 'admin')).status, 400)
+    eq((await call('/v1/query', q('lessons', { select: 'studentEmail' }), 'admin')).status, 400)
+    eq((await call('/v1/query', q('lessons', { select: ['a.b'] }), 'admin')).status, 400)
+  })
   await t('тренер: занятия чужого тренера — отказ', async () => eq((await call('/v1/query', q('lessons', { where: [['trainerId', '==', 'uidT2']] }), 't1')).status, 403))
   await t('тренер: чужое занятие по id — отказ, своё — да', async () => {
     eq((await call('/v1/get', { coll: 'lessons', id: 'L3' }, 't1')).status, 403)
