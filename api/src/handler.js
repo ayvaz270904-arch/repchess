@@ -7,16 +7,18 @@
 //   POST /v1/commit  { writes: [...] }  — пакет записей одной транзакцией
 //   *    /fs/documents…                 — вход в формате Firestore REST для бота и прокси
 //                                         (fsrest.js), только по служебному ключу
+//   *    /v1/payments…                  — оплаты, копия листа Table 2 (payments.js)
 //
 // Ответ — JSON. Ошибка — { error: { code, message } } с кодом HTTP по смыслу.
 
 import { identify, AuthError } from './auth.js'
 import { getDoc, queryDocs, commit, ApiError, qualify, table } from './store.js'
 import { handleFs, FsError } from './fsrest.js'
+import { paymentsSync, paymentsCsv, paymentsRows, paymentsMeta } from './payments.js'
 
 const STATUS = {
   'invalid-argument': 400, unauthenticated: 401, 'permission-denied': 403,
-  'not-found': 404, 'already-exists': 409,
+  'not-found': 404, 'already-exists': 409, unavailable: 503,
 }
 const MAX_BODY = 1_000_000
 
@@ -29,6 +31,7 @@ function corsHeaders(request, env) {
     h['access-control-allow-headers'] = 'authorization, content-type, x-service-key'
     h['access-control-allow-methods'] = 'GET, POST, OPTIONS'   // /fs/* — не для браузера, PATCH/DELETE тут не нужны
     h['access-control-max-age'] = '600'
+    h['access-control-expose-headers'] = 'x-payments-synced-at, x-payments-checked-at'
   }
   return h
 }
@@ -76,6 +79,60 @@ async function fsRoute(request, env, deps, url) {
   }
 }
 
+// Роль — из документа тренера. Пользователь без документа тренера в API не допускается
+// (строже Firestore: там любой вошедший читал priceOverrides).
+async function authOf(client, who) {
+  const auth = { uid: who.uid, isService: who.isService, role: null }
+  if (!who.isService) {
+    const r = await client.query(`SELECT role FROM ${table('trainers')} WHERE id = $1`, [who.uid])
+    if (!r.rows[0]) throw new ApiError('permission-denied', 'нет учётной записи тренера')
+    auth.role = r.rows[0].role
+  }
+  return auth
+}
+
+const NOT_FOUND = () => new ApiError('not-found', 'нет такого адреса')
+
+// Оплаты (payments.js). Копию присылает и читает построчно только служебный ключ (прокси, бот);
+// CSV — админ и тренер (тренер — только своих учеников), сводку — админ.
+async function paymentsRoute(request, env, deps, url) {
+  const path = url.pathname
+  const who = await identify(request, env, deps)
+  if (!who) throw new AuthError('нужен вход')
+  if (path === '/v1/payments/sync') {
+    if (request.method !== 'POST') throw NOT_FOUND()
+    if (!who.isService) throw new ApiError('permission-denied', 'копию оплат присылает только прокси')
+    const text = await request.text()
+    const r = await deps.withClient(c => paymentsSync(c, text, url.searchParams.get('allowShrink') === '1'))
+    return json(r, 200, request, env)
+  }
+  if (request.method !== 'GET') throw NOT_FOUND()
+  if (path === '/v1/payments/rows') {
+    if (!who.isService) throw new ApiError('permission-denied', 'строки оплат — только для бота')
+    const text = await deps.withClient(c => paymentsRows(c, url.searchParams))
+    return new Response(text, { status: 200, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...corsHeaders(request, env) } })
+  }
+  if (path === '/v1/payments' || path === '/v1/payments/meta') {
+    return await deps.withClient(async client => {
+      const auth = await authOf(client, who)
+      if (path === '/v1/payments/meta') {
+        if (!auth.isService && auth.role !== 'admin') throw new ApiError('permission-denied', 'сводка — только админу')
+        return json(await paymentsMeta(client), 200, request, env)
+      }
+      const r = await paymentsCsv(client, auth)
+      return new Response(r.text, {
+        status: 200,
+        headers: {
+          'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store',
+          'x-payments-synced-at': new Date(r.syncedAt).toISOString(), 'x-payments-checked-at': new Date(r.checkedAt).toISOString(),
+          ...corsHeaders(request, env),
+        },
+      })
+    })
+  }
+  throw NOT_FOUND()
+}
+
 export async function handle(request, env, deps) {
   const url = new URL(request.url)
   const log = deps.log || (e => console.error(e))
@@ -87,6 +144,7 @@ export async function handle(request, env, deps) {
       return json({ ok: true, schema: v.rows[0] ? v.rows[0].value : null }, 200, request, env)
     }
     if (url.pathname.startsWith(FS_PREFIX)) return await fsRoute(request, env, deps, url)
+    if (url.pathname === '/v1/payments' || url.pathname.startsWith('/v1/payments/')) return await paymentsRoute(request, env, deps, url)
     if (request.method !== 'POST' || !['/v1/get', '/v1/query', '/v1/commit'].includes(url.pathname)) {
       return json({ error: { code: 'not-found', message: 'нет такого адреса' } }, 404, request, env)
     }
@@ -100,14 +158,7 @@ export async function handle(request, env, deps) {
     try { body = JSON.parse(text || '{}') } catch { throw new ApiError('invalid-argument', 'тело — не JSON') }
 
     return await deps.withClient(async client => {
-      // Роль — из документа тренера. Пользователь без документа тренера в API не допускается
-      // (строже Firestore: там любой вошедший читал priceOverrides).
-      const auth = { uid: who.uid, isService: who.isService, role: null }
-      if (!who.isService) {
-        const r = await client.query(`SELECT role FROM ${table('trainers')} WHERE id = $1`, [who.uid])
-        if (!r.rows[0]) throw new ApiError('permission-denied', 'нет учётной записи тренера')
-        auth.role = r.rows[0].role
-      }
+      const auth = await authOf(client, who)
       if (url.pathname === '/v1/get') return json({ doc: await getDoc(client, auth, body.coll, body.id) }, 200, request, env)
       if (url.pathname === '/v1/query') return json({ docs: await queryDocs(client, auth, body.coll, body) }, 200, request, env)
       return json(await commit(client, auth, body.writes), 200, request, env)

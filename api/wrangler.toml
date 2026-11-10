@@ -15,6 +15,14 @@ PGSCHEMA = "prod"
 FIREBASE_PROJECT_ID = "repchess-trainer"
 ALLOWED_ORIGINS = "https://repchess.ayvaz-270904.workers.dev,https://ayvaz270904-arch.github.io"
 AUTH_PROVIDERS = "firebase,service"
+# CRM-прокси (Apps Script): раз в минуту расписание ниже просит его сверить лист оплат Table 2
+# с копией в базе (src/payments.js). Тот же адрес, что _CSV в trainer.html.
+PAYMENTS_PROXY_URL = "https://script.google.com/macros/s/AKfycbx7_UDm2N5BXftfgZbHa66gAs_ZnbT7ed-N9BuuGJowd3qcVztlrncg_bI_Hzsm_7_cAA/exec"
+
+# Расписание: копия оплат (с 11.11.2026). Минутный триггер в Apps Script съедал бы ~треть
+# суточной квоты триггеров аккаунта (90 мин), поэтому минуту отсчитывает Cloudflare.
+[triggers]
+crons = ["* * * * *"]
 
 # Подключение к базе через Hyperdrive (см. src/worker.js). Конфигурация repchess-db создана
 # 10.11.2026: кэш запросов выключен, sslmode verify-ca, сертификат центра repchess-db-ca

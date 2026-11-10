@@ -116,7 +116,7 @@ async function main() {
   await t('поддельная подпись (выдаёт себя за админа) — 401', async () => eq((await call('/v1/query', q('lessons'), 'forged')).status, 401))
   await t('неверный служебный ключ — 401', async () => eq((await call('/v1/query', q('lessons'), 'badservice')).status, 401))
   await t('вошёл, но не тренер — 403', async () => eq((await call('/v1/query', q('priceOverrides'), 'stranger')).status, 403))
-  await t('health без входа отвечает, версия схемы 1', async () => eq((await call('/v1/health')).body, { ok: true, schema: '1' }))
+  await t('health без входа отвечает, версия схемы 2', async () => eq((await call('/v1/health')).body, { ok: true, schema: '2' }))
   await t('CORS: свой сайт получает разрешение', async () => eq((await call('/v1/health')).cors, ORIGIN))
 
   // Чтение — тренер
