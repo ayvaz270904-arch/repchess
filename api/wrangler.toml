@@ -15,3 +15,11 @@ PGSCHEMA = "staging"
 FIREBASE_PROJECT_ID = "repchess-trainer"
 ALLOWED_ORIGINS = "https://repchess.ayvaz-270904.workers.dev,https://ayvaz270904-arch.github.io"
 AUTH_PROVIDERS = "firebase,service"
+
+# Подключение к базе через Hyperdrive (см. src/worker.js). Блок включается, когда у сервера
+# базы будет сертификат, которому Cloudflare может доверять, и владелец создаст конфигурацию:
+#   npx wrangler hyperdrive create repchess-db --connection-string="postgresql://…" \
+#     --caching-disabled --sslmode verify-ca --ca-certificate-id <id сертификата центра>
+# [[hyperdrive]]
+# binding = "HYPERDRIVE"
+# id = "<id из вывода команды>"

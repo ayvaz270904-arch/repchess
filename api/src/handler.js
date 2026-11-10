@@ -11,7 +11,7 @@
 // Ответ — JSON. Ошибка — { error: { code, message } } с кодом HTTP по смыслу.
 
 import { identify, AuthError } from './auth.js'
-import { getDoc, queryDocs, commit, ApiError } from './store.js'
+import { getDoc, queryDocs, commit, ApiError, qualify, table } from './store.js'
 import { handleFs, FsError } from './fsrest.js'
 
 const STATUS = {
@@ -83,7 +83,7 @@ export async function handle(request, env, deps) {
 
   try {
     if (request.method === 'GET' && url.pathname === '/v1/health') {
-      const v = await deps.withClient(c => c.query(`SELECT value FROM schema_meta WHERE key = 'schema_version'`))
+      const v = await deps.withClient(c => c.query(`SELECT value FROM ${qualify('schema_meta')} WHERE key = 'schema_version'`))
       return json({ ok: true, schema: v.rows[0] ? v.rows[0].value : null }, 200, request, env)
     }
     if (url.pathname.startsWith(FS_PREFIX)) return await fsRoute(request, env, deps, url)
@@ -104,7 +104,7 @@ export async function handle(request, env, deps) {
       // (строже Firestore: там любой вошедший читал priceOverrides).
       const auth = { uid: who.uid, isService: who.isService, role: null }
       if (!who.isService) {
-        const r = await client.query('SELECT role FROM trainers WHERE id = $1', [who.uid])
+        const r = await client.query(`SELECT role FROM ${table('trainers')} WHERE id = $1`, [who.uid])
         if (!r.rows[0]) throw new ApiError('permission-denied', 'нет учётной записи тренера')
         auth.role = r.rows[0].role
       }

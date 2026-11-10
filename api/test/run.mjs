@@ -6,6 +6,7 @@ import fs from 'node:fs'
 import vm from 'node:vm'
 import { createRequire } from 'node:module'
 import { handle } from '../src/handler.js'
+import { setSchema } from '../src/store.js'
 import { _resetJwksCache } from '../src/auth.js'
 
 const require = createRequire(import.meta.url)
@@ -89,6 +90,10 @@ async function seed() {
   await ins('lesson_feedback', 'F1', { status: 'asked', trainerId: 'uidT1', studentEmail: 's1@x.ru', _date: '2026-11-01' })
   await ins('price_overrides', 'P1', { price: 100 })
   await client.query(`INSERT INTO schema_meta (key, value) VALUES ('schema_version','1') ON CONFLICT (key) DO NOTHING`)
+  // Дальше API работает, как в Worker через Hyperdrive: без search_path, схема — в имени таблицы.
+  // Любое имя таблицы без схемы в коде API упадёт здесь же.
+  await client.query('SET search_path TO public')
+  setSchema(SCHEMA)
 }
 
 async function main() {

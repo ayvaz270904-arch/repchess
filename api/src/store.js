@@ -3,10 +3,17 @@
 // лимит), чтение по id, запись (create/set/set merge/update/delete) пакетом в одной
 // транзакции, служебные значения (время сервера, удалить поле, добавить/убрать из массива).
 //
-// Клиент pg передаётся снаружи (Worker или тесты) с уже выставленным search_path.
+// Клиент pg передаётся снаружи (Worker или тесты). Схема (staging/рабочая) задаётся
+// setSchema() и подставляется в имя таблицы: через Hyperdrive search_path из параметров
+// подключения не передаётся, а SET сбрасывается между запросами. Без setSchema имена
+// идут без схемы и работает search_path (локальные тесты).
 // Права проверяются здесь же, функциями из rules.js, на каждый документ.
 
 import { COLLECTIONS, canRead, canQuery, canWrite } from './rules.js'
+
+let SCHEMA = ''
+export function setSchema(s) { SCHEMA = /^[a-z_]+$/.test(s || '') ? s : '' }
+export function qualify(name) { return SCHEMA ? `${SCHEMA}.${name}` : name }
 
 export const TABLES = {
   trainers: 'trainers', lessons: 'lessons', groupLessons: 'group_lessons',
@@ -28,7 +35,7 @@ const MAX_WRITES = 500   // как у пакета Firestore
 
 export function table(coll) {
   if (!COLLECTIONS.includes(coll)) throw new ApiError('invalid-argument', `неизвестная коллекция ${coll}`)
-  return TABLES[coll]
+  return qualify(TABLES[coll])
 }
 export function checkId(id) {
   if (typeof id !== 'string' || !ID.test(id)) throw new ApiError('invalid-argument', 'недопустимый id документа')

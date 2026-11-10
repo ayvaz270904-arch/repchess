@@ -6,12 +6,14 @@
 import http from 'node:http'
 import { createRequire } from 'node:module'
 import { handle } from '../src/handler.js'
+import { setSchema } from '../src/store.js'
 
 const require = createRequire(import.meta.url)
 const { Pool } = require(process.env.PG_MODULE || 'pg')
 for (const v of ['PGHOST', 'PGDATABASE', 'PGUSER', 'SERVICE_KEY']) if (!process.env[v]) throw new Error(`не задана переменная ${v}`)
 const schema = /^[a-z_]+$/.test(process.env.PGSCHEMA || '') ? process.env.PGSCHEMA : 'staging'
-const pool = new Pool({ ssl: { rejectUnauthorized: false }, options: `-c search_path=${schema}`, max: 4, application_name: 'repchess-api-local' })
+setSchema(schema)   // как в Worker: схема в имени таблицы, search_path не нужен
+const pool = new Pool({ ssl: { rejectUnauthorized: false }, max: 4, application_name: 'repchess-api-local' })
 
 const env = {
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || 'repchess-trainer',
