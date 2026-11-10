@@ -7,3 +7,6 @@ gas/
 api/node_modules
 api/.dev.vars
 api/.wrangler
+
+# Сертификат центра сервера базы (открытый, но в публичный репозиторий не кладём)
+api/db-ca.crt
