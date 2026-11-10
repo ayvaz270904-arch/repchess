@@ -1449,7 +1449,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.10-postgres';
+const APP_VERSION = '11.10-fastload';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1482,6 +1482,9 @@ async function checkAppUpdate(btn) {
 }
 
 let students = [];          // from  CSV
+// База учеников приходит из Apps Script дольше всего (~7 с). Пока её нет, «Главная» уже
+// показана по занятиям, а блоки, которым нужна база, рисуют «Загружаю…» (см. showApp).
+let _studentsReady = false;
 let _nickByEmail = {}, _nickByPhone = {};   // ник ТГ из «Лиды»/«Профили» для поиска учеников по нику
 let _nameByEmail = {};   // реальное ФИО из «Профили» по почте (в т.ч. служебной cert-*@repchess.local)
 let _chatByEmail = {};   // Chat ID из «Профили» по почте — надёжный якорь для бот-гостей
@@ -1748,18 +1751,28 @@ async function showApp() {
   document.getElementById('home-greeting').textContent = gr + ', ' + firstName + '!';
   document.getElementById('home-date').textContent = new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'});
 
-  await loadPriceOverrides();
+  // Порядок загрузки (10.11.2026). Раньше шаги шли строго по очереди, и «Главная» ждала
+  // базу учеников из Apps Script: около 7 с из 12. Теперь база грузится параллельно,
+  // «Главная» рисуется сразу по занятиям, а блок «Баланс кончился» и база учеников
+  // в «Админе» дорисовываются, когда она придёт. Другие сохранённые вкладки, как раньше,
+  // открываются после базы.
   _unknownPayments = [];
-  await loadStudents();
+  _studentsReady = false;
+  const _pricesReady = loadPriceOverrides();
+  const _studentsLoad = loadStudents(_pricesReady);   // самое долгое — запускаем первым и не ждём
   // Список всех тренеров — только админу: правила Firestore не отдают его тренеру
   // (в документах лежат assignedStudents — почты чужих учеников). Тренеру он и не нужен:
   // выбор тренера в модалках админский, а своё закрепление есть в currentTrainer.
-  if (currentTrainer.role === 'admin') await loadTrainers();
+  await Promise.all([_pricesReady, currentTrainer.role === 'admin' ? loadTrainers() : null]);
   loadNickMap();   // карта ников ТГ для поиска (админ, не блокируем загрузку)
-  await _enrichStudentsWithRemaining(); // обогащаем s.remaining для всех учеников
-  loadHomePage();
   const _savedPage = sessionStorage.getItem('_activePage') || 'home';
-  showPage(_savedPage);
+  if (_savedPage === 'home') { await loadHomePage(); showPage('home'); }
+  await _studentsLoad;
+  await _enrichStudentsWithRemaining(); // обогащаем s.remaining для всех учеников
+  _studentsReady = true;
+  if (_savedPage === 'home') loadHomeReminders();
+  else { loadHomePage(); showPage(_savedPage); }
+  renderStudentDB(document.getElementById('sdb-search')?.value || '');
   // Показываем предупреждение об неизвестных тарифах только администратору
   if (currentTrainer.role === 'admin' && _unknownPayments.length > 0) {
     setTimeout(() => showUnknownPaymentsModal(), 800);
@@ -1772,7 +1785,9 @@ async function showApp() {
 const _CACHE_KEY = 'repchess__v7';   // v7: + суммы платежей для раздела «Финансы»
 const _CACHE_TTL = 5 * 60 * 1000; // 5 минут
 
-async function loadStudents() {
+// waitFor — промис загрузки ручных цен (_priceOverrides): запрос к Apps Script уходит сразу,
+// а разбор покупок ждёт цены, иначе вручную заданные тарифы посчитались бы по умолчанию.
+async function loadStudents(waitFor) {
   // Проверяем sessionStorage кэш
   try {
     const raw = sessionStorage.getItem(_CACHE_KEY);
@@ -1800,6 +1815,7 @@ async function loadStudents() {
     const idToken = await firebase.auth().currentUser.getIdToken();
     const res = await fetch(_CSV + '?token=' + encodeURIComponent(idToken));
     const txt = await res.text();
+    if (waitFor) await waitFor;
     if (txt === 'Unauthorized' || txt === '' || txt.startsWith('Error:')) {
       console.warn('Student data fetch rejected:', txt);
       students = [];
@@ -7360,6 +7376,11 @@ function renderStudentDB(q) {
   const listEl = document.getElementById('sdb-list');
   const countEl = document.getElementById('sdb-count');
   if (!listEl) return;
+  if (!_studentsReady) {   // база ещё грузится — showApp перерисует список, когда она придёт
+    countEl.textContent = '';
+    listEl.innerHTML = '<div class="empty">Загружаю базу учеников…</div>';
+    return;
+  }
 
   const searching = q && q.length > 0;
   let pool = students.slice();
@@ -7490,6 +7511,19 @@ async function saveUnknownPayments() {
 async function loadHomeReminders() {
   const isAdmin = currentTrainer.role === 'admin';
   const myAssigned = currentTrainer.assignedStudents || [];
+  if (!_studentsReady) {
+    // База учеников ещё идёт из Apps Script. Держим место под блок, чтобы лента
+    // не прыгала вниз, когда он появится; showApp перерисует его, когда база придёт.
+    const card = document.getElementById('home-remind-card');
+    const needs = isAdmin || myAssigned.length > 0;
+    if (card) card.style.display = needs ? '' : 'none';
+    if (needs) {
+      document.getElementById('home-remind-sub').textContent = '';
+      document.getElementById('home-remind-stats').innerHTML = '';
+      document.getElementById('home-remind-body').innerHTML = '<div class="dim" style="padding:12px 2px;font-size:.82rem">Загружаю балансы учеников…</div>';
+    }
+    return;
+  }
   const pool = isAdmin ? students.filter(s => s.purchased > 0) :
     myAssigned.length ? students.filter(s => assignedHas(myAssigned, s.email) && s.purchased > 0) : [];
 
