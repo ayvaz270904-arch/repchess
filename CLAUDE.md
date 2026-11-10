@@ -8,6 +8,7 @@ Chess school CRM. Static apps (admin CRM, trainer cabinet, client Telegram Mini 
 - `trainer.html` — trainer/admin cabinet (Firebase Firestore + same GAS proxy for student base). ~7500 lines, single file.
 - **Клиентский кабинет = React.** Исходник `client-app/` (Vite + React 18 + TS + `@telegram-apps/telegram-ui`), сборка коммитится в `/app` (`npm run build`, outDir `../app`). Бот открывает `CABINET_URL = …/app/index.html`. `client.html` — старый кабинет, оставлен только для отката (`OLD_CABINET_URL`), не развивать. Node есть через nvm: перед сборкой `export PATH="$HOME/.nvm/versions/node/v24.19.0/bin:$PATH"` (Bash-инструмент не читает `.zshrc`). Подробности — memory `repchess-miniapp-react`.
 - Firestore-коллекции (см. `gas/firestore.rules`): `trainers`, `lessons`, `groupLessons`, `trainerSchedules`, `certCodes`, `lessonFeedback`, `trainerRates`, `priceOverrides`, `settings`.
+- **С 10.11.2026 данные живут в своей базе Postgres** (схема `prod`, таблица на коллекцию, документ в `doc jsonb`) за API — Cloudflare Worker `repchess-api` (папка `api/`, выкладка `npx wrangler deploy` оттуда, к базе через Hyperdrive, права = перенос `firestore.rules`, тесты `node api/test/run.mjs`). Страницы ходят через `datalayer.js` (`RC_BACKEND_DEFAULT = 'api'`, менять вместе с `?v=` у тега), бот и прокси — через свойства скрипта `DATA_BACKEND=api` + `API_SERVICE_KEY` (у бота >50 свойств — ставить разовой функцией из редактора). Firebase остался для входа (Auth) и как запасная копия для отката. Подробности — memory `repchess-postgres-migration`.
 - Версии для проверки деплоя: `APP_VERSION` в trainer.html, `BOT_VERSION` в gas/bot.gs (`/version` в боте) — инкрементировать при каждой заметной правке.
 - Если сайт не обновился после пуша — проверить check-run «Workers Builds: repchess» у коммита (memory `repchess-deploy-check`), лечится пустым коммитом.
 - `gas/` — **local-only mirrors** of the two Apps Script projects (crm-proxy.gs, bot.gs) + `firestore.rules` copy + `backup/`. NEVER commit (contains bot token; repo is public).
@@ -37,7 +38,8 @@ Chess school CRM. Static apps (admin CRM, trainer cabinet, client Telegram Mini 
 - **Цвета:** кабинет клиента — кирпичный `#C94A42` + цвета направлений по макету дизайнера (не «монохромить»); тренерка — бренд `#CF4B4E`. Разница сознательная, не «чинить».
 - Cabinet is open to EVERYONE (guest mode): unknown phone → link with empty email. Empty email must NEVER reach Firestore/sheet queries (matches technical rows) — every booking action guards `if (!link.email)`. Guest cert redemption mints `cert-<phone>@repchess.local`; doGet auto-upgrades guests via findClientByPhone every 10 min.
 
-## Firestore quota discipline (Spark 50K reads/day; exhausted once — 2026-07-09)
+## Firestore quota discipline (Spark 50K reads/day; exhausted 2026-07-09 и 2026-11-09)
+Актуально, только если откатились на Firebase. В своей базе платы за документ нет; лимит Hyperdrive на бесплатном плане — 100K запросов в сутки (открыть «Историю» = 2 запроса). Но «История», «Админ» и «Финансы» по-прежнему тянут все занятия при каждом открытии — при росте базы это вопрос скорости, а не квоты.
 - NEVER add unconditional `loadAdminData()/loadHomePage()/loadGroupLessons()` after user actions.
 - Patch local caches instead: `_patchGroupCaches()`, `_homeIndivCache/_homeGrpCache`, `loadHomePage(true)` = render from cache (0 reads).
 - `_enrichStudentsWithRemaining()` reads the whole lessons collection — guarded by 5-min memory + 10-min sessionStorage cache (`repchess_used_v1`); refresh button resets both.
