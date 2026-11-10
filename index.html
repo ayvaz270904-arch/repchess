@@ -15,7 +15,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <!-- Слой данных: при переезде на свою базу подменяет firebase.firestore() на API (см. datalayer.js) -->
-<script src="datalayer.js?v=3"></script>
+<script src="datalayer.js?v=4"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -783,9 +783,8 @@ async function doRefresh(force) {
     const user = auth.currentUser;
     if (!user) { setPill('Не авторизован','err'); return; }
     const tok = await user.getIdToken();
-    const res = await fetch(CSV_URL + '?token=' + encodeURIComponent(tok));
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const txt = await res.text();
+    // Копия листа оплат в своей базе (доли секунды); при сбое datalayer.js сам идёт в Apps Script
+    const txt = await RC_DATA.paymentsCsv(CSV_URL, tok);
     if (!txt || txt.length < 50 || txt === 'Unauthorized' || txt.startsWith('Error:')) throw new Error('Нет доступа к данным');
     processCSV(txt);
   } catch(e) {

@@ -14,7 +14,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <!-- Слой данных: при переезде на свою базу подменяет firebase.firestore() на API (см. datalayer.js) -->
-<script src="datalayer.js?v=3"></script>
+<script src="datalayer.js?v=4"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1448,7 +1448,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.10-quick';
+const APP_VERSION = '11.11-pay';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1817,8 +1817,8 @@ async function loadStudents(waitFor) {
 
   try {
     const idToken = await firebase.auth().currentUser.getIdToken();
-    const res = await fetch(_CSV + '?token=' + encodeURIComponent(idToken));
-    const txt = await res.text();
+    // Копия листа оплат в своей базе (доли секунды); при сбое datalayer.js сам идёт в Apps Script
+    const txt = await RC_DATA.paymentsCsv(_CSV, idToken);
     if (waitFor) await waitFor;
     if (txt === 'Unauthorized' || txt === '' || txt.startsWith('Error:')) {
       console.warn('Student data fetch rejected:', txt);

@@ -8,6 +8,13 @@
 // Какая база используется:
 //   RC_BACKEND_DEFAULT ниже — для всех;
 //   ?backend=api | firestore в адресе — только для этой вкладки (проверка до переключения).
+//
+// Оплаты (база учеников, CSV из Table 2) — отдельный переключатель (с 11.11.2026):
+//   RC_PAYMENTS_DEFAULT ниже — для всех: 'api' — копия листа в своей базе (доли секунды),
+//   'gas' — как раньше, прямо из таблицы через Apps Script (5–7 с);
+//   ?payments=api | gas в адресе — только для этой вкладки.
+//   Страницы зовут RC_DATA.paymentsCsv(адрес Apps Script, токен входа): API не ответил,
+//   отказал или копия устарела — функция сама берёт CSV из Apps Script.
 // Подключать ПОСЛЕ firebase-*.js и ДО скрипта страницы.
 
 (function () {
@@ -15,6 +22,7 @@
 
   var RC_BACKEND_DEFAULT = 'api'   // с 10.11.2026 — своя база; откат: 'firestore'
   var RC_API_BASE = 'https://repchess-api.ayvaz-270904.workers.dev'
+  var RC_PAYMENTS_DEFAULT = 'api'  // с 11.11.2026 — копия оплат в своей базе; откат: 'gas'
 
   var backend = RC_BACKEND_DEFAULT
   try {
@@ -24,7 +32,36 @@
     if (s === 'api' || s === 'firestore') backend = s
   } catch (e) { /* приватный режим — остаёмся на значении по умолчанию */ }
 
-  window.RC_DATA = { backend: backend, apiBase: RC_API_BASE }
+  var payments = RC_PAYMENTS_DEFAULT
+  try {
+    var qp = new URLSearchParams(window.location.search).get('payments')
+    if (qp === 'api' || qp === 'gas') sessionStorage.setItem('rc_payments', qp)
+    var sp = sessionStorage.getItem('rc_payments')
+    if (sp === 'api' || sp === 'gas') payments = sp
+  } catch (e) { /* приватный режим — значение по умолчанию */ }
+
+  // CSV оплат (как отдавал Apps Script): админ — все строки, тренер — свои ученики.
+  // Возвращает Promise<текст>. Из API — за доли секунды; при любой неудаче — Apps Script.
+  function paymentsCsv(gasUrl, idToken) {
+    var viaGas = function () {
+      return fetch(gasUrl + '?token=' + encodeURIComponent(idToken)).then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        return res.text()
+      })
+    }
+    if (payments !== 'api') return viaGas()
+    return fetch(RC_API_BASE + '/v1/payments', { headers: { authorization: 'Bearer ' + idToken } })
+      .then(function (res) {
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        return res.text()
+      })
+      .catch(function (e) {
+        console.warn('Оплаты из базы не пришли (' + (e && e.message) + ') — беру из Apps Script')
+        return viaGas()
+      })
+  }
+
+  window.RC_DATA = { backend: backend, apiBase: RC_API_BASE, payments: payments, paymentsCsv: paymentsCsv }
   if (backend !== 'api') return   // работаем с Firestore как раньше
 
   // ── Отметка времени (замена firebase.firestore.Timestamp) ──
