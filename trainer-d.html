@@ -4988,6 +4988,10 @@ function _adminLayout() {
   const dest = { lessons:'page-history', students:'page-students', trainers:'page-trainers', money:'page-finance' };
   document.querySelectorAll('#page-admin [data-sec]').forEach(c => {
     const sec = c.dataset.sec;
+    // «Нужна оплата» (adm-balance-list) никогда не заполнялась — loadBalanceAlerts нигде не
+    // вызывается; должники на деле видны в «Занимаются, но баланс кончился» на Главной,
+    // там и кнопка «Написать». Пустую карточку не показываем.
+    if (sec === 'home' && c.querySelector('#adm-balance-list')) { c.style.display = 'none'; return; }
     if (sec === 'home' && homeAnchor) { homeAnchor.after(c); homeAnchor = c; }
     else if (dest[sec]) document.getElementById(dest[sec]).appendChild(c);
   });
@@ -7910,6 +7914,7 @@ async function loadHomeReminders() {
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span class="balance-badge" style="background:color-mix(in srgb, ${color} 14%, transparent);color:${color}">${label}</span>
         ${s.phone ? `<button class="copy-btn" onclick="navigator.clipboard.writeText('${escJs(s.phone)}').then(()=>toast('Номер скопирован','ok'))">📋</button>` : ''}
+        ${_writeLink(s)}
       </div>
     </div>`;
   }).join('');
