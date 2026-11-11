@@ -219,7 +219,10 @@ export function getAppearance(): 'light' | 'dark' {
 }
 
 // Базисные фоны темы «Шахматный набор» — держать синхронно с --rc-bg в styles.css.
-const APP_BG = { dark: '#0c0c0e', light: '#f2f2f3' } as const
+const APP_BG = { dark: '#0c0c0e', light: '#ffffff' } as const
+// Дизайн D (11.11.2026): шапка кабинета чёрная — красим в тот же цвет шапку самого Telegram,
+// чтобы его полоса с кнопкой «Закрыть» сливалась с нашей шапкой, а не висела белой над ней.
+const TG_HEADER = '#151515'
 
 /**
  * Ставит класс темы на <html> и красит «обвязку» Telegram под наш фон.
@@ -246,7 +249,7 @@ export function applyAppearance(a: 'light' | 'dark'): void {
     // supports.rgb — произвольный HEX (а не только ключи bg_color/secondary_bg_color),
     // появился в Bot API 6.9; на клиентах постарше шапку просто не трогаем.
     if (miniApp.setHeaderColor.isAvailable() && miniApp.setHeaderColor.supports.rgb()) {
-      miniApp.setHeaderColor(c)
+      miniApp.setHeaderColor(TG_HEADER)
     }
   } catch {
     /* noop */

@@ -106,7 +106,6 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
 
   return (
     <List>
-      <div className="screen-title">Запись</div>
 
       <div className="home-sec-title">Индивидуальное занятие</div>
       {slots?.trainer && (

@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { AppRoot, Tabbar, Spinner, Placeholder, Button } from '@telegram-apps/telegram-ui'
-import { subscribeAppearance, applyAppearance } from './telegram/env'
+import { AppRoot, Placeholder, Button } from '@telegram-apps/telegram-ui'
+import '@fontsource/onest/400.css'
+import '@fontsource/onest/500.css'
+import '@fontsource/onest/600.css'
+import '@fontsource/onest/700.css'
+import '@fontsource/onest/800.css'
+import { applyAppearance } from './telegram/env'
+import { DHeader, DTabbar } from './ui/DHeader'
+import queenWhite from './assets/mascot.svg'
 import { haptic } from './telegram/ui'
 import { tabIcons } from './ui/icons'
 import { fetchCabinet, getCachedCabinet, clearCachedCabinet, track, ApiError } from './data'
@@ -57,6 +64,58 @@ function FsAlert({ data, onReload }: { data: Cabinet; onReload: () => void }) {
   )
 }
 
+// Слово после числа: 1 занятие, 2 занятия, 5 занятий.
+function lessonsWord(n: number): string {
+  const m10 = Math.abs(n) % 10
+  const m100 = Math.abs(n) % 100
+  if (m10 === 1 && m100 !== 11) return 'занятие'
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'занятия'
+  return 'занятий'
+}
+
+function todayShort(): string {
+  const d = new Date()
+  const p = (n: number) => String(n).padStart(2, '0')
+  return ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'][d.getDay()] + ', ' + p(d.getDate()) + '.' + p(d.getMonth() + 1)
+}
+
+// Шапка D для каждой вкладки. Живёт здесь, а не в экранах, чтобы плашка «нет связи»
+// вставала СРАЗУ ПОД шапкой, а не над ней.
+function TabHeader({ tab, data }: { tab: Tab; data: Cabinet }) {
+  if (tab === 'home') {
+    const noData = !!data.fsError && data.staleAt === undefined
+    const n = data.balanceTotal
+    return (
+      <DHeader tab="home" tall sticker="queen" right={todayShort()}>
+        <div className="dh-hello">{(data.name || '').split(' ')[0] || 'Привет'}, осталось</div>
+        <div className="dh-big">
+          <b className={n < 0 && !noData ? 'debt' : ''}>{noData ? '—' : n}</b>
+          <span>{noData ? 'нет данных' : lessonsWord(n)}</span>
+        </div>
+        <div className="dh-sub">
+          {noData ? 'баланс временно недоступен' : data.nextExpiry ? 'пакет до ' + data.nextExpiry : '\u00a0'}
+        </div>
+      </DHeader>
+    )
+  }
+  if (tab === 'book') return <DHeader tab="book" title="Запись" sticker="checker" />
+  if (tab === 'events') return <DHeader tab="events" title="Афиша" sticker="sun" />
+  if (tab === 'history') {
+    const done = data.lessonHistory.filter((l) => l.status === 'done').length
+    return (
+      <DHeader tab="history" title="История">
+        {done > 0 && (
+          <div className="dh-count">
+            <b>{done}</b>
+            <span>{lessonsWord(done)} пройдено</span>
+          </div>
+        )}
+      </DHeader>
+    )
+  }
+  return <DHeader tab="profile" title="Профиль" sticker="queen" />
+}
+
 type State = { status: 'loading' } | { status: 'error'; code: string } | { status: 'ready'; data: Cabinet }
 
 export default function App({
@@ -66,7 +125,10 @@ export default function App({
   platform: 'ios' | 'base'
   initialAppearance: 'light' | 'dark'
 }) {
-  const [appearance, setAppearance] = useState<'light' | 'dark'>(initialAppearance)
+  // Дизайн D (11.11.2026) — один: белый фон, чёрная шапка, фирменный красный. Тёмную тему
+  // Telegram больше не повторяем: макет рассчитан на белое, а чёрного в нём и так много.
+  void initialAppearance
+  const appearance = 'light' as const
   const [tab, setTab] = useState<Tab>(initialTab())
   // Мгновенный рендер из кэша (если открывали раньше); свежие данные подтянет reload().
   const [state, setState] = useState<State>(() => {
@@ -92,10 +154,6 @@ export default function App({
     }
   }, [])
 
-  useEffect(() => {
-    subscribeAppearance(setAppearance)
-  }, [])
-  // Пользователь переключил тему прямо в Telegram — перекрашиваем <html> и обвязку клиента.
   useEffect(() => {
     applyAppearance(appearance)
   }, [appearance])
@@ -135,8 +193,15 @@ export default function App({
 
   if (state.status === 'loading') {
     return shell(
-      <div className="center-screen">
-        <Spinner size="l" />
+      <div className="d-loading" role="status" aria-label="Загрузка">
+        <img src={queenWhite} alt="" aria-hidden="true" />
+        <div className="d-loading-brand">
+          REP CHESS <span>EDUCATION</span>
+        </div>
+        <div className="d-loading-txt">Расставляем фигуры…</div>
+        <div className="d-loading-sq" aria-hidden="true">
+          <i /><i /><i /><i /><i /><i /><i /><i />
+        </div>
       </div>,
     )
   }
@@ -174,6 +239,7 @@ export default function App({
   return shell(
     <>
       <div className="app-scroll">
+        <TabHeader tab={tab} data={data} />
         {data.fsError && <FsAlert data={data} onReload={reload} />}
         {tab === 'home' && <HomeScreen data={data} onGoBook={() => go('book')} onReload={reload} />}
         {tab === 'book' && <BookScreen data={data} onReload={reload} />}
@@ -182,13 +248,7 @@ export default function App({
         {tab === 'profile' && <ProfileScreen data={data} onSaved={reload} />}
       </div>
 
-      <Tabbar className="app-tabbar">
-        {TABS.map((t) => (
-          <Tabbar.Item key={t.id} selected={tab === t.id} text={t.label} onClick={() => go(t.id)}>
-            {tabIcons[t.id]}
-          </Tabbar.Item>
-        ))}
-      </Tabbar>
+      <DTabbar tabs={TABS} icons={tabIcons} current={tab} onGo={go} />
     </>,
   )
 }

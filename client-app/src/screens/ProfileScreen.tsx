@@ -206,9 +206,7 @@ export function ProfileScreen({
             )}
           </div>
         </>
-      ) : (
-        <div className="screen-title">Профиль</div>
-      )}
+      ) : null}
 
       {!gate && (
         <>
@@ -340,6 +338,11 @@ export function ProfileScreen({
           <a onClick={() => openUrl(POLICY_URL)}>политикой конфиденциальности</a>. Услуги оказываются на условиях{' '}
           <a onClick={() => openUrl(OFFER_URL)}>публичной оферты</a>. За ученика младше 18 лет согласие даёт родитель.
         </Caption>
+        {!gate && (
+          <button className="d-btn d-btn-line" onClick={() => openUrl(HELPER_URL)}>
+            Написать администратору
+          </button>
+        )}
       </div>
     </List>
   )

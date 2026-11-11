@@ -30,7 +30,6 @@ export function HistoryScreen({ data }: { data: Cabinet }) {
 
   return (
     <List>
-      <div className="screen-title">История</div>
 
       {/* Счётчика «Пропущено» здесь намеренно НЕТ: кабинет не журнал посещаемости
           («человек не обязан, это не университет»). Статус конкретного занятия

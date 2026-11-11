@@ -48,7 +48,6 @@ export function EventsScreen({ data }: { data: Cabinet }) {
   if (!s || !s.days.length) {
     return (
       <List>
-        <div className="screen-title">Афиша</div>
         <MascotEmpty pic="sun" text="Расписание на неделю появится здесь, как только выйдет в канале." />
       </List>
     )
@@ -67,7 +66,6 @@ export function EventsScreen({ data }: { data: Cabinet }) {
 
   return (
     <List>
-      <div className="screen-title">Афиша</div>
 
       <div className="ev-strip">
         {s.days.map((d) => {

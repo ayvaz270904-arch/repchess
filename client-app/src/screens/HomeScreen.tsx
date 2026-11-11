@@ -1,13 +1,11 @@
 import { useState } from 'react'
 import { Button, Input } from '@telegram-apps/telegram-ui'
 import type { Cabinet, UpcomingLesson } from '../types'
-import { CellIcon } from '../ui/CellIcon'
 import { haptic, openUrl, shareReferral } from '../telegram/ui'
-import { redeemCert, cancelIndiv, confirmDialog, track, safeAction, userPhoto } from '../data'
+import { redeemCert, cancelIndiv, confirmDialog, track, safeAction } from '../data'
 import { errText } from '../errors'
 import { ruDate, lessonType } from '../format'
-import mascot from '../assets/mascot-queen.png'
-import { kindTone, lessonTone } from '../ui/tones'
+import sun from '../assets/star-sun.png'
 
 export function HomeScreen({
   data,
@@ -25,8 +23,6 @@ export function HomeScreen({
   const [homeMsg, setHomeMsg] = useState('')
 
   const buy = data.buyLinks[0]
-  const initial = (data.name || '?').trim().charAt(0).toUpperCase() || '?'
-  const photo = userPhoto()
 
   // Показываем только направления с ненулевым остатком: у типичного клиента три
   // из четырёх — нули, и четыре почти одинаковые плитки только мешают читать
@@ -73,30 +69,58 @@ export function HomeScreen({
 
   return (
     <div className="home">
-      <div className="home-topbar">
-        <div>
-          <div className="greet">Привет, {data.name}</div>
-          <div className="sub2">Личный кабинет</div>
+      {cats.length > 0 && (
+        <div className={'d-cats' + (cats.length === 1 ? ' one' : '')}>
+          {/* Вид занятия — знаком, а не цветом (дизайн D): чёрный квадрат = группа,
+              контурный = индивидуальное. Формат пишем словом. */}
+          {cats.map((c) => (
+            <div className="d-cat" key={c.key}>
+              <div className="d-cat-lbl">
+                <i className={'d-mark ' + (c.group === 'indiv' ? 'indiv' : 'group')} />
+                {(c.group === 'indiv' ? 'Индив. ' : 'Групп. ') + (/онлайн/i.test(c.title) ? 'онлайн' : /офлайн/i.test(c.title) ? 'офлайн' : (c.title || '').toLowerCase())}
+              </div>
+              <div className={'d-cat-num' + (c.count < 0 ? ' debt' : '')}>{c.count}</div>
+            </div>
+          ))}
         </div>
-        <div className="ava" aria-hidden="true">
-          {photo ? <img className="ava-photo" src={photo} alt="" /> : initial}
-        </div>
-      </div>
+      )}
 
-      <div className="home-hero">
-        <div className="hero-inner">
-          <div className="hero-num">{noData ? '—' : data.balanceTotal}</div>
-          <div className="hero-cap">{noData ? 'баланс временно недоступен' : 'занятий на балансе'}</div>
-          {data.nextExpiry && !noData && <div className="hero-pill">действуют до {data.nextExpiry}</div>}
-          <img className="hero-mascot" src={mascot} alt="" aria-hidden="true" />
+      <div className="d-cap">Ближайшее</div>
+      {data.upcoming.length ? (
+        <div className="d-next-list">
+          {data.upcoming.map((u, i) => {
+            const { kind, fmt } = lessonType(u.type)
+            return (
+              <div className={'d-next' + (i === 0 ? ' first' : '')} key={u.id}>
+                {i === 0 && <img className="d-next-star" src={sun} alt="" aria-hidden="true" />}
+                <div className="d-next-row">
+                  <div className="d-next-time">{u.time || '—'}</div>
+                  <div className="d-next-date">{ruDate(u.date)}</div>
+                </div>
+                <div className="d-next-meta">{[kind, fmt, u.trainerName].filter(Boolean).join(' · ')}</div>
+                {/* Заметка тренера к будущему занятию — «что будет». */}
+                {u.notes && <div className="d-next-note">{u.notes.trim()}</div>}
+                {u.cancellable && (
+                  <button className="d-next-cancel" onClick={() => cancel(u)}>
+                    Отменить
+                  </button>
+                )}
+              </div>
+            )
+          })}
         </div>
-      </div>
+      ) : (
+        <div className="d-empty-line">{noData ? 'Не удалось загрузить занятия' : 'Нет запланированных занятий'}</div>
+      )}
+      {homeMsg && <div className="book-msg" style={{ padding: '6px 18px 0' }}>{homeMsg}</div>}
 
-      <div className="home-cta-wrap">
+      <div className="d-actions">
+        <button className="d-btn d-btn-red" onClick={() => { haptic(); onGoBook() }}>
+          Записаться на занятие
+        </button>
         {buy && (
-          <Button
-            stretched
-            size="l"
+          <button
+            className="d-btn d-btn-line"
             onClick={() => {
               haptic()
               track('link', buy[1])
@@ -104,13 +128,27 @@ export function HomeScreen({
             }}
           >
             Купить пакет
-          </Button>
+          </button>
         )}
-        {/* «Промокод», а не «сертификат»: код один и тот же (REP-XXXX-XX, action=redeemCert),
-            но клиенты получают его как промокод — под этим словом и ищут. */}
-        <button className="ghost-btn" onClick={() => { haptic(); setShowCert((v) => !v) }}>
-          Ввести промокод
-        </button>
+        <div className="d-actions-row">
+          {/* «Промокод», а не «сертификат»: код один и тот же (REP-XXXX-XX, action=redeemCert),
+              но клиенты получают его как промокод — под этим словом и ищут. */}
+          <button className="d-link" onClick={() => { haptic(); setShowCert((v) => !v) }}>
+            Ввести промокод
+          </button>
+          {data.refLink && (
+            <button
+              className="d-link"
+              onClick={() => {
+                haptic()
+                track('ref_share')
+                shareReferral(data.refLink!)
+              }}
+            >
+              Пригласить друга
+            </button>
+          )}
+        </div>
         {showCert && (
           <div className="cert-row">
             <Input
@@ -125,94 +163,6 @@ export function HomeScreen({
           </div>
         )}
         {certMsg && <div className="section-note">{certMsg}</div>}
-      </div>
-
-      {cats.length > 0 && (
-        <>
-          <div className="home-sec-title">По направлениям</div>
-          <div className="home-grid">
-            {/* Признаков различия три и они независимы: иконка = формат (pin/globe,
-                они уже лежат в данных), жирная строка = вид занятия, приглушённая =
-                формат словом. Раньше плитки различались одним словом в середине
-                почти одинаковых подписей, а иконки были неотличимые user/users. */}
-            {cats.map((c) => (
-              <div className="home-tile" key={c.key}>
-                <div className="tile-top">
-                  <CellIcon name={c.icon} tone={kindTone(c.group)} />
-                  <span className={'tile-count' + (c.count < 0 ? ' debt' : '')}>{c.count}</span>
-                </div>
-                <div className="tile-label">
-                  <span className="tl-group">{c.group === 'indiv' ? 'Индивидуальные' : 'Групповые'}</span>
-                  <span className="tl-fmt">{(c.title || '').toLowerCase()}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-
-      <div className="home-sec-title">Ближайшее занятие</div>
-      {data.upcoming.length ? (
-        <div className="home-next-list">
-          {data.upcoming.map((u) => {
-            const { kind, fmt } = lessonType(u.type)
-            return (
-            <div className="home-next" key={u.id}>
-              {/* Квадрат того же цвета, что у этого вида занятия везде в кабинете:
-                  цвет = индивидуальное/групповое, глиф = формат. */}
-              <div className="next-head">
-                <CellIcon name={/онлайн/i.test(fmt) ? 'globe' : 'pin'} tone={lessonTone(u.type)} />
-                <div className="next-date">
-                  {ruDate(u.date)}
-                  {u.time ? ` · ${u.time}` : ''}
-                </div>
-              </div>
-              {/* «Индив.» разворачиваем в «Индивидуальное» — то же, что в Истории,
-                  чтобы одно и то же занятие называлось на двух экранах одинаково. */}
-              <div className="next-meta">
-                {[kind, fmt, u.trainerName].filter(Boolean).join(' · ')}
-              </div>
-              {/* Заметка тренера к БУДУЩЕМУ занятию — «что будет». Показываем сразу,
-                  без раскрытия: ближайших занятий одно-два, прятать там нечего. */}
-              {u.notes && <div className="next-note">{u.notes.trim()}</div>}
-              {u.cancellable && (
-                <div className="next-foot">
-                  <button className="next-cancel" onClick={() => cancel(u)}>
-                    Отменить
-                  </button>
-                </div>
-              )}
-            </div>
-            )
-          })}
-        </div>
-      ) : (
-        <div className="home-empty">{noData ? 'Не удалось загрузить занятия' : 'Нет запланированных занятий'}</div>
-      )}
-      {homeMsg && (
-        <div className="book-msg" style={{ padding: '6px 20px 0' }}>
-          {homeMsg}
-        </div>
-      )}
-
-      <div className="home-actions">
-        <button className="act-tile" onClick={() => { haptic(); onGoBook() }}>
-          <CellIcon name="calendar" />
-          <span className="act-lbl">Записаться</span>
-        </button>
-        {data.refLink && (
-          <button
-            className="act-tile red"
-            onClick={() => {
-              haptic()
-              track('ref_share')
-              shareReferral(data.refLink!)
-            }}
-          >
-            <CellIcon name="gift" tone="red" />
-            <span className="act-lbl">Пригласить друга</span>
-          </button>
-        )}
       </div>
     </div>
   )

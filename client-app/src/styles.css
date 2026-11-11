@@ -1493,3 +1493,578 @@ html.app-light .home-hero {
   border-color: var(--rc-hairline);
   background: var(--rc-surface);
 }
+
+/* ══════════ Дизайн D (11.11.2026): «Клетка» + бар из варианта B ══════════
+   Белый фон, чёрная шапка с красной линией «ходом коня» и полосой клеток, фирменный
+   красный только для действий и внимания. Вид занятия — знаком (чёрный квадрат = группа,
+   контурный = индивидуальное), а не цветом. Тема одна — светлая (App.tsx не следит за
+   тёмной темой Telegram). Макеты: холст «Rep Chess — дизайн с маскотом», ряд D. */
+html.app-light {
+  --rc-red: #c94a42;
+  --rc-bg: #ffffff;
+  --rc-surface: #ffffff;
+  --rc-text: #151515;
+  --rc-hint: #5c5c5c;
+  --rc-sep: #e3e3e3;
+  --rc-fill: #f3f3f3;
+  --rc-hairline: #151515;
+  --rc-hairline-strong: #151515;
+  --rc-board-sq: rgba(0, 0, 0, 0.035);
+  --rc-chip-bg: #f3f3f3;
+  --rc-chip-fg: #151515;
+  --rc-c-group: #151515;
+  --rc-c-indiv: #ffffff;
+  --rc-c-tour: #c94a42;
+  --rc-c-master: #ffffff;
+  --tabbar-h: 60px;
+}
+.app-brand {
+  --tgui--font-family: 'Onest', -apple-system, 'Segoe UI', Roboto, sans-serif !important;
+}
+body {
+  font-family: 'Onest', -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+.top-cover {
+  background: #151515;
+}
+.app-scroll {
+  padding-bottom: calc(60px + 30px + var(--pad-bottom));
+}
+
+/* ── Шапка ── */
+.dh {
+  position: relative;
+  margin: 0 calc(-1 * var(--safe-right)) 0 calc(-1 * var(--safe-left));
+}
+.dh-black {
+  position: relative;
+  overflow: hidden;
+  background: #151515;
+  color: #fff;
+  min-height: 168px;
+  padding: 18px 18px 18px;
+  box-sizing: border-box;
+}
+.dh-tall .dh-black {
+  min-height: 236px;
+}
+.dh-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100px;
+  pointer-events: none;
+}
+.dh-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dh-brand {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+.dh-brand span {
+  color: #e0645b;
+}
+.dh-right {
+  font-size: 13px;
+  color: #b5b5b5;
+}
+.dh-body {
+  position: relative;
+  z-index: 1;
+  margin-top: 66px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.dh-tall .dh-body {
+  display: block;
+  margin-top: 66px;
+  padding-right: 110px;
+}
+.dh-title {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.05;
+}
+.dh-hello,
+.dh-sub {
+  font-size: 14px;
+  color: #b5b5b5;
+}
+.dh-big {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 6px;
+}
+.dh-big b {
+  font-size: 72px;
+  font-weight: 800;
+  line-height: 0.9;
+}
+.dh-big b.debt {
+  color: #e0645b;
+}
+.dh-big span {
+  font-size: 16px;
+  font-weight: 600;
+}
+.dh-count {
+  text-align: right;
+}
+.dh-count b {
+  display: block;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1;
+}
+.dh-count span {
+  font-size: 12px;
+  color: #b5b5b5;
+}
+.dh-strip {
+  height: 20px;
+  background: repeating-conic-gradient(#151515 0 25%, #ffffff 0 50%) 0 0 / 20px 20px;
+}
+.dh-st {
+  position: absolute;
+  pointer-events: none;
+}
+.dh-st-queen {
+  right: 14px;
+  bottom: 6px;
+  width: 100px;
+  height: 116px;
+  object-fit: contain;
+  z-index: 1;
+}
+.dh:not(.dh-tall) .dh-st-queen {
+  width: 64px;
+  height: 74px;
+}
+.dh-st-sun {
+  right: -24px;
+  bottom: -34px;
+  width: 140px;
+  filter: grayscale(1) brightness(1.25);
+}
+.dh-st-checker {
+  right: -34px;
+  bottom: -40px;
+  width: 150px;
+  filter: hue-rotate(-26deg) saturate(0.85) brightness(0.85);
+}
+
+/* ── Нижний бар ── */
+.dtab {
+  position: fixed;
+  left: calc(12px + var(--safe-left));
+  right: calc(12px + var(--safe-right));
+  bottom: calc(14px + var(--pad-bottom));
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 2px;
+  padding: 6px;
+  background: #151515;
+  border-radius: 22px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+}
+.dtab-item {
+  min-height: 48px;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  color: #c9c9cf;
+  font: 500 11px 'Onest', sans-serif;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  padding: 0;
+}
+.dtab-item svg {
+  width: 21px;
+  height: 21px;
+}
+.dtab-item.on {
+  background: #fff;
+  color: #151515;
+  font-weight: 700;
+}
+
+/* ── Главная ── */
+.d-cats {
+  margin: 18px 18px 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1.5px solid #151515;
+}
+.d-cats.one {
+  grid-template-columns: minmax(0, 1fr);
+}
+.d-cat {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.d-cat:nth-child(odd):not(:last-child) {
+  border-right: 1.5px solid #151515;
+}
+.d-cat:nth-child(n + 3) {
+  border-top: 1.5px solid #151515;
+}
+.d-cat-lbl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.d-mark {
+  flex: none;
+  display: inline-block;
+}
+.d-mark.group {
+  width: 10px;
+  height: 10px;
+  background: #151515;
+}
+.d-mark.indiv {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid #151515;
+}
+.d-cat-num {
+  font-size: 30px;
+  font-weight: 800;
+}
+.d-cat-num.debt {
+  color: #c94a42;
+}
+.d-cap,
+.home-sec-title {
+  margin: 20px 18px 8px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5c5c5c;
+}
+.d-next-list {
+  margin: 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.d-next {
+  position: relative;
+  overflow: hidden;
+  border: 1.5px solid #151515;
+  padding: 14px 16px;
+}
+.d-next.first {
+  background: #151515;
+  color: #fff;
+}
+.d-next-star {
+  position: absolute;
+  right: -28px;
+  top: -30px;
+  width: 120px;
+  filter: grayscale(1) brightness(1.25);
+  pointer-events: none;
+}
+.d-next-row {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.d-next-time {
+  font-size: 28px;
+  font-weight: 800;
+}
+.d-next-date {
+  font-size: 15px;
+  font-weight: 700;
+}
+.d-next-meta,
+.d-next-note {
+  position: relative;
+  font-size: 14px;
+  color: #5c5c5c;
+  margin-top: 4px;
+  padding-right: 60px;
+}
+.d-next.first .d-next-meta,
+.d-next.first .d-next-note {
+  color: #cfcfcf;
+}
+.d-next-cancel {
+  position: relative;
+  margin-top: 12px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: 600 13px 'Onest', sans-serif;
+  cursor: pointer;
+}
+.d-empty-line {
+  margin: 0 18px;
+  padding: 14px 0;
+  border-top: 1px solid #e3e3e3;
+  border-bottom: 1px solid #e3e3e3;
+  font-size: 14px;
+  color: #5c5c5c;
+}
+.d-actions {
+  padding: 18px 18px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.d-btn {
+  min-height: 52px;
+  border: 0;
+  font: 700 15px 'Onest', sans-serif;
+  cursor: pointer;
+  width: 100%;
+}
+.d-btn-red {
+  background: #c94a42;
+  color: #fff;
+}
+.d-btn-red:active {
+  background: #b23c35;
+}
+.d-btn-line {
+  background: #fff;
+  color: #151515;
+  border: 1.5px solid #151515;
+}
+.d-actions-row {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+}
+.d-link {
+  min-height: 44px;
+  border: 0;
+  background: none;
+  color: #151515;
+  font: 600 14px 'Onest', sans-serif;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ── Загрузка ── */
+.d-loading {
+  min-height: 100vh;
+  background: #151515;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+.d-loading img {
+  width: 110px;
+  height: 126px;
+  object-fit: contain;
+  margin-bottom: 8px;
+}
+.d-loading-brand {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+.d-loading-brand span {
+  color: #e0645b;
+}
+.d-loading-txt {
+  font-size: 14px;
+  color: #b5b5b5;
+}
+.d-loading-sq {
+  display: grid;
+  grid-template-columns: repeat(8, 14px);
+  margin-top: 8px;
+}
+.d-loading-sq i {
+  height: 14px;
+  background: #3a3a3a;
+  animation: d-sq 1.6s infinite;
+}
+.d-loading-sq i:nth-child(even) {
+  background: #5a5a5a;
+}
+.d-loading-sq i:nth-child(2) { animation-delay: 0.2s; }
+.d-loading-sq i:nth-child(3) { animation-delay: 0.4s; }
+.d-loading-sq i:nth-child(4) { animation-delay: 0.6s; }
+.d-loading-sq i:nth-child(5) { animation-delay: 0.8s; }
+.d-loading-sq i:nth-child(6) { animation-delay: 1s; }
+.d-loading-sq i:nth-child(7) { animation-delay: 1.2s; }
+.d-loading-sq i:nth-child(8) { animation-delay: 1.4s; }
+@keyframes d-sq {
+  0%, 40%, 100% { background-color: #3a3a3a; }
+  15%, 25% { background-color: #c94a42; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d-loading-sq i { animation: none; }
+}
+
+/* ── Плашка «нет связи» ── */
+.fs-alert,
+.fs-alert.fs-alert-soft {
+  margin: 14px 18px 0;
+  border: 1.5px solid #c94a42;
+  border-radius: 0;
+  background: #fff;
+  color: #151515;
+}
+.fs-alert-btn {
+  border-radius: 0 !important;
+  background: #c94a42 !important;
+  color: #fff !important;
+}
+
+/* ── Остальные экраны: перекраска старых блоков под D ── */
+.cell-icon {
+  border-radius: 0;
+}
+.cell-icon-group {
+  background: #151515;
+  color: #fff;
+}
+.cell-icon-indiv,
+.cell-icon-master {
+  background: #fff;
+  color: #151515;
+  box-shadow: inset 0 0 0 1.5px #151515;
+}
+.cell-icon-tour,
+.cell-icon-red {
+  background: #c94a42;
+  color: #fff;
+}
+.day-chip,
+.ev-chip,
+.slot,
+.seg-wrap,
+.stat-card,
+.home-tile,
+.trainer-card,
+.grp-act,
+.grp-prog,
+.pill,
+.ach {
+  border-radius: 0 !important;
+}
+.day-chip.on,
+.ev-chip.on {
+  background: #c94a42;
+  color: #fff;
+}
+.stat-card {
+  border: 1.5px solid #151515;
+  background: #fff;
+}
+.ev-banner {
+  border-radius: 0;
+  background: #151515;
+  color: #fff;
+}
+.ev-banner::before {
+  display: none;
+}
+.mascot-empty img {
+  filter: grayscale(1) contrast(1.3);
+}
+.ev-banner {
+  margin: 16px 18px 10px;
+  border: 0;
+}
+.ev-banner-chip {
+  border-radius: 0;
+  background: #c94a42;
+  color: #fff;
+  letter-spacing: 0.04em;
+}
+.ev-banner-title {
+  color: #fff;
+}
+.ev-banner-btn {
+  border-radius: 0 !important;
+}
+/* Кнопки, поля и секции telegram-ui — прямые углы, как во всём дизайне D */
+.app-brand button[class*='tgui-'],
+.app-brand [class*='tgui-'][class*='wrapper'],
+.app-brand section[class*='tgui-'],
+.app-brand input,
+.app-brand textarea {
+  border-radius: 0 !important;
+}
+.day-chip.on .dw,
+.day-chip.on .dt,
+.ev-chip.on * {
+  color: #fff !important;
+}
+.prof-header {
+  border-radius: 0 !important;
+  border: 1.5px solid #151515 !important;
+}
+.prof-badge {
+  border-radius: 0 !important;
+}
+
+/* 11.11: ферзь стоит НАД полосой клеток, а не заходит на неё (владелец: «заползает на клетку») */
+.dh-st-queen {
+  bottom: 26px;
+}
+/* Нижний бар на узких Android и при крупном шрифте системы: подпись в одну строку, без
+   обрезки «Гл…» (так было у старого таббара telegram-ui на 360 px). Размер шрифта жмётся
+   от ширины экрана, иконка чуть меньше. */
+.dtab {
+  left: calc(8px + var(--safe-left));
+  right: calc(8px + var(--safe-right));
+  padding: 5px;
+  gap: 0;
+}
+.dtab-item {
+  min-width: 0;
+  font-size: min(11px, 2.9vw);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dtab-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: clip;
+}
+@media (max-width: 340px) {
+  .dtab-item svg {
+    width: 19px;
+    height: 19px;
+  }
+}
