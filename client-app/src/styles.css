@@ -2068,3 +2068,18 @@ body {
     height: 19px;
   }
 }
+
+/* 11.11: «края не влезают» на Android. List из telegram-ui даёт поля 18 px ТОЛЬКО на iOS
+   (класс tgui-cfed40fe81d34ad5), а на Android (platform=base) — ноль, и карточки Истории,
+   полоса дней Афиши и т. п. упирались в края экрана. Даём списку те же 18 px везде.
+   Хэш-класс взят из telegram-ui 2.1.x — при обновлении библиотеки проверить. */
+.app-brand .tgui-389a43acd684137a {
+  box-sizing: border-box;
+  padding: 10px 18px;
+}
+/* Внутри списка край уже задан его полями — свои боковые отступы не добавляем */
+.app-brand .tgui-389a43acd684137a > .home-sec-title,
+.app-brand .tgui-389a43acd684137a > .ev-banner {
+  margin-left: 0;
+  margin-right: 0;
+}
