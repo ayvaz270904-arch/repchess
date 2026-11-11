@@ -448,6 +448,17 @@ button,input,select,textarea{font-family:inherit;}
 @media(max-width:420px){.dh-brand{font-size:11.5px;letter-spacing:.11em;}.topbar-right{gap:6px!important;}.topbar .btn-sm{padding:6px 9px;}}
 #home-remind-card{border-color:#c94a42!important;}
 #home-remind-card .card-head{border-color:#f0d4d2!important;}
+
+/* 11.11: кнопки шапки одной высоты и одного вида; «Записать занятие» в окнах не прилипает */
+.dh-btn,.topbar .btn-sm,.topbar .trainer-badge{height:36px;min-height:36px;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;border-radius:0;font-size:13px;font-weight:600;line-height:1;}
+.dh-btn{width:36px;padding:0;background:transparent;border:1px solid #6b6b6b;color:#fff;cursor:pointer;}
+.dh-btn:hover{border-color:#fff;}
+#refresh-btn{filter:none;}
+.topbar .trainer-badge{padding:0 12px;border:1px solid #6b6b6b;color:#fff;background:transparent;}
+.topbar .trainer-badge.admin-badge{background:#c94a42;border-color:#c94a42;}
+.topbar .btn-sm{padding:0 14px;border:1px solid #fff;background:transparent;color:#fff;}
+.topbar .btn-sm:hover{background:#fff;color:#151515;}
+.modal .btn-gold{position:static;box-shadow:none;}
 </style>
 </head>
 <body>
@@ -490,7 +501,7 @@ button,input,select,textarea{font-family:inherit;}
       <div class="dh-brand">REP CHESS <span>EDUCATION</span><em>ЖУРНАЛ ТРЕНЕРА</em></div>
     </div>
     <div class="topbar-right" style="display:flex;align-items:center;gap:8px">
-      <button id="refresh-btn" onclick="refreshCurrentPage()" title="Обновить" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:4px 6px;border-radius:8px;color:var(--text2);transition:transform .3s">🔄</button>
+      <button id="refresh-btn" class="dh-btn dh-ico" onclick="refreshCurrentPage()" title="Обновить" aria-label="Обновить" style="transition:transform .3s"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>
       <span class="trainer-badge" id="user-badge" onclick="openChangePass()" title="Сменить пароль" style="cursor:pointer"></span>
       <button class="btn-sm" onclick="doLogout()">Выйти</button>
     </div>
@@ -1596,7 +1607,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.11-designD';
+const APP_VERSION = '11.11-designD2';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
