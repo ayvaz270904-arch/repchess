@@ -523,6 +523,23 @@ auth.onAuthStateChanged(async user => {
   }
 });
 
+// Ошибки входа Firebase — по-русски и с подсказкой, что делать. Текст Google
+// («A network error…») тренеру ничего не говорит.
+function _authErrText(e) {
+  const c = (e && e.code) || '';
+  if (c === 'auth/network-request-failed')
+    return 'Нет связи с сервером входа Google. Проверьте интернет, включите или выключите VPN, '
+      + 'попробуйте другую сеть (Wi-Fi или мобильный интернет) или другой браузер.';
+  if (c === 'auth/wrong-password' || c === 'auth/user-not-found'
+      || c === 'auth/invalid-credential' || c === 'auth/invalid-login-credentials')
+    return 'Неверный email или пароль';
+  if (c === 'auth/invalid-email') return 'Проверьте адрес почты';
+  if (c === 'auth/too-many-requests') return 'Слишком много попыток — попробуйте через несколько минут';
+  if (c === 'auth/user-disabled') return 'Аккаунт отключён — напишите администратору';
+  if (c === 'auth/internal-error') return 'Сервер входа не ответил — попробуйте ещё раз через минуту';
+  return 'Ошибка входа: ' + ((e && e.message) || c || 'неизвестная');
+}
+
 async function doLogin() {
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
@@ -532,8 +549,7 @@ async function doLogin() {
   try {
     await auth.signInWithEmailAndPassword(email, pass);
   } catch(e) {
-    errEl.textContent = e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found'
-      ? 'Неверный email или пароль' : 'Ошибка: ' + e.message;
+    errEl.textContent = _authErrText(e);
   }
 }
 
