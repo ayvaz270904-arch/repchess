@@ -875,7 +875,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Certificates (promo codes) -->
-      <div class="card" data-sec="money" style="margin-bottom:14px">
+      <div class="card" data-sec="home-cert" style="margin-bottom:14px">
         <div class="card-head" onclick="toggleCertCard()" style="cursor:pointer;user-select:none">
           <span class="card-title">🎟 Сертификаты (промокоды)</span>
           <span style="display:flex;align-items:center;gap:8px">
@@ -1638,7 +1638,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.11-admin';
+const APP_VERSION = '11.11-admin2';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -4993,6 +4993,8 @@ function _adminLayout() {
     // там и кнопка «Написать». Пустую карточку не показываем.
     if (sec === 'home' && c.querySelector('#adm-balance-list')) { c.style.display = 'none'; return; }
     if (sec === 'home' && homeAnchor) { homeAnchor.after(c); homeAnchor = c; }
+    // Сертификаты (промокоды) — на Главной сразу под «Занимаются, но баланс кончился» (11.11.2026)
+    else if (sec === 'home-cert') { const rc = document.getElementById('home-remind-card'); if (rc) rc.after(c); else document.getElementById('page-finance').appendChild(c); }
     else if (dest[sec]) document.getElementById(dest[sec]).appendChild(c);
   });
 }
