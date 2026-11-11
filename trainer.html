@@ -459,6 +459,9 @@ button,input,select,textarea{font-family:inherit;}
 .topbar .btn-sm{padding:0 14px;border:1px solid #fff;background:transparent;color:#fff;}
 .topbar .btn-sm:hover{background:#fff;color:#151515;}
 .modal .btn-gold{position:static;box-shadow:none;}
+
+/* 11.11: чёрная линия под шахматной полосой — нижние белые клетки иначе сливаются с фоном */
+.dh-strip{border-bottom:2px solid #151515;}
 </style>
 </head>
 <body>
@@ -1607,7 +1610,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.11-designD2';
+const APP_VERSION = '11.11-designD3';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
