@@ -305,19 +305,162 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 .fmt-brush.on{border-color:var(--green);color:var(--green);background:color-mix(in srgb, var(--green) 12%, transparent);}
 .fmt-brush.on[data-fmt="offline"]{border-color:var(--accent2);color:var(--accent2);background:color-mix(in srgb, var(--accent2) 12%, transparent);}
 .fmt-brush.on[data-fmt="online"]{border-color:var(--purple);color:var(--purple);background:color-mix(in srgb, var(--purple) 12%, transparent);}
+
+/* ══════════ Дизайн D (11.11.2026): как кабинет клиента ══════════
+   Белый фон, чёрная шапка с красной линией и полосой клеток, фирменный красный #c94a42
+   (общий с кабинетом), чёрный и белый. Прямые углы. На телефоне — плавающий чёрный бар,
+   на компьютере (≥1000 px) — тот же бар вертикально слева. Макеты: холст
+   «Rep Chess — дизайн с маскотом», ряд «D · Тренерка» и «на компьютере». */
+@font-face{font-family:'Onest';font-weight:400;font-display:swap;src:url(fonts/onest-cyrillic-400-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+@font-face{font-family:'Onest';font-weight:400;font-display:swap;src:url(fonts/onest-latin-400-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+@font-face{font-family:'Onest';font-weight:500;font-display:swap;src:url(fonts/onest-cyrillic-500-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+@font-face{font-family:'Onest';font-weight:500;font-display:swap;src:url(fonts/onest-latin-500-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+2000-206F,U+20AC,U+2122,U+2212;}
+@font-face{font-family:'Onest';font-weight:600;font-display:swap;src:url(fonts/onest-cyrillic-600-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+@font-face{font-family:'Onest';font-weight:600;font-display:swap;src:url(fonts/onest-latin-600-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+2000-206F,U+20AC,U+2122,U+2212;}
+@font-face{font-family:'Onest';font-weight:700;font-display:swap;src:url(fonts/onest-cyrillic-700-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+@font-face{font-family:'Onest';font-weight:700;font-display:swap;src:url(fonts/onest-latin-700-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+2000-206F,U+20AC,U+2122,U+2212;}
+@font-face{font-family:'Onest';font-weight:800;font-display:swap;src:url(fonts/onest-cyrillic-800-normal.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+@font-face{font-family:'Onest';font-weight:800;font-display:swap;src:url(fonts/onest-latin-800-normal.woff2) format('woff2');unicode-range:U+0000-00FF,U+2000-206F,U+20AC,U+2122,U+2212;}
+
+:root{
+  --bg:#ffffff;--surface:#ffffff;--surface2:#f3f3f3;--border:#d4d4d4;
+  --accent:#c94a42;--accent2:#2b2b2b;--text:#151515;--text2:#5c5c5c;
+  --green:#1f7a4d;--red:#c94a42;--orange:#9a5a10;--purple:#151515;--gold:#8a6d12;
+  --ink:#151515;
+  color-scheme:light;
+}
+body{font-family:'Onest',-apple-system,'Segoe UI',Roboto,sans-serif;}
+button,input,select,textarea{font-family:inherit;}
+
+/* Шапка */
+.topbar{position:relative;top:auto;background:#151515;border:0;color:#fff;display:grid;
+  grid-template-columns:1fr auto;align-items:center;row-gap:0;padding:16px 20px 18px;min-height:150px;overflow:hidden;}
+.dh-line{position:absolute;left:0;top:0;width:100%;height:96px;pointer-events:none;}
+.topbar-left,.topbar-right{position:relative;z-index:1;}
+.dh-brand{font-size:13px;font-weight:800;letter-spacing:.14em;color:#fff;}
+.dh-brand span{color:#e0645b;}
+.dh-brand em{font-style:normal;color:#9a9a9a;font-weight:600;letter-spacing:.1em;margin-left:10px;font-size:11px;}
+.dh-title{grid-column:1/-1;position:relative;z-index:1;margin-top:58px;font-size:32px;font-weight:800;line-height:1.05;color:#fff;}
+.dh-queen{position:absolute;right:16px;bottom:10px;width:62px;height:72px;object-fit:contain;pointer-events:none;}
+.dh-strip{height:18px;background:repeating-conic-gradient(#151515 0 25%,#ffffff 0 50%) 0 0/18px 18px;}
+.topbar .btn-sm{border-color:#fff;color:#fff;border-radius:0;min-height:34px;}
+.topbar .btn-sm:hover{background:#fff;color:#151515;}
+.trainer-badge{background:transparent;color:#cfcfcf;border:1px solid #555;border-radius:0;}
+.admin-badge{background:#c94a42;color:#fff;border-color:#c94a42;}
+#refresh-btn{color:#fff!important;filter:grayscale(1) brightness(2);}
+@media(max-width:420px){.dh-brand em{display:none;}.topbar{padding:14px 16px 16px;}}
+
+/* Нижний бар — плавающая чёрная плашка, открытый раздел — белая «таблетка» */
+#app{padding-bottom:110px;}
+.bottom-nav{left:10px;right:10px;bottom:calc(12px + env(safe-area-inset-bottom));background:#151515;border:0;border-radius:22px;padding:5px;gap:2px;box-shadow:0 6px 20px rgba(0,0,0,.18);}
+@supports(padding-bottom:env(safe-area-inset-bottom)){.bottom-nav{padding-bottom:5px;}}
+.nav-item{border-radius:16px;color:#c9c9cf;padding:7px 2px;min-height:50px;justify-content:center;min-width:0;}
+.nav-item.on{background:#fff;color:#151515;}
+.nav-icon{margin-bottom:2px;line-height:0;}
+.nav-label{font-size:min(11px,2.9vw);font-weight:500;white-space:nowrap;}
+.nav-item.on .nav-label{font-weight:700;}
+#fab-wrap{bottom:calc(92px + env(safe-area-inset-bottom));}
+
+/* Компьютер: бар становится меню слева, шапка на всю ширину */
+@media(min-width:1000px){
+  .topbar{padding:20px max(28px,calc(50% - 560px)) 22px;min-height:170px;}
+  .dh-title{font-size:40px;}
+  .dh-queen{right:max(28px,calc(50% - 560px));width:92px;height:106px;bottom:8px;}
+  #app{padding-bottom:40px;}
+  .bottom-nav{position:fixed;top:220px;bottom:auto;right:auto;left:max(24px,calc(50% - 560px));width:210px;flex-direction:column;padding:8px;gap:4px;box-shadow:none;}
+  .nav-item{flex:none;flex-direction:row;justify-content:flex-start;gap:12px;padding:0 14px;min-height:48px;}
+  .nav-icon{margin:0;}
+  .nav-label{font-size:15px;}
+  .container{max-width:800px;margin-left:max(260px,calc(50% - 560px + 240px));margin-right:auto;padding-top:26px;}
+  #fab-wrap{bottom:32px;right:max(24px,calc(50% - 560px));}
+}
+
+/* Загрузка */
+#page-loading{background:#151515;gap:14px;}
+.ld-queen{width:100px;height:116px;object-fit:contain;margin-bottom:6px;}
+.ld-brand{color:#fff;font-size:15px;font-weight:800;letter-spacing:.16em;}
+.ld-brand span{color:#e0645b;}
+.ld-txt{color:#b5b5b5;font-size:14px;}
+.ld-sq{display:grid;grid-template-columns:repeat(8,14px);margin-top:6px;}
+.ld-sq i{height:14px;background:#3a3a3a;animation:ldsq 1.6s infinite;}
+.ld-sq i:nth-child(even){background:#5a5a5a;}
+.ld-sq i:nth-child(2){animation-delay:.2s}.ld-sq i:nth-child(3){animation-delay:.4s}.ld-sq i:nth-child(4){animation-delay:.6s}
+.ld-sq i:nth-child(5){animation-delay:.8s}.ld-sq i:nth-child(6){animation-delay:1s}.ld-sq i:nth-child(7){animation-delay:1.2s}.ld-sq i:nth-child(8){animation-delay:1.4s}
+@keyframes ldsq{0%,40%,100%{background-color:#3a3a3a}15%,25%{background-color:#c94a42}}
+@media(prefers-reduced-motion:reduce){.ld-sq i{animation:none}}
+
+/* Вход */
+#login-page{background:#151515;min-height:100vh;}
+.auth-card{border:0;border-radius:0;padding:32px 28px;}
+.auth-logo{display:block;width:64px;height:74px;margin:0 auto 10px;object-fit:contain;filter:invert(1);}
+.auth-title{font-size:14px;letter-spacing:.14em;color:#151515;}
+.auth-title span{color:#c94a42;}
+.auth-sub{text-transform:uppercase;letter-spacing:.1em;font-size:11px;font-weight:600;}
+
+/* Карточки, кнопки, поля — прямые углы, чёрные рамки */
+.card{border:1.5px solid #151515;border-radius:0;}
+.card:has(.student-search-wrap) .card-head{border-radius:0;}
+.card-head{border-bottom:1px solid #e3e3e3;}
+.card-title{font-weight:800;}
+.btn-full,.btn-sm,.toggle-btn,.field-inp,.form-inp,.form-sel,.form-ta,.date-filter input,.copy-btn,.rate-act,.li-action,.note-chip,.day-chip,.slot-chip,.fmt-brush,.group-student-tag,.alert,.toast,.student-results,.stat-card,.tag,.balance-badge,.attend-check,.fab-label{border-radius:0!important;}
+.btn-gold{background:#c94a42;}
+.btn-gold:hover{background:#b23c35;}
+.btn-ghost{background:#fff;border:1.5px solid #151515;color:#151515;}
+.btn-ghost:hover{background:#151515;color:#fff;}
+.field-inp,.form-inp,.form-sel,.form-ta{border-color:#bdbdbd;background:#fff;}
+.field-inp:focus,.form-inp:focus,.form-sel:focus,.form-ta:focus{border-color:#151515;box-shadow:none;}
+.toggle-btn.on,.day-chip.on{background:#151515;border-color:#151515;color:#fff;}
+.date-filter input::-webkit-calendar-picker-indicator{filter:none;}
+
+/* Статистика */
+.stat-card{border:1.5px solid #151515;}
+.stat-card::after{display:none;}
+.stat-val,.sc-green .stat-val,.sc-blue .stat-val,.sc-purple .stat-val,.sc-orange .stat-val{color:#151515;}
+.sc-red .stat-val{color:#c94a42;}
+.rem-stats,.stat-strip{background:#151515;}
+
+/* Метки вида занятия — знаком, а не цветом: группа — чёрная, индивидуальное — контурная */
+.tag-group{background:#151515;color:#fff;}
+.tag-indiv{background:#fff;color:#151515;box-shadow:inset 0 0 0 1.5px #151515;}
+.tag-offline,.tag-online,.tag-scheduled{background:#f0f0f0;color:#151515;}
+.tag-pending{background:#c94a42;color:#fff;}
+.li-main{border-left-color:#151515;}
+.li-action{background:#c94a42;border-color:#c94a42;color:#fff;border-radius:0;}
+.li-action:hover{background:#b23c35;}
+.li-action.alt{background:#fff;border:1.5px solid #151515;color:#151515;}
+.li-action.alt:hover{background:#151515;color:#fff;}
+.attend-check.on{background:#151515;border-color:#151515;color:#fff;}
+
+/* FAB — красный квадрат, пункты — чёрные */
+#fab-main{border-radius:16px;background:#c94a42;box-shadow:0 4px 14px rgba(0,0,0,.2);}
+.fab-btn{border-radius:12px;}
+.fab-btn-group,.fab-btn-indiv{background:#151515;box-shadow:0 3px 10px rgba(0,0,0,.2);}
+.fab-label{background:#fff;color:#151515;border-color:#151515;}
+
+/* Окна */
+.overlay{background:rgba(21,21,21,.6);}
+.modal{border-radius:0;border-top:4px solid #151515;}
+@media(min-width:600px){.modal{border-radius:0;}}
+
+/* поправки после первого просмотра */
+.topbar .dh-title{font-size:32px;font-weight:800;color:#fff;}
+@media(min-width:1000px){.topbar .dh-title{font-size:40px;}}
+@media(max-width:420px){.dh-brand{font-size:11.5px;letter-spacing:.11em;}.topbar-right{gap:6px!important;}.topbar .btn-sm{padding:6px 9px;}}
+#home-remind-card{border-color:#c94a42!important;}
+#home-remind-card .card-head{border-color:#f0d4d2!important;}
 </style>
 </head>
 <body>
 
 <!-- LOADING -->
-<div id="page-loading"><div class="ico">♟</div><div style="color:var(--text2);font-size:.9rem">Загрузка...</div></div>
+<div id="page-loading"><img class="ld-queen" src="mascot-queen.svg" alt=""><div class="ld-brand">REP CHESS <span>EDUCATION</span></div><div class="ld-txt">Расставляем фигуры…</div><div class="ld-sq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
 
 <!-- LOGIN -->
 <div id="login-page" style="display:none">
   <div class="auth-wrap">
     <div class="auth-card">
-      <div class="auth-logo">♟</div>
-      <div class="auth-title">Rep Chess Education</div>
+      <img class="auth-logo" src="mascot-queen.svg" alt="">
+      <div class="auth-title">REP CHESS <span>EDUCATION</span></div>
       <div class="auth-sub">Журнал тренера</div>
       <div class="field-label">Email</div>
       <input class="field-inp" id="login-email" type="email" placeholder="ваш@email.com" autocomplete="email">
@@ -339,34 +482,39 @@ body.modal-open{overflow:hidden;position:fixed;width:100%;}
 <!-- APP -->
 <div id="app">
   <!-- TOPBAR -->
+  <!-- Шапка дизайна D (11.11.2026): чёрная, красная линия «ходом коня», полоса клеток.
+       Ступенька линии своя у каждого раздела (DH_STEPS в showPage). -->
   <div class="topbar">
+    <svg class="dh-line" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path id="dh-path" d="M0 60 H31 V84 H77 V60 H100" fill="none" stroke="#c94a42" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>
     <div class="topbar-left">
-      <span style="font-size:1.3rem">♟</span>
-      <h1>Rep Chess Education</h1>
+      <div class="dh-brand">REP CHESS <span>EDUCATION</span><em>ЖУРНАЛ ТРЕНЕРА</em></div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
+    <div class="topbar-right" style="display:flex;align-items:center;gap:8px">
       <button id="refresh-btn" onclick="refreshCurrentPage()" title="Обновить" style="background:none;border:none;cursor:pointer;font-size:1.1rem;padding:4px 6px;border-radius:8px;color:var(--text2);transition:transform .3s">🔄</button>
       <span class="trainer-badge" id="user-badge" onclick="openChangePass()" title="Сменить пароль" style="cursor:pointer"></span>
       <button class="btn-sm" onclick="doLogout()">Выйти</button>
     </div>
+    <h1 class="dh-title" id="dh-title">Главная</h1>
+    <img class="dh-queen" src="mascot-queen.svg" alt="" aria-hidden="true">
   </div>
+  <div class="dh-strip" aria-hidden="true"></div>
 
   <!-- BOTTOM NAV -->
   <div class="bottom-nav" id="bottom-nav">
     <button class="nav-item" onclick="showPage('admin')" data-page="admin" id="admin-nav" style="display:none">
-      <div class="nav-icon">⚙️</div><div class="nav-label">Админ</div>
+      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></div><div class="nav-label">Админ</div>
     </button>
     <button class="nav-item" onclick="showPage('history')" data-page="history">
-      <div class="nav-icon">📋</div><div class="nav-label">История</div>
+      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></div><div class="nav-label">История</div>
     </button>
     <button class="nav-item on" onclick="showPage('home')" data-page="home">
-      <div class="nav-icon">🏠</div><div class="nav-label">Главная</div>
+      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/></svg></div><div class="nav-label">Главная</div>
     </button>
     <button class="nav-item" onclick="showPage('schedule')" data-page="schedule">
-      <div class="nav-icon">📅</div><div class="nav-label">График</div>
+      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div><div class="nav-label">График</div>
     </button>
     <button class="nav-item" onclick="showPage('finance')" data-page="finance" id="finance-nav">
-      <div class="nav-icon">💰</div><div class="nav-label">Финансы</div>
+      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></div><div class="nav-label">Финансы</div>
     </button>
   </div>
 
@@ -1448,7 +1596,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.11-autherr';
+const APP_VERSION = '11.11-designD';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -4740,6 +4888,16 @@ function schedRenderExceptionList() {
     : '';
 }
 
+// Шапка D: заголовок раздела и своя ступенька красной линии (вход и выход на одной высоте,
+// поэтому при переключении разделов линия как будто продолжается).
+const DH_TITLES = { home:'Главная', history:'История', schedule:'График', finance:'Финансы', admin:'Админ', group:'Группы', record:'Запись' };
+const DH_STEPS  = { home:[31,77], history:[10,85], schedule:[46,92], finance:[60,72], admin:[18,40], group:[64,80], record:[15,62] };
+function _dhSet(name) {
+  const t = document.getElementById('dh-title'); if (t) t.textContent = DH_TITLES[name] || '';
+  const [a, b] = DH_STEPS[name] || DH_STEPS.home;
+  const p = document.getElementById('dh-path');
+  if (p) p.setAttribute('d', `M0 60 H${a} V84 H${b} V60 H100`);
+}
 function showPage(name) {
   if (name === 'admin' && currentTrainer?.role !== 'admin') return;
   const prev = sessionStorage.getItem('_activePage');
@@ -4749,6 +4907,7 @@ function showPage(name) {
   document.getElementById(`page-${name}`).classList.add('on');
   document.querySelector(`[data-page="${name}"]`)?.classList.add('on');
   sessionStorage.setItem('_activePage', name);
+  _dhSet(name);
   // Lazy load (Главная/Запись — из кэша, если данные свежее минуты: экономия квоты)
   if (name==='record')  loadHomePage(Date.now() - _homeLoadedAt < 60000);
   if (name==='history') loadHistory();

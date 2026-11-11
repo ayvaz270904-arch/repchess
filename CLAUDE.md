@@ -36,7 +36,7 @@ Chess school CRM. Static apps (admin CRM, trainer cabinet, client Telegram Mini 
 - **Тренеры:** удаление — кнопкой 🗑 в Админ → Тренеры (копия в `settings/removedTrainers`, «↩ Вернуть»), не через Firebase; письмо с паролем уходит само при создании. Memory `repchess-trainer-removal`, `repchess-trainer-invite`.
 - **Отзывы и рейтинг тренеров** — пробные видны в ленте с пометкой, в средние не идут; ученикам рейтинг без числа оценок. Memory `repchess-feedback`.
 - **Финансы** — выручка по дате оплаты, история ставок тренеров с датами (`trainerRates`). Memory `repchess-finance-tab`.
-- **Цвета:** кабинет клиента — кирпичный `#C94A42` + цвета направлений по макету дизайнера (не «монохромить»); тренерка — бренд `#CF4B4E`. Разница сознательная, не «чинить».
+- **Дизайн D (11.11.2026), кабинет и тренерка одинаково:** белый фон, чёрная шапка REP CHESS EDUCATION с красной линией «ходом коня» и полосой клеток, плавающий чёрный бар (в тренерке на ≥1000 px — меню слева), красный `#c94a42` только для действий/внимания, вид занятия — знаком (чёрный = группа, контур = индив.), а не цветом; шрифт Onest вшит (`fonts/`, в кабинете @fontsource). Цвета направлений из макета 29.09 и тренерский `#CF4B4E` больше не используются. Макеты — холст «Rep Chess — дизайн с маскотом» (ряд D).
 - Cabinet is open to EVERYONE (guest mode): unknown phone → link with empty email. Empty email must NEVER reach Firestore/sheet queries (matches technical rows) — every booking action guards `if (!link.email)`. Guest cert redemption mints `cert-<phone>@repchess.local`; doGet auto-upgrades guests via findClientByPhone every 10 min.
 
 ## Firestore quota discipline (Spark 50K reads/day; exhausted 2026-07-09 и 2026-11-09)
