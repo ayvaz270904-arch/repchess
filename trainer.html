@@ -392,7 +392,8 @@ button,input,select,textarea{font-family:inherit;}
 /* Вход */
 #login-page{background:#151515;min-height:100vh;}
 .auth-card{border:0;border-radius:0;padding:32px 28px;}
-.auth-logo{display:block;width:64px;height:74px;margin:0 auto 10px;object-fit:contain;filter:invert(1);}
+.auth-logo{display:block;width:64px;height:74px;margin:0 auto 10px;object-fit:contain;}
+/* Негативного (залитого чёрным) ферзя не используем — только оригиналы: белый на тёмном, контурный на светлом */
 .auth-title{font-size:14px;letter-spacing:.14em;color:#151515;}
 .auth-title span{color:#c94a42;}
 .auth-sub{text-transform:uppercase;letter-spacing:.1em;font-size:11px;font-weight:600;}
@@ -473,7 +474,7 @@ button,input,select,textarea{font-family:inherit;}
 <div id="login-page" style="display:none">
   <div class="auth-wrap">
     <div class="auth-card">
-      <img class="auth-logo" src="mascot-queen.svg" alt="">
+      <img class="auth-logo" src="mascot-queen-line.png" alt="">
       <div class="auth-title">REP CHESS <span>EDUCATION</span></div>
       <div class="auth-sub">Журнал тренера</div>
       <div class="field-label">Email</div>
