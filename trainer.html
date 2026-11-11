@@ -463,6 +463,16 @@ button,input,select,textarea{font-family:inherit;}
 
 /* 11.11: чёрная линия под шахматной полосой — нижние белые клетки иначе сливаются с фоном */
 .dh-strip{border-bottom:2px solid #151515;}
+
+/* Вкладки внутри раздела: «Журнал | Группы», «Команда | График окон» */
+.subtabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1.5px solid #151515;margin-bottom:16px;}
+.subtabs button{min-height:44px;border:0;background:#fff;color:#151515;font:600 14px 'Onest',sans-serif;cursor:pointer;}
+.subtabs button+button{border-left:1.5px solid #151515;}
+.subtabs button.on{background:#151515;color:#fff;font-weight:700;}
+#settings-btn svg{display:block;}
+
+.btn-write{border:1.5px solid #151515!important;color:#151515!important;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;min-height:34px;border-radius:0!important;}
+.btn-write:hover{background:#151515!important;color:#fff!important;}
 </style>
 </head>
 <body>
@@ -505,6 +515,7 @@ button,input,select,textarea{font-family:inherit;}
       <div class="dh-brand">REP CHESS <span>EDUCATION</span><em>ЖУРНАЛ ТРЕНЕРА</em></div>
     </div>
     <div class="topbar-right" style="display:flex;align-items:center;gap:8px">
+      <button id="settings-btn" class="dh-btn dh-ico" onclick="showPage('admin')" title="Настройки" aria-label="Настройки" style="display:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></button>
       <button id="refresh-btn" class="dh-btn dh-ico" onclick="refreshCurrentPage()" title="Обновить" aria-label="Обновить" style="transition:transform .3s"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>
       <span class="trainer-badge" id="user-badge" onclick="openChangePass()" title="Сменить пароль" style="cursor:pointer"></span>
       <button class="btn-sm" onclick="doLogout()">Выйти</button>
@@ -515,21 +526,29 @@ button,input,select,textarea{font-family:inherit;}
   <div class="dh-strip" aria-hidden="true"></div>
 
   <!-- BOTTOM NAV -->
+  <!-- Меню (11.11.2026, «админка по задачам»). Админ: Главная · Занятия · Ученики · Тренеры · Деньги,
+       настройки — шестерёнкой в шапке. Тренер: Главная · История · График · Финансы (только свои). -->
   <div class="bottom-nav" id="bottom-nav">
-    <button class="nav-item" onclick="showPage('admin')" data-page="admin" id="admin-nav" style="display:none">
-      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg></div><div class="nav-label">Админ</div>
-    </button>
-    <button class="nav-item" onclick="showPage('history')" data-page="history">
-      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></div><div class="nav-label">История</div>
-    </button>
     <button class="nav-item on" onclick="showPage('home')" data-page="home">
       <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/></svg></div><div class="nav-label">Главная</div>
     </button>
-    <button class="nav-item" onclick="showPage('schedule')" data-page="schedule">
+    <button class="nav-item" onclick="showPage('history')" data-page="history">
+      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/></svg></div><div class="nav-label" id="nav-lbl-history">История</div>
+    </button>
+    <button class="nav-item adm-only" onclick="showPage('students')" data-page="students" style="display:none">
+      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg></div><div class="nav-label">Ученики</div>
+    </button>
+    <button class="nav-item adm-only" onclick="showPage('trainers')" data-page="trainers" style="display:none">
+      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c1-3.5 3.5-5 6-5s5 1.5 6 5M15 15c2.5 0 4.5 1.5 5.5 4"/></svg></div><div class="nav-label">Тренеры</div>
+    </button>
+    <button class="nav-item trn-only" onclick="showPage('schedule')" data-page="schedule">
       <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div><div class="nav-label">График</div>
     </button>
     <button class="nav-item" onclick="showPage('finance')" data-page="finance" id="finance-nav">
-      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></div><div class="nav-label">Финансы</div>
+      <div class="nav-icon"><svg class="nav-svg" width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></div><div class="nav-label" id="nav-lbl-finance">Финансы</div>
+    </button>
+    <button class="nav-item" onclick="showPage('admin')" data-page="admin" id="admin-nav" style="display:none" hidden>
+      <div class="nav-label">Настройки</div>
     </button>
   </div>
 
@@ -588,6 +607,7 @@ button,input,select,textarea{font-family:inherit;}
 
     <!-- GROUP LESSONS -->
     <div class="page" id="page-group">
+      <div class="subtabs"><button type="button" data-sub="history" onclick="showPage('history')">Журнал</button><button type="button" data-sub="group" onclick="showPage('group')">Группы</button></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div style="font-weight:700;font-size:1rem">Групповые занятия</div>
         <button class="btn-sm btn-gold" id="grp-new-btn" style="color:#fff;background:var(--accent);border:none;font-weight:700" onclick="openGroupModal()">+ Новое</button>
@@ -597,6 +617,7 @@ button,input,select,textarea{font-family:inherit;}
 
     <!-- HISTORY -->
     <div class="page" id="page-history">
+      <div class="subtabs"><button type="button" data-sub="history" onclick="showPage('history')">Журнал</button><button type="button" data-sub="group" onclick="showPage('group')">Группы</button></div>
       <div style="font-weight:700;font-size:1rem;margin-bottom:12px">📋 Журнал занятий</div>
 
       <!-- Вид: список / календарь -->
@@ -647,6 +668,7 @@ button,input,select,textarea{font-family:inherit;}
     <!-- ADMIN -->
     <!-- SCHEDULE (график доступности) -->
     <div class="page" id="page-schedule">
+      <div class="subtabs adm-only" style="display:none"><button type="button" data-sub="trainers" onclick="showPage('trainers')">Команда</button><button type="button" data-sub="schedule" onclick="showPage('schedule')">График окон</button></div>
       <div style="font-weight:700;font-size:1rem;margin-bottom:12px">📅 График доступности</div>
 
       <!-- админ: выбор тренера -->
@@ -710,8 +732,14 @@ button,input,select,textarea{font-family:inherit;}
       </div>
     </div>
 
+    <!-- Ученики и Тренеры (админ). Карточки переносит сюда _adminLayout() из «Настроек» -->
+    <div class="page" id="page-students"></div>
+    <div class="page" id="page-trainers">
+      <div class="subtabs adm-only" style="display:none"><button type="button" data-sub="trainers" onclick="showPage('trainers')">Команда</button><button type="button" data-sub="schedule" onclick="showPage('schedule')">График окон</button></div>
+    </div>
+
     <div class="page" id="page-admin">
-      <div style="font-weight:700;font-size:1.1rem;margin-bottom:16px">⚙️ Панель администратора</div>
+      
 
       <!-- Group mismatch / pending approval alerts -->
       <div id="admin-group-mismatches"></div>
@@ -720,7 +748,7 @@ button,input,select,textarea{font-family:inherit;}
            от «обновление доехало, но не помогло»: тренерка открывается через VPN, а
            service worker при неудачном запросе молча отдаёт сохранённую копию страницы —
            внешне это выглядит как рабочее приложение, просто старое. -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="settings" style="margin-bottom:14px">
         <div class="card-head"><span class="card-title">📦 Версия</span><span class="dim" id="app-version-badge" style="font-size:.8rem"></span></div>
         <div class="card-body">
           <div class="dim" style="font-size:.78rem;margin-bottom:10px">
@@ -734,7 +762,7 @@ button,input,select,textarea{font-family:inherit;}
       <!-- Разовая починка данных: занятия, сохранённые с пустым именем ученика.
            Появились 07.09.2026, когда в Таблице 2 пропала колонка «Name» и база
            учеников приехала без имён — занятия тех дней записали пустое ФИО. -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="students" style="margin-bottom:14px">
         <div class="card-head"><span class="card-title">🩹 Имена в занятиях</span></div>
         <div class="card-body">
           <div class="dim" style="font-size:.78rem;margin-bottom:10px">
@@ -751,7 +779,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Trainer stats -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="trainers" style="margin-bottom:14px">
         <div class="card-head">
           <span class="card-title">Активность тренеров</span>
           <div style="display:flex;gap:6px">
@@ -768,13 +796,13 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Students needing payment -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="home" style="margin-bottom:14px">
         <div class="card-head"><span class="card-title">🔴 Нужна оплата</span></div>
         <div class="card-body" id="adm-balance-list"></div>
       </div>
 
       <!-- All recent lessons -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="lessons" style="margin-bottom:14px">
         <div class="card-head">
           <span class="card-title">Все занятия</span>
           <span class="dim" id="adm-lessons-count" style="font-size:.78rem"></span>
@@ -788,13 +816,13 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Assign students to trainers -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="students" style="margin-bottom:14px">
         <div class="card-head"><span class="card-title">👤 Назначение учеников тренерам</span></div>
         <div class="card-body" id="adm-assignment-body"><div class="empty">Загрузка...</div></div>
       </div>
 
       <!-- Finance PIN -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="settings" style="margin-bottom:14px">
         <div class="card-head">
           <span class="card-title">🔑 Финансовый пароль</span>
           <button class="btn-sm" style="color:#fff;background:var(--accent);border:none;font-weight:700;padding:5px 12px;border-radius:8px" onclick="openSetFinancePin()">Изменить</button>
@@ -805,7 +833,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Manage trainers -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="trainers" style="margin-bottom:14px">
         <div class="card-head">
           <span class="card-title">Тренеры</span>
           <button class="btn-sm btn-gold" style="color:#fff;background:var(--accent);border:none;font-weight:700" onclick="openAddTrainerModal()">+ Добавить</button>
@@ -820,7 +848,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Student database -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="students" style="margin-bottom:14px">
         <div class="card-head">
           <span class="card-title">📚 База учеников</span>
           <span class="dim" id="sdb-count" style="font-size:.78rem"></span>
@@ -834,7 +862,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Отзывы о занятиях: бот просит оценку после проведённого занятия. Видит только админ. -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="trainers" style="margin-bottom:14px">
         <div class="card-head" onclick="toggleFbCard()" style="cursor:pointer;user-select:none">
           <span class="card-title">⭐ Отзывы о занятиях</span>
           <span style="display:flex;align-items:center;gap:8px">
@@ -848,7 +876,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Certificates (promo codes) -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="home-cert" style="margin-bottom:14px">
         <div class="card-head" onclick="toggleCertCard()" style="cursor:pointer;user-select:none">
           <span class="card-title">🎟 Сертификаты (промокоды)</span>
           <span style="display:flex;align-items:center;gap:8px">
@@ -893,7 +921,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Лиды и профили -->
-      <div class="card" style="margin-bottom:14px">
+      <div class="card" data-sec="students" style="margin-bottom:14px">
         <div class="card-head" onclick="toggleInsightsCard()" style="cursor:pointer;user-select:none">
           <span class="card-title">👥 Лиды и профили</span>
           <span style="display:flex;align-items:center;gap:8px">
@@ -914,7 +942,7 @@ button,input,select,textarea{font-family:inherit;}
       </div>
 
       <!-- Quick links -->
-      <div class="card">
+      <div class="card" data-sec="settings">
         <div class="card-head"><span class="card-title">🔗 Быстрые ссылки</span></div>
         <div class="card-body" style="display:flex;flex-direction:column;gap:10px">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
@@ -1611,7 +1639,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.11-designD3';
+const APP_VERSION = '11.11-admin2';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1907,7 +1935,13 @@ async function showApp() {
   document.getElementById('user-badge').textContent = currentTrainer.name.split(' ')[0];
   document.getElementById('user-badge').className = 'trainer-badge' + (isAdmin ? ' admin-badge' : '');
   // Явно задаём видимость — не оставляем на CSS
-  document.getElementById('admin-nav').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('admin-nav').style.display = 'none';   // «Настройки» — шестерёнкой в шапке
+  document.querySelectorAll('.adm-only').forEach(el => { el.style.display = isAdmin ? '' : 'none'; });
+  document.querySelectorAll('.trn-only').forEach(el => { el.style.display = isAdmin ? 'none' : ''; });
+  document.getElementById('settings-btn').style.display = isAdmin ? '' : 'none';
+  document.getElementById('nav-lbl-history').textContent = isAdmin ? 'Занятия' : 'История';
+  document.getElementById('nav-lbl-finance').textContent = isAdmin ? 'Деньги' : 'Финансы';
+  if (isAdmin) _adminLayout();
   // Групповые занятия создаёт только админ — тренерам кнопки не показываем
   const _fabGrp = document.getElementById('fab-group-row');
   if (_fabGrp) _fabGrp.style.display = isAdmin ? '' : 'none';
@@ -3962,6 +3996,16 @@ async function restoreTrainer(uid) {
   } catch (e) { toast('Ошибка: ' + e.message, 'err'); }
 }
 
+// «Написать» должнику (11.11.2026): открывает чат в Telegram — по нику, если он известен,
+// иначе по номеру телефона (t.me/+7…). Нет ни того, ни другого — кнопки нет.
+function _writeLink(s) {
+  const nick = _stuNick(s);
+  const ph = _np(s && s.phone);
+  const url = nick ? 'https://t.me/' + encodeURIComponent(nick) : ph ? 'https://t.me/+7' + ph : '';
+  if (!url) return '';
+  return `<a class="btn-sm btn-write" href="${url}" target="_blank" rel="noopener" title="${nick ? '@' + esc(nick) : '+7' + ph}">Написать</a>`;
+}
+
 async function loadBalanceAlerts() {
   // Единый расчёт (кэш 5/10 мин). Своего полного чтения коллекции здесь больше нет:
   // оно и расходилось с остальными числами (считало ВСЕ занятия, включая отменённые
@@ -3990,7 +4034,10 @@ async function loadBalanceAlerts() {
             <div style="font-weight:700">${esc(s.name)}</div>
             <div style="font-size:.75rem;color:var(--text2)">${s.id} · ${esc(s.email)}</div>
           </div>
-          <span class="balance-badge balance-empty">${remaining <= 0 ? '0' : remaining} зан.</span>
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+            <span class="balance-badge balance-empty">${remaining <= 0 ? '0' : remaining} зан.</span>
+            ${_writeLink(s)}
+          </div>
         </div>`).join('')
     : '<div class="empty" style="padding:16px">Всё в порядке — у всех учеников есть занятия</div>';
 }
@@ -4243,7 +4290,7 @@ async function saveEditLesson() {
     if (ai >= 0) _admLessonsCache[ai] = { ..._admLessonsCache[ai], ..._lPatch };
     loadHomePage(true);
     if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
-    if (document.getElementById('page-admin').classList.contains('on')) renderAdmLessons();
+    if (_admVisible()) renderAdmLessons();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
   }
@@ -4284,7 +4331,7 @@ async function confirmDeleteLesson() {
     _admLessonsCache  = _admLessonsCache.filter(l => l._rowType === 'group' || l.id !== id);
     if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
     loadHomePage(true);   // _deletedLessonIds отфильтрует удалённое из кэша Главной
-    if (document.getElementById('page-admin').classList.contains('on')) renderAdmLessons();
+    if (_admVisible()) renderAdmLessons();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false;
@@ -4905,24 +4952,73 @@ function schedRenderExceptionList() {
 
 // Шапка D: заголовок раздела и своя ступенька красной линии (вход и выход на одной высоте,
 // поэтому при переключении разделов линия как будто продолжается).
-const DH_TITLES = { home:'Главная', history:'История', schedule:'График', finance:'Финансы', admin:'Админ', group:'Группы', record:'Запись' };
-const DH_STEPS  = { home:[31,77], history:[10,85], schedule:[46,92], finance:[60,72], admin:[18,40], group:[64,80], record:[15,62] };
+const DH_TITLES = { home:'Главная', history:'История', schedule:'График', finance:'Финансы', admin:'Настройки', group:'Группы', record:'Запись', students:'Ученики', trainers:'Тренеры' };
+// У админа те же страницы называются по задачам: «Занятия», «Деньги», «График окон».
+const DH_TITLES_ADM = { history:'Занятия', group:'Занятия · группы', finance:'Деньги', schedule:'График окон' };
+// Какой пункт меню подсветить: «Группы» живут внутри «Занятий», график окон у админа — внутри «Тренеров».
+function _navParent(name) {
+  if (name === 'group') return 'history';
+  if (name === 'record') return 'home';
+  if (name === 'schedule' && currentTrainer?.role === 'admin') return 'trainers';
+  return name;
+}
+// Админские карточки теперь разложены по разделам; данные им даёт loadAdminData().
+// Чтобы не тянуть её на каждое переключение — не чаще раза в минуту (кнопка 🔄 и правки
+// обновляют сами).
+let _admLoadedAt = 0;
+function _admLoad() {
+  if (currentTrainer?.role !== 'admin') return;
+  if (Date.now() - _admLoadedAt < 60000) return;
+  _admLoadedAt = Date.now();
+  loadAdminData();
+}
+function _admVisible() {
+  return currentTrainer?.role === 'admin' && ['page-admin','page-home','page-students','page-trainers','page-history','page-finance']
+    .some(id => document.getElementById(id)?.classList.contains('on'));
+}
+// Раскладка «админки по задачам» (11.11.2026): карточки с data-sec уезжают из «Настроек»
+// в свои разделы. Узлы переносятся целиком, id внутри не меняются — весь код, который их
+// заполняет, работает как раньше.
+let _admLaid = false;
+function _adminLayout() {
+  if (_admLaid) return; _admLaid = true;
+  const stats = document.getElementById('home-stats');
+  const mism = document.getElementById('admin-group-mismatches');
+  if (mism && stats) stats.before(mism);
+  let homeAnchor = stats;
+  const dest = { lessons:'page-history', students:'page-students', trainers:'page-trainers', money:'page-finance' };
+  document.querySelectorAll('#page-admin [data-sec]').forEach(c => {
+    const sec = c.dataset.sec;
+    // «Нужна оплата» (adm-balance-list) никогда не заполнялась — loadBalanceAlerts нигде не
+    // вызывается; должники на деле видны в «Занимаются, но баланс кончился» на Главной,
+    // там и кнопка «Написать». Пустую карточку не показываем.
+    if (sec === 'home' && c.querySelector('#adm-balance-list')) { c.style.display = 'none'; return; }
+    if (sec === 'home' && homeAnchor) { homeAnchor.after(c); homeAnchor = c; }
+    // Сертификаты (промокоды) — на Главной сразу под «Занимаются, но баланс кончился» (11.11.2026)
+    else if (sec === 'home-cert') { const rc = document.getElementById('home-remind-card'); if (rc) rc.after(c); else document.getElementById('page-finance').appendChild(c); }
+    else if (dest[sec]) document.getElementById(dest[sec]).appendChild(c);
+  });
+}
+const DH_STEPS  = { home:[31,77], history:[10,85], schedule:[46,92], finance:[60,72], admin:[18,40], group:[64,80], record:[15,62], students:[22,58], trainers:[52,88] };
 function _dhSet(name) {
-  const t = document.getElementById('dh-title'); if (t) t.textContent = DH_TITLES[name] || '';
+  const adm = currentTrainer?.role === 'admin';
+  const t = document.getElementById('dh-title'); if (t) t.textContent = (adm && DH_TITLES_ADM[name]) || DH_TITLES[name] || '';
   const [a, b] = DH_STEPS[name] || DH_STEPS.home;
   const p = document.getElementById('dh-path');
   if (p) p.setAttribute('d', `M0 60 H${a} V84 H${b} V60 H100`);
 }
 function showPage(name) {
-  if (name === 'admin' && currentTrainer?.role !== 'admin') return;
+  if ((name === 'admin' || name === 'students' || name === 'trainers') && currentTrainer?.role !== 'admin') return;
   const prev = sessionStorage.getItem('_activePage');
   if (prev) sessionStorage.setItem(`_scroll_${prev}`, window.scrollY);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('on'));
   document.getElementById(`page-${name}`).classList.add('on');
-  document.querySelector(`[data-page="${name}"]`)?.classList.add('on');
+  document.querySelector(`.bottom-nav [data-page="${_navParent(name)}"]`)?.classList.add('on');
+  document.querySelectorAll('.subtabs button').forEach(b => b.classList.toggle('on', b.dataset.sub === name));
   sessionStorage.setItem('_activePage', name);
   _dhSet(name);
+  if (['home','students','trainers','history','finance'].includes(name)) _admLoad();
   // Lazy load (Главная/Запись — из кэша, если данные свежее минуты: экономия квоты)
   if (name==='record')  loadHomePage(Date.now() - _homeLoadedAt < 60000);
   if (name==='history') loadHistory();
@@ -6731,7 +6827,7 @@ async function submitAttendance() {
     loadHomePage(true);
     if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
     if (document.getElementById('page-group').classList.contains('on')) loadGroupLessons();
-    if (isAdmin && document.getElementById('page-admin').classList.contains('on')) loadAdminData();
+    if (isAdmin && _admVisible()) loadAdminData();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false;
@@ -6899,7 +6995,7 @@ async function approveAttendance() {
     loadHomePage(true);
     if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
     if (document.getElementById('page-group').classList.contains('on')) loadGroupLessons();
-    if (document.getElementById('page-admin').classList.contains('on')) loadAdminData();
+    if (_admVisible()) loadAdminData();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false;
@@ -7821,6 +7917,7 @@ async function loadHomeReminders() {
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
         <span class="balance-badge" style="background:color-mix(in srgb, ${color} 14%, transparent);color:${color}">${label}</span>
         ${s.phone ? `<button class="copy-btn" onclick="navigator.clipboard.writeText('${escJs(s.phone)}').then(()=>toast('Номер скопирован','ok'))">📋</button>` : ''}
+        ${_writeLink(s)}
       </div>
     </div>`;
   }).join('');
