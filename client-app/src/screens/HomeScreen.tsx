@@ -33,7 +33,10 @@ export function HomeScreen({
   const cats = noData ? [] : data.categories.filter((c) => c.count !== 0)
 
   async function redeem() {
-    const code = cert.toUpperCase().replace(/[^A-Z0-9-]/g, '')
+    // Похожие русские буквы → латинские (набрали «СНЕSS15» на русской раскладке). Так же делает
+    // бот (_certNorm в gas/bot.gs) — держать одинаково.
+    const homo: Record<string, string> = { А: 'A', В: 'B', Е: 'E', Ё: 'E', К: 'K', М: 'M', Н: 'H', О: 'O', Р: 'P', С: 'C', Т: 'T', У: 'Y', Х: 'X' }
+    const code = cert.toUpperCase().replace(/[А-ЯЁ]/g, (ch) => homo[ch] || ch).replace(/[^A-Z0-9-]/g, '')
     if (!code) {
       setCertMsg('Введите промокод')
       return
@@ -155,7 +158,7 @@ export function HomeScreen({
               className="cert-inp"
               value={cert}
               onChange={(e) => setCert(e.currentTarget.value.toUpperCase())}
-              placeholder="REP-XXXX-XX"
+              placeholder="Промокод"
             />
             <Button size="l" loading={certBusy} onClick={redeem}>
               OK

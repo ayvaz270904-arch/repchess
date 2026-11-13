@@ -999,8 +999,27 @@ button,input,select,textarea{font-family:inherit;}
         </div>
         <div class="card-body" id="cert-card-body" style="display:none">
           <div style="font-size:.78rem;color:var(--text2);margin-bottom:10px">Создай коды, напечатай их на сертификатах. Человек вводит код в Telegram-кабинете — и сам появляется в базе с пакетом занятий.</div>
+          <div class="form-row">
+            <div class="form-label">Какие коды</div>
+            <div class="toggle-group">
+              <button class="toggle-btn on" onclick="certMode(this,'random')">🎲 Случайные</button>
+              <button class="toggle-btn" onclick="certMode(this,'custom')">✏️ Свой текст</button>
+              <button class="toggle-btn" onclick="certMode(this,'multi')">♾ Многоразовый</button>
+            </div>
+            <input type="hidden" id="cert-mode" value="random">
+            <div class="dim" id="cert-mode-hint" style="font-size:.72rem;margin-top:6px">REP-XXXX-XX, каждый — на одного человека.</div>
+          </div>
+          <div style="margin-bottom:10px"><div class="form-label">Название пачки (для себя и выгрузки)</div>
+            <input class="form-inp" id="cert-batch" maxlength="60" placeholder="Например: Ярмарка 15.11"></div>
+          <div id="cert-custom-row" style="display:none;margin-bottom:10px"><div class="form-label">Текст кода — латиница, цифры, дефис</div>
+            <input class="form-inp" id="cert-custom" maxlength="24" placeholder="Например: CHESS15" autocapitalize="characters" autocomplete="off"
+              oninput="this.value=_certNormJs(this.value)"></div>
+          <div id="cert-multi-row" style="display:none;gap:8px;margin-bottom:10px">
+            <div style="flex:1"><div class="form-label">Лимит активаций</div><input class="form-inp" id="cert-limit" type="number" min="1" max="10000" placeholder="без лимита"></div>
+            <div style="flex:1"><div class="form-label">Действует до</div><input class="form-inp" id="cert-until" type="date"></div>
+          </div>
           <div style="display:flex;gap:8px;margin-bottom:10px">
-            <div style="flex:1"><div class="form-label">Кодов</div><input class="form-inp" id="cert-qty" type="number" min="1" max="50" value="5"></div>
+            <div style="flex:1" id="cert-qty-box"><div class="form-label">Кодов</div><input class="form-inp" id="cert-qty" type="number" min="1" max="50" value="5"></div>
             <div style="flex:1"><div class="form-label">Занятий</div><input class="form-inp" id="cert-lessons" type="number" min="1" max="50" value="4"></div>
           </div>
           <div class="form-row">
@@ -1812,7 +1831,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-mail';
+const APP_VERSION = '11.13-promo';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -7923,35 +7942,130 @@ function _certNewCode() {
   return 'REP-' + s.slice(0, 4) + '-' + s.slice(4);
 }
 
+// Режим генератора (13.11.2026): случайные REP-…; свой текст (одноразовые, при нескольких —
+// с номерами CHESS15-01…); многоразовый — одно слово для многих, с лимитом и сроком.
+// Код — латиница, цифры, дефис; похожие русские буквы → латинские, как в боте (_certNorm) и кабинете.
+const _CERT_HOMO = { А: 'A', В: 'B', Е: 'E', Ё: 'E', К: 'K', М: 'M', Н: 'H', О: 'O', Р: 'P', С: 'C', Т: 'T', У: 'Y', Х: 'X' };
+function _certNormJs(v) { return String(v || '').toUpperCase().replace(/[А-ЯЁ]/g, ch => _CERT_HOMO[ch] || ch).replace(/[^A-Z0-9-]/g, ''); }
+function certMode(btn, mode) {
+  toggle('cert-mode', btn, mode);
+  document.getElementById('cert-custom-row').style.display = mode === 'random' ? 'none' : '';
+  document.getElementById('cert-multi-row').style.display = mode === 'multi' ? 'flex' : 'none';
+  document.getElementById('cert-qty-box').style.display = mode === 'multi' ? 'none' : '';
+  document.getElementById('cert-mode-hint').textContent = {
+    random: 'REP-XXXX-XX, каждый — на одного человека.',
+    custom: 'Свой текст: один код — как написали; несколько — с номерами (CHESS15-01, CHESS15-02…). Каждый — на одного человека.',
+    multi: 'Одно слово для многих людей. Каждый человек активирует его один раз; лимит — пусто = без лимита.',
+  }[mode];
+  document.getElementById('cert-gen-btn').textContent = mode === 'multi' ? 'Создать код' : 'Создать коды';
+  if (mode === 'multi' && !document.getElementById('cert-until').value) {
+    const d = new Date(); d.setMonth(d.getMonth() + 1);
+    document.getElementById('cert-until').value = d.toISOString().slice(0, 10);
+  }
+}
+
 async function generateCertCodes() {
   if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
-  const qty = Math.min(50, Math.max(1, parseInt(document.getElementById('cert-qty').value) || 1));
+  const mode = document.getElementById('cert-mode').value || 'random';
+  const qty = mode === 'multi' ? 1 : Math.min(50, Math.max(1, parseInt(document.getElementById('cert-qty').value) || 1));
   const lessons = parseInt(document.getElementById('cert-lessons').value) || 0;
   if (lessons < 1) { toast('Укажи количество занятий', 'err'); return; }
   const kind = document.getElementById('cert-kind').value;   // Индив. | Групп.
   const fmt  = document.getElementById('cert-fmt').value;    // офлайн | онлайн
-  const btn = document.getElementById('cert-gen-btn');
+  const batchName = document.getElementById('cert-batch').value.replace(/\s+/g, ' ').trim().slice(0, 60);
+  const base = _certNormJs(document.getElementById('cert-custom').value);
+  if (mode !== 'random' && (base.length < 3 || base.length > 24)) { toast('Текст кода — от 3 до 24 латинских букв и цифр', 'err'); return; }
+  let limit = 0, until = null;
+  if (mode === 'multi') {
+    limit = Math.max(0, parseInt(document.getElementById('cert-limit').value) || 0);
+    const u = document.getElementById('cert-until').value;
+    if (!u) { toast('Укажи, до какого дня действует код', 'err'); return; }
+    until = new Date(u + 'T23:59:59+03:00');   // до конца дня по Москве
+    if (until.getTime() < Date.now()) { toast('Дата «действует до» уже прошла', 'err'); return; }
+  }
+  const btn = document.getElementById('cert-gen-btn'), was = btn.textContent;
   btn.disabled = true; btn.textContent = 'Создание...';
   try {
-    const batch = db.batch();
     const codes = [];
-    for (let i = 0; i < qty; i++) {
-      const c = _certNewCode();
-      codes.push(c);
-      batch.set(db.collection('certCodes').doc(c), {
-        lessons, kind, format: fmt, usedBy: '', usedByName: '',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
-      });
+    if (mode === 'random') for (let i = 0; i < qty; i++) codes.push(_certNewCode());
+    else if (qty === 1) codes.push(base);
+    else for (let i = 1; i <= qty; i++) codes.push(base + '-' + String(i).padStart(2, '0'));
+    // Свой текст может совпасть с уже выданным кодом — проверяем, перезаписывать нельзя
+    if (mode !== 'random') {
+      const taken = [];
+      for (const c of codes) { const d = await db.collection('certCodes').doc(c).get(); if (d.exists) taken.push(c); }
+      if (taken.length) { toast('Такие коды уже есть: ' + taken.slice(0, 5).join(', ') + (taken.length > 5 ? '…' : ''), 'err'); return; }
     }
+    const batch = db.batch();
+    codes.forEach(c => {
+      const doc = { lessons, kind, format: fmt, usedBy: '', usedByName: '', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      if (batchName) doc.batch = batchName;
+      if (mode === 'custom') doc.custom = true;
+      if (mode === 'multi') Object.assign(doc, { multi: true, custom: true, limit, uses: 0, redeemers: [],
+        validUntil: firebase.firestore.Timestamp.fromDate(until) });
+      batch.set(db.collection('certCodes').doc(c), doc);
+    });
     await batch.commit();
-    toast(`Создано кодов: ${qty} ✓`, 'ok');
-    try { await navigator.clipboard.writeText(codes.join('\n')); toast('Новые коды скопированы в буфер', 'ok'); } catch(e) {}
+    toast(mode === 'multi' ? `Код ${codes[0]} создан ✓` : `Создано кодов: ${codes.length} ✓`, 'ok');
+    try { await navigator.clipboard.writeText(codes.join('\n')); toast(codes.length > 1 ? 'Новые коды скопированы в буфер' : 'Код скопирован в буфер', 'ok'); } catch(e) {}
+    if (batchName) _certBatch = batchName;
     loadCertCodes();
   } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
-  btn.disabled = false; btn.textContent = 'Создать коды';
+  finally { btn.disabled = false; btn.textContent = was; }
 }
 
 let _certShowArchive = false;
+let _certBatch = null;   // фильтр по пачке: null — все, '' — без названия
+
+// Выгрузка CSV для Google Таблиц (решение владельца 13.11.2026: разделитель «,», UTF-8).
+// Строка на код; у многоразового — строка на каждую активацию. Кто активировал: из самого кода
+// (с 13.11 бот пишет телефон, ник и Telegram id), для старых — из базы учеников и анкет по почте.
+async function exportCertCsv() {
+  if (currentTrainer?.role !== 'admin') return;
+  if (!Object.keys(_nickByEmail || {}).length) { try { await loadNickMap(); } catch (e) {} }
+  const now = Date.now();
+  const list = _certDocs.filter(c => _certBatch === null || (c.batch || '') === _certBatch);
+  const d = x => x ? x.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Moscow' }) : '';
+  const dt = x => x ? d(x) + ' ' + x.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' }) : '';
+  const tsd = v => (v && v.toDate) ? v.toDate() : (v ? new Date(v) : null);
+  const who = (email, name, phone, nick, tg, at) => {
+    const em = String(email || '').toLowerCase();
+    const s = em ? students.find(x => String(x.email || '').toLowerCase() === em) : null;
+    const ph = phone || (s && s.phone) || '';
+    const nk = String(nick || _nickByEmail[em] || _nickByPhone[_np(ph)] || '').replace(/^@/, '');
+    const p10 = _np(ph);   // телефоны в базе записаны по-разному — в выгрузке один вид +7XXXXXXXXXX
+    return [dt(at), name || (s && s.name) || '', p10 ? '+7' + p10 : ph, em, nk ? '@' + nk : '', tg || (_chatByEmail && _chatByEmail[em]) || ''];
+  };
+  const head = ['Код', 'Пачка', 'Тип', 'Номинал', 'Создан', 'Действует до', 'Статус', 'Лимит', 'Активирован', 'Имя', 'Телефон', 'Почта', 'Ник Telegram', 'Telegram ID'];
+  const rows = [];
+  list.forEach(c => {
+    const e = _certExpiry(c);
+    const nominal = `${c.kind || ''} ${c.format || ''} ×${c.lessons || 0}`;
+    const base = [c.id, c.batch || '', c.multi ? 'многоразовый' : (c.custom ? 'свой текст' : 'случайный'), nominal, d(tsd(c.createdAt)), d(e)];
+    if (c.multi) {
+      const st = c.archived ? (c.archivedReason === 'manual' ? 'в архиве' : c.archivedReason === 'used' ? 'лимит исчерпан' : 'срок прошёл')
+        : (e && e.getTime() <= now ? 'срок прошёл' : 'действует');
+      const reds = Array.isArray(c.redeemers) ? c.redeemers : [];
+      const lim = c.limit ? String(c.limit) : 'без лимита';
+      if (!reds.length) rows.push(base.concat([st, lim, '', '', '', '', '', '']));
+      reds.forEach(r => rows.push(base.concat([st, lim].concat(who(r.email, r.name, r.phone, r.nick, r.tg, tsd(r.at))))));
+    } else if (c.usedBy) {
+      rows.push(base.concat(['активирован', ''].concat(who(c.usedBy, c.usedByName, c.usedByPhone, c.usedByNick, c.usedByTg, tsd(c.usedAt)))));
+    } else {
+      const st = c.archived ? (c.archivedReason === 'expired' || (e && e.getTime() <= now) ? 'срок прошёл' : 'в архиве') : (e && e.getTime() <= now ? 'срок прошёл' : 'свободен');
+      rows.push(base.concat([st, '', '', '', '', '', '', '']));
+    }
+  });
+  const q = v => { const t = String(v == null ? '' : v); return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
+  const csv = [head].concat(rows).map(r => r.map(q).join(',')).join('\r\n');
+  const name = 'promokody' + (_certBatch ? '-' + _certNormJs(_certBatch).toLowerCase() || '' : '') + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast(`Выгружено строк: ${rows.length}`, 'ok');
+}
 
 // ══════════════════════════════════════════════
 //  ОТЗЫВЫ О ЗАНЯТИЯХ (admin)
@@ -8149,6 +8263,7 @@ const _certSelected = new Set();
 // Срок годности кода = срок пакета от даты создания: 1 зан. → 1 мес, 4 → 3 мес, 10 → 6 мес.
 // ТА ЖЕ формула, что в redeemCert (gas/bot.gs) — менять только вместе.
 function _certExpiry(c) {
+  if (c.multi) return c.validUntil && c.validUntil.toDate ? c.validUntil.toDate() : null;   // многоразовый — до даты из генератора
   if (!c.createdAt || !c.createdAt.toDate) return null;
   const e = new Date(c.createdAt.toDate().getTime());
   const n = c.lessons || 0;
@@ -8182,6 +8297,7 @@ async function _certAutoArchive() {
   _certDocs.forEach(c => {
     if (c.archived) return;
     if (c.usedBy) { todo.push([c, 'used']); return; }
+    if (c.multi && c.limit > 0 && (c.uses || 0) >= c.limit) { todo.push([c, 'used']); return; }   // активации кончились
     const e = _certExpiry(c);
     if (e && e.getTime() <= now) todo.push([c, 'expired']);
   });
@@ -8200,19 +8316,25 @@ async function _certAutoArchive() {
 function renderCertCodes() {
   const el = document.getElementById('cert-list');
   if (!el) return;
-  const free = _certDocs.filter(c => !c.usedBy && !c.archived);
-  const arch = _certDocs.filter(c => c.archived || c.usedBy);
+  const batches = [...new Set(_certDocs.map(c => c.batch || ''))].sort((a, b) => (a === '') - (b === '') || a.localeCompare(b, 'ru'));
+  if (_certBatch !== null && !batches.includes(_certBatch)) _certBatch = null;
+  const all = _certDocs.filter(c => _certBatch === null || (c.batch || '') === _certBatch);
+  const free = all.filter(c => !c.multi && !c.usedBy && !c.archived);
+  const multiLive = all.filter(c => c.multi && !c.archived);
+  const arch = all.filter(c => c.archived || (!c.multi && c.usedBy));
   const cnt = document.getElementById('cert-count');
-  if (cnt) cnt.textContent = free.length + ' свободных';
+  if (cnt) cnt.textContent = _certDocs.filter(c => !c.archived && (c.multi || !c.usedBy)).length + ' действующих';
   const btnS = 'font-size:.72rem;background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:6px;cursor:pointer';
   const now = Date.now();
 
-  let html = '';
-  if (free.length) {
-    html += `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-      <button onclick="toggleCertSelect()" style="${btnS};color:var(--text2)">${_certSelectMode ? '✕ Отменить выбор' : '☑ Выбрать коды → в архив'}</button>
-    </div>`;
-  }
+  let html = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+    <select class="form-sel" style="font-size:.78rem;padding:4px 8px;max-width:230px" onchange="_certBatch=this.value==='__all'?null:this.value;renderCertCodes()">
+      <option value="__all"${_certBatch === null ? ' selected' : ''}>Все пачки</option>
+      ${batches.map(b => `<option value="${esc(b)}"${_certBatch === b ? ' selected' : ''}>${esc(b || 'Без названия')}</option>`).join('')}
+    </select>
+    <button onclick="exportCertCsv()" style="${btnS};color:var(--text)">⬇ CSV${_certBatch !== null ? ' пачки' : ''}</button>
+    ${free.length ? `<button onclick="toggleCertSelect()" style="${btnS};color:var(--text2)">${_certSelectMode ? '✕ Отменить выбор' : '☑ Выбрать коды → в архив'}</button>` : ''}
+  </div>`;
   if (_certSelectMode) {
     const n = _certSelected.size;
     html += `<div style="position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;margin-bottom:10px;border-radius:8px;background:var(--surface2);border:1px solid var(--border)">
@@ -8224,7 +8346,7 @@ function renderCertCodes() {
   // Свободные — группами по номиналу; у каждого кода срок «до ДД.ММ» (неделя и меньше — оранжевым)
   const byNominal = {};
   free.forEach(c => {
-    const k = `${c.kind || ''} ${c.format || ''} ×${c.lessons || 0}`;
+    const k = `${c.batch ? c.batch + ' · ' : ''}${c.kind || ''} ${c.format || ''} ×${c.lessons || 0}`;
     (byNominal[k] = byNominal[k] || []).push(c);
   });
   const chipS = 'font-family:monospace;font-size:.75rem;border-radius:6px;padding:3px 8px;cursor:pointer;';
@@ -8253,7 +8375,20 @@ function renderCertCodes() {
           style="${chipS}${sel ? 'background:color-mix(in srgb, var(--accent2) 18%, var(--surface2));border:1px solid var(--accent2)' : 'background:var(--surface2);border:1px solid var(--border)'}">${sel ? '✓ ' : ''}${c.id} ${until}</span>`;
       }).join('')}</div>
     </div>`;
-  }).join('') || '<div class="dim" style="font-size:.8rem;margin-bottom:10px">Свободных кодов нет</div>';
+  }).join('') || (multiLive.length ? '' : '<div class="dim" style="font-size:.8rem;margin-bottom:10px">Свободных кодов нет</div>');
+
+  // Многоразовые: код · активаций N из лимита · до даты
+  if (multiLive.length) {
+    html += `<div style="margin-bottom:12px"><div style="font-size:.8rem;font-weight:700;margin-bottom:6px">♾ Многоразовые</div>`
+      + multiLive.map(c => {
+        const e = _certExpiry(c), soon = e && e.getTime() - now < 7 * 864e5;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
+          <span onclick="navigator.clipboard.writeText('${escJs(c.id)}').then(()=>toast('${escJs(c.id)} скопирован','ok'))" style="${chipS}background:var(--surface2);border:1px solid var(--border)">${esc(c.id)}</span>
+          <span class="dim" style="flex:1;font-size:.72rem">${c.batch ? esc(c.batch) + ' · ' : ''}${esc(c.kind || '')} ${esc(c.format || '')} ×${c.lessons || 0}</span>
+          <span style="font-size:.72rem;white-space:nowrap"><b>${c.uses || 0}</b>${c.limit ? ' из ' + c.limit : ''} активаций · <span style="${soon ? 'color:var(--orange);font-weight:700' : 'opacity:.6'}">до ${_certDM(e)}</span></span>
+        </div>`;
+      }).join('') + `</div>`;
+  }
 
   // Архив — спойлером: активированные (кто), истёкшие (когда), убранные вручную (можно вернуть)
   if (arch.length) {
@@ -8263,7 +8398,9 @@ function renderCertCodes() {
       html += arch.map(c => {
         const e = _certExpiry(c);
         let st;
-        if (c.usedBy) st = `<span style="color:var(--green)">✅ ${esc(c.usedByName || c.usedBy)}</span>`;
+        if (c.multi) st = `<span class="dim">♾ ${c.uses || 0}${c.limit ? ' из ' + c.limit : ''} активаций${c.archivedReason === 'expired' || (e && e.getTime() <= now) ? ', срок прошёл' : c.archivedReason === 'used' ? ', лимит' : ''}</span>`
+          + (c.archivedReason === 'manual' ? `<button onclick="unarchiveCert('${c.id}')" style="${btnS};color:var(--accent);margin-left:6px">↩ Вернуть</button>` : '');
+        else if (c.usedBy) st = `<span style="color:var(--green)">✅ ${esc(c.usedByName || c.usedBy)}</span>`;
         else if (e && e.getTime() <= now) st = `<span class="dim">истёк ${_certDate(e)}</span>`;
         else st = `<span class="dim">убран вручную</span>
           <button onclick="unarchiveCert('${c.id}')" style="${btnS};color:var(--accent);margin-left:6px">↩ Вернуть</button>`;
