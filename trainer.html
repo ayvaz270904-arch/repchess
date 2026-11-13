@@ -1850,7 +1850,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-cert3';
+const APP_VERSION = '11.13-cert4';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -8521,7 +8521,7 @@ function renderCertCodes() {
     </select>
     <button onclick="window.open('certificate.html','_blank')" title="Сертификат со свободными полями, без привязки к коду" style="${btnS};color:var(--text)">📄 Пустой шаблон</button>
     <button onclick="exportCertCsv()" style="${btnS};color:var(--text)">⬇ CSV${_certBatch !== null ? ' пачки' : ''}</button>
-    ${free.length ? `<button onclick="toggleCertSelect()" style="${btnS};color:var(--text2)">${_certSelectMode ? '✕ Отменить выбор' : '☑ Выбрать коды → в архив'}</button>` : ''}
+    ${free.length || multiLive.length ? `<button onclick="toggleCertSelect()" style="${btnS};color:var(--text2)">${_certSelectMode ? '✕ Отменить выбор' : '☑ Выбрать коды → в архив'}</button>` : ''}
   </div>`;
   if (_certSelectMode) {
     const n = _certSelected.size;
@@ -8572,7 +8572,9 @@ function renderCertCodes() {
       + multiLive.map(c => {
         const e = _certExpiry(c), soon = e && e.getTime() - now < 7 * 864e5;
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
-          <span onclick="navigator.clipboard.writeText('${escJs(c.id)}').then(()=>toast('${escJs(c.id)} скопирован','ok'))" style="${chipS}background:var(--surface2);border:1px solid var(--border)">${esc(c.id)}</span>
+          ${_certSelectMode
+            ? `<span onclick="toggleCertPick('${escJs(c.id)}')" style="${chipS}${_certSelected.has(c.id) ? 'background:color-mix(in srgb, var(--accent2) 18%, var(--surface2));border:1px solid var(--accent2)' : 'background:var(--surface2);border:1px solid var(--border)'}">${_certSelected.has(c.id) ? '✓ ' : ''}${esc(c.id)}</span>`
+            : `<span onclick="navigator.clipboard.writeText('${escJs(c.id)}').then(()=>toast('${escJs(c.id)} скопирован','ok'))" style="${chipS}background:var(--surface2);border:1px solid var(--border)">${esc(c.id)}</span>`}
           <span class="dim" style="flex:1;font-size:.72rem">${c.batch ? esc(c.batch) + ' · ' : ''}${esc(c.kind || '')} ${esc(c.format || '')} ×${c.lessons || 0}</span>
           <span style="font-size:.72rem;white-space:nowrap"><b>${c.uses || 0}</b>${c.limit ? ' из ' + c.limit : ''} активаций · <span style="${soon ? 'color:var(--orange);font-weight:700' : 'opacity:.6'}">до ${_certDM(e)}</span></span>
           <button onclick="openCertPdf(['${escJs(c.id)}'])" title="Сертификат" style="${btnS};flex:none">📄</button>
