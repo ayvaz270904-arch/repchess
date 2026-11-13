@@ -70,6 +70,9 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .pulse tr.bad td{color:var(--accent);font-weight:600}
 .pulse tr.bad td small{color:var(--accent)}
 @media (max-width:480px){.pulse .c-yfull{display:none}}
+.pulse-spark rect{fill:#151515}
+.pulse .c-spark{text-align:left}
+.pulse-modes .toggle-btn{padding:6px 11px;font-size:.78rem}
 .pulse-alert{border:1px solid var(--accent);color:var(--accent);border-radius:10px;padding:8px 12px;font-size:.8rem;margin-bottom:10px;line-height:1.4}
 .evj-day{font-size:.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px}
 .evj-day:first-child{margin-top:0}
@@ -109,7 +112,10 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .ml-bar{height:6px;background:#eee;border-radius:3px;margin-top:8px;overflow:hidden}.ml-bar i{display:block;height:100%;background:#151515}
 .ml-conds{display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:center;margin-bottom:14px}
 .ml-conds .k,.ml-row .k{font-size:.8rem;color:var(--text2)}
-.ml-conds .toggle-btn{padding:6px 11px;font-size:.8rem}
+.ml-conds .toggle-group{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.ml-conds .toggle-btn{padding:6px 8px;font-size:.8rem;width:100%;text-align:center}
+.ml-days-cell{display:flex;align-items:center;gap:6px}
+.ml-days-cell .ml-days{flex:1;width:auto!important}
 .ml-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .ml-days{width:64px!important;min-width:0!important;margin:0!important;padding:6px 8px!important}
 .ml-count{border:1.5px solid #151515;border-radius:10px;padding:10px 14px;margin:4px 0 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
@@ -845,7 +851,8 @@ button,input,select,textarea{font-family:inherit;}
           <div class="dim" style="font-size:.75rem;margin-bottom:10px">
             Сколько раз за сегодня запускали бота, открывали кабинет и разделы, записывались, ловили ошибки —
             против того же часа вчера. Большое число — сколько раз, маленькое — сколько человек. Красным — людей
-            стало вдвое меньше (если вчера к этому часу было от 5 человек) или ошибок вдвое больше.
+            стало вдвое меньше (если вчера к этому часу было от 10 человек) или ошибок вдвое больше. «7 дней», «30 дней»
+            и «Период» показывают, как раздел шёл день за днём.
           </div>
           <div id="pulse-body"><div class="dim" style="font-size:.82rem">Загружаю…</div></div>
         </div>
@@ -1623,6 +1630,17 @@ button,input,select,textarea{font-family:inherit;}
   </div>
 </div>
 
+<!-- СТАТИСТИКА ПРОМОКОДОВ (14.11.2026): кто из активировавших потом купил -->
+<div class="overlay" id="cert-stats-modal" style="display:none" onclick="if(event.target===this)_closeModal('cert-stats-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📊 Промокоды: кто потом купил</div>
+    <div id="cert-stats-body"></div>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('cert-stats-modal')">Закрыть</button>
+  </div>
+</div>
+
 <!-- ПРАВКА ПРОФИЛЯ УЧЕНИКА (13.11.2026): имя и почта, только админ -->
 <div class="overlay" id="student-edit-modal" style="display:none" onclick="if(event.target===this)_closeModal('student-edit-modal')">
   <div class="modal" style="max-width:480px" onclick="event.stopPropagation()">
@@ -1850,7 +1868,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.14-certnew';
+const APP_VERSION = '11.14-pulse';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -2295,7 +2313,7 @@ async function loadStudents(waitFor) {
         const prodStr = row['products'] || '';
         if (price > 0 || prodStr) {   // промо (цена 0) тоже учитываем, если есть товар
           const cls = classifyPayment(prodStr, price, date);
-          if (price > 0 && date) _allPayments.push({ d: localDateStr(date), price, cat: cls.cat });
+          if (price > 0 && date) _allPayments.push({ d: localDateStr(date), price, cat: cls.cat, email, phone10: _np(row['Phone']) });   // почта и телефон — для статистики промокодов
           const cnt = cls.lessons;
           const isGrp = cls.group;
           // Фиксируем неизвестные тарифы для ручной классификации (только платные)
@@ -5358,6 +5376,32 @@ function _evName(k) {
 const _evIsErr = k => /^(error|bot_error):/.test(k);
 
 let _pulse = null, _pulseAt = 0, _pulseLoading = false;
+// Режим (14.11.2026): today — сегодня против того же часа вчера (как было); 7 / 30 — последние дни;
+// range — свой период «с — по». В периоде — люди по дням (столбики), за весь период и в среднем в день.
+let _pulseMode = 'today', _pulseFrom = '', _pulseTo = '';
+const PULSE_MIN_PEOPLE = 10;   // плашка «Проверьте» — только если вчера к этому часу было от 10 человек (решение владельца 14.11.2026; было 5 — много ложных)
+function _pulseIso(d) { return d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' }); }
+function pulseMode(m) {
+  _pulseMode = m;
+  if (m === 'range' && !_pulseFrom) {
+    _pulseTo = _pulseIso(new Date());
+    _pulseFrom = _pulseIso(new Date(Date.now() - 13 * 86400000));
+  }
+  loadPulse(true);
+}
+function pulseRange() {
+  _pulseFrom = document.getElementById('pulse-from').value;
+  _pulseTo = document.getElementById('pulse-to').value;
+  if (_pulseFrom && _pulseTo) loadPulse(true);
+}
+function _pulseBar() {
+  const b = (m, t) => `<button type="button" class="toggle-btn${_pulseMode === m ? ' on' : ''}" onclick="pulseMode('${m}')">${t}</button>`;
+  return `<div class="toggle-group pulse-modes" style="margin-bottom:10px">${b('today', 'Сегодня и вчера')}${b('7', '7 дней')}${b('30', '30 дней')}${b('range', 'Период')}</div>`
+    + (_pulseMode === 'range' ? `<div class="ml-row" style="margin-bottom:10px"><span class="k" style="font-size:.8rem;color:var(--text2)">с</span>
+      <input class="form-inp" type="date" id="pulse-from" value="${esc(_pulseFrom)}" style="margin:0;width:auto" onchange="pulseRange()">
+      <span class="k" style="font-size:.8rem;color:var(--text2)">по</span>
+      <input class="form-inp" type="date" id="pulse-to" value="${esc(_pulseTo)}" style="margin:0;width:auto" onchange="pulseRange()"></div>` : '');
+}
 async function loadPulse(force) {
   const box = document.getElementById('pulse-body');
   if (!box || currentTrainer?.role !== 'admin') return;
@@ -5370,13 +5414,15 @@ async function loadPulse(force) {
   _pulseLoading = true;
   const btn = document.getElementById('pulse-refresh');
   if (btn) btn.disabled = true;
-  if (!_pulse) box.innerHTML = '<div class="dim" style="font-size:.82rem">Загружаю…</div>';
+  box.innerHTML = _pulseBar() + '<div class="dim" style="font-size:.82rem">Загружаю…</div>';
   try {
-    _pulse = await RC_DATA.api('/v1/events/daily', { days: 8 });
+    const q = _pulseMode === 'today' ? { days: 8 } : _pulseMode === 'range' ? { from: _pulseFrom, to: _pulseTo } : { days: +_pulseMode };
+    _pulse = await RC_DATA.api('/v1/events/daily', q);
+    _pulse.mode = _pulseMode;
     _pulseAt = Date.now();
     renderPulse();
   } catch (e) {
-    box.innerHTML = `<div style="color:var(--accent);font-size:.82rem;margin-bottom:8px">Не загрузилось: ${esc(e.message || e)}</div>`
+    box.innerHTML = _pulseBar() + `<div style="color:var(--accent);font-size:.82rem;margin-bottom:8px">Не загрузилось: ${esc(e.message || e)}</div>`
       + `<button class="btn-sm" onclick="loadPulse(true)">Повторить</button>`;
   } finally {
     _pulseLoading = false;
@@ -5393,27 +5439,55 @@ function _pulseNums(d, k) {
     avg: full.length ? full.reduce((s, day) => s + at(day).n, 0) / full.length : 0,
   };
 }
-// Падение — по ЛЮДЯМ, а не нажатиям: людей 5–15 в день, и один человек, переоткрывший кабинет
-// 20 раз, иначе давал бы ложную тревогу. Ошибки — по числу, но хотя бы у двух человек.
 function _pulseBad(k, v) {
   if (_evIsErr(k)) return v.today.n >= 5 && v.today.u >= 2 && v.today.n >= 2 * v.same.n;
-  return v.same.u >= 5 && v.today.u < v.same.u * 0.5;
+  return v.same.u >= PULSE_MIN_PEOPLE && v.today.u < v.same.u * 0.5;
+}
+function _pulseGroups(d) {
+  const all = Object.keys(d.keys || {});
+  const listed = new Set(EV_GROUPS.flatMap(g => g[1]));
+  const total = k => (d.keys[k].total || {}).n || 0;
+  const errs = all.filter(_evIsErr).sort((a, b) => total(b) - total(a));
+  const rest = all.filter(k => !listed.has(k) && !_evIsErr(k)).sort();
+  return EV_GROUPS.map(g => [g[0], g[1].filter(k => all.includes(k))]).concat([['Ошибки', errs], ['Прочее', rest]]).filter(g => g[1].length);
+}
+// Столбики «людей по дням», старые слева. Подсказка при наведении — дата и число.
+function _pulseSpark(d, k) {
+  const days = d.days.slice().reverse(), x = d.keys[k] || { days: {} };
+  const vals = days.map(day => (x.days[day] || {}).u || 0), max = Math.max(1, ...vals);
+  const w = Math.max(4, Math.min(10, Math.floor(140 / days.length))), h = 22;
+  const bars = vals.map((v, i) => `<rect x="${i * w}" y="${h - Math.max(v ? 2 : 0, Math.round(v / max * h))}" width="${w - 1}" height="${Math.max(v ? 2 : 0, Math.round(v / max * h))}"><title>${days[i].slice(8, 10)}.${days[i].slice(5, 7)}: ${v} чел.</title></rect>`).join('');
+  return `<svg class="pulse-spark" width="${days.length * w}" height="${h}" viewBox="0 0 ${days.length * w} ${h}">${bars}</svg>`;
 }
 function renderPulse() {
   const d = _pulse, box = document.getElementById('pulse-body');
   if (!d || !box) return;
-  document.getElementById('pulse-when').textContent = 'сегодня к ' + String(d.now || '').slice(11, 16);
-  const all = Object.keys(d.keys || {});
-  if (!all.length) {
-    box.innerHTML = '<div class="dim" style="font-size:.82rem">Событий пока нет. Они появятся после обновления бота '
-      + '(и истории из листа «События» — после разовой функции setupEventsApi).</div>';
+  const dm = s => s.slice(8, 10) + '.' + s.slice(5, 7);
+  document.getElementById('pulse-when').textContent = d.mode === 'today' ? 'сегодня к ' + String(d.now || '').slice(11, 16)
+    : dm(d.from) + ' – ' + dm(d.to) + ' · ' + d.days.length + ' дн.';
+  if (!Object.keys(d.keys || {}).length) {
+    box.innerHTML = _pulseBar() + '<div class="dim" style="font-size:.82rem">За этот период событий нет.</div>';
     return;
   }
-  const listed = new Set(EV_GROUPS.flatMap(g => g[1]));
-  const errs = all.filter(_evIsErr).sort((a, b) => _pulseNums(d, b).today.n - _pulseNums(d, a).today.n);
-  const rest = all.filter(k => !listed.has(k) && !_evIsErr(k)).sort();
-  const groups = EV_GROUPS.map(g => [g[0], g[1].filter(k => all.includes(k))])
-    .concat([['Ошибки', errs], ['Прочее', rest]]).filter(g => g[1].length);
+  const groups = _pulseGroups(d);
+  if (d.mode !== 'today') {
+    let rows = '';
+    for (const [title, keys] of groups) {
+      rows += `<tr class="pulse-grp"><td colspan="4">${esc(title)}</td></tr>`;
+      for (const k of keys) {
+        const x = d.keys[k], tot = x.total || { n: 0, u: 0 };
+        const per = d.days.map(day => (x.days[day] || {}).u || 0);
+        const best = Math.max(...per), bestDay = d.days[per.indexOf(best)];
+        rows += `<tr><td>${esc(_evName(k))}</td><td class="c-spark">${_pulseSpark(d, k)}</td>`
+          + `<td>${tot.u}<small>${tot.n} раз</small></td>`
+          + `<td>${Math.round(per.reduce((a, b) => a + b, 0) / d.days.length * 10) / 10}<small>макс ${best} · ${dm(bestDay)}</small></td></tr>`;
+      }
+    }
+    box.innerHTML = _pulseBar()
+      + `<div class="dim" style="font-size:.75rem;margin-bottom:8px">Столбики — сколько разных людей было в разделе в каждый день (старые слева, наведите — дата и число).</div>`
+      + `<div class="pulse-wrap"><table class="pulse"><thead><tr><th></th><th class="c-spark">По дням</th><th>Людей за период</th><th>В среднем в день</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return;
+  }
   const num = (v, people) => `${v.n}${people && v.n ? `<small>${v.u} чел.</small>` : ''}`;
   const bad = [];
   let rows = '';
@@ -5421,14 +5495,13 @@ function renderPulse() {
     rows += `<tr class="pulse-grp"><td colspan="5">${esc(title)}</td></tr>`;
     for (const k of keys) {
       const v = _pulseNums(d, k), isBad = _pulseBad(k, v);
-      if (isBad) bad.push(_evIsErr(k) ? `${_evName(k)}: ${v.today.n} раз против ${v.same.n}`
-        : `${_evName(k)}: ${v.today.u} чел. против ${v.same.u}`);
+      if (isBad) bad.push(_evIsErr(k) ? `${_evName(k)}: ${v.today.n} раз против ${v.same.n}` : `${_evName(k)}: ${v.today.u} чел. против ${v.same.u}`);
       rows += `<tr${isBad ? ' class="bad"' : ''}><td>${esc(_evName(k))}${isBad ? (_evIsErr(k) ? ' ↑' : ' ↓') : ''}</td>`
         + `<td>${num(v.today, true)}</td><td>${num(v.same, true)}</td>`
         + `<td class="c-yfull">${v.yday.n}</td><td>${Math.round(v.avg * 10) / 10}</td></tr>`;
     }
   }
-  box.innerHTML = (bad.length
+  box.innerHTML = _pulseBar() + (bad.length
       ? `<div class="pulse-alert"><b>Проверьте:</b> ${bad.map(esc).join('; ')}</div>`
       : `<div class="dim" style="font-size:.78rem;margin-bottom:8px">✓ Резких падений к вчерашнему дню нет.</div>`)
     + `<div class="pulse-wrap"><table class="pulse"><thead><tr><th></th><th>Сегодня</th><th>Вчера к этому часу</th>`
@@ -5530,14 +5603,20 @@ function _mlItem(m) {
     btns = b('Открыть', `mlOpen('${escJs(m.id)}')`) + b('Отменить', `mlCancel('${escJs(m.id)}', false)`);
   }
   if (m.testPending) sub += ' · тест отправляется';
+  // Архив (14.11.2026): завершённые, отменённые, черновики и выключенные правила
+  const canArch = m.kind === 'rule' ? m.status === 'off' : ['done', 'cancelled', 'draft'].includes(m.status);
+  if (m.archived) btns = b('Открыть', `mlOpen('${escJs(m.id)}')`) + b('↩ Вернуть из архива', `mlArchive('${escJs(m.id)}', false)`);
+  else if (canArch) btns += b('В архив', `mlArchive('${escJs(m.id)}', true)`);
   return `<div class="ml-item"><div class="ml-top"><span class="ml-name">${esc(m.title)}</span>${_mlChip(m)}</div>`
     + `<div class="ml-sub">${sub}</div>${extra}<div class="ml-btns">${btns}</div></div>`;
 }
 function renderMailList() {
   const box = document.getElementById('ml-list');
   if (!box || !_ml.list) return;
-  const once = _ml.list.filter(m => m.kind === 'once'), rules = _ml.list.filter(m => m.kind === 'rule');
+  const live = _ml.list.filter(m => !m.archived);
+  const once = live.filter(m => m.kind === 'once'), rules = live.filter(m => m.kind === 'rule');
   const cur = _ml.tab === 'rule' ? rules : once;
+  const arch = _ml.list.filter(m => m.archived && m.kind === (_ml.tab === 'rule' ? 'rule' : 'once'));
   box.innerHTML = `<div class="toggle-group" style="margin-bottom:12px">`
     + `<button class="toggle-btn${_ml.tab === 'once' ? ' on' : ''}" onclick="mlTab('once')">Разовые${once.length ? ' (' + once.length + ')' : ''}</button>`
     + `<button class="toggle-btn${_ml.tab === 'rule' ? ' on' : ''}" onclick="mlTab('rule')">Регулярные${rules.length ? ' (' + rules.length + ')' : ''}</button></div>`
@@ -5545,6 +5624,10 @@ function renderMailList() {
       : `<div class="dim" style="font-size:.82rem">${_ml.tab === 'rule'
         ? 'Регулярных правил пока нет. Например: «остался 1 урок» — каждый день в 12:00, каждому один раз.'
         : 'Рассылок пока нет. Нажмите «+ Новая», выберите, кому, и напишите текст.'}</div>`);
+  if (arch.length) {
+    box.innerHTML += `<div style="margin-top:12px"><button class="btn-sm" onclick="_ml.showArch=!_ml.showArch;renderMailList()">${_ml.showArch ? 'Скрыть архив' : 'Архив (' + arch.length + ')'}</button></div>`
+      + (_ml.showArch ? `<div style="margin-top:8px;opacity:.75">${arch.map(_mlItem).join('')}</div>` : '');
+  }
 }
 
 // ── Редактор ──
@@ -5587,10 +5670,10 @@ function renderMlEditor() {
     h += `<span class="k">${label}</span><div class="toggle-group">` + opts.map(([v, t]) =>
       `<button type="button" class="toggle-btn${f[k] === v ? ' on' : ''}"${dis} onclick="mlSet('${k}','${v}')">${t}</button>`).join('') + '</div>';
   });
-  h += `<span class="k">Сгорание пакета</span><div class="ml-row"><div class="toggle-group">`
+  h += `<span class="k">Сгорание пакета</span><div class="toggle-group">`
     + `<button type="button" class="toggle-btn${!f.expiryDays ? ' on' : ''}"${dis} onclick="mlSet('expiryDays', 0)">Неважно</button>`
-    + `<button type="button" class="toggle-btn${f.expiryDays ? ' on' : ''}"${dis} onclick="mlSet('expiryDays', Math.min(90, Math.max(1, +document.getElementById('ml-days').value || 7)))">Истекает в ближайшие</button></div>`
-    + `<input id="ml-days" class="form-inp ml-days" type="number" min="1" max="90" value="${f.expiryDays || 7}"${dis} onchange="if(_mlEd.filters.expiryDays) mlSet('expiryDays', Math.min(90, Math.max(1, +this.value || 7)))"><span class="k">дн.</span></div>`;
+    + `<button type="button" class="toggle-btn${f.expiryDays ? ' on' : ''}"${dis} onclick="mlSet('expiryDays', Math.min(90, Math.max(1, +document.getElementById('ml-days').value || 7)))">Истекает в ближайшие</button><span class="ml-days-cell">`
+    + `<input id="ml-days" class="form-inp ml-days" type="number" min="1" max="90" value="${f.expiryDays || 7}"${dis} onchange="if(_mlEd.filters.expiryDays) mlSet('expiryDays', Math.min(90, Math.max(1, +this.value || 7)))"><span class="k">дн.</span></span></div>`;
   document.getElementById('ml-conds').innerHTML = h;
   const bt = e.button ? e.button.type : 'none';
   document.getElementById('ml-btn-type').innerHTML = [['none', 'Без кнопки'], ['cabinet', 'Открыть кабинет'], ['url', 'Ссылка…']].map(([v, t]) =>
@@ -5769,6 +5852,13 @@ async function mlCancel(id, running) {
   try {
     await RC_DATA.api('/v1/mail/cancel', { id });
     toast(running ? 'Рассылка остановлена' : 'Рассылка отменена', 'ok');
+    loadMail(true);
+  } catch (e) { toast('Не получилось: ' + (e.message || e), 'err'); }
+}
+async function mlArchive(id, on) {
+  try {
+    await RC_DATA.api('/v1/mail/archive', { id, archived: on });
+    toast(on ? 'Рассылка в архиве' : 'Рассылка возвращена', 'ok');
     loadMail(true);
   } catch (e) { toast('Не получилось: ' + (e.message || e), 'err'); }
 }
@@ -8226,6 +8316,56 @@ window.rcCertEnsureCode = async function (d) {
 // Выгрузка CSV для Google Таблиц (решение владельца 13.11.2026: разделитель «,», UTF-8).
 // Строка на код; у многоразового — строка на каждую активацию. Кто активировал: из самого кода
 // (с 13.11 бот пишет телефон, ник и Telegram id), для старых — из базы учеников и анкет по почте.
+// Оплаты человека в день активации кода и позже (14.11.2026): по почте или телефону, только деньги
+// (_allPayments — оплаты с суммой > 0). Промокод и подарок сюда не попадают — у них сумма 0.
+function _certPaidAfter(email, phone, at) {
+  if (!at) return { n: 0, sum: 0 };
+  const em = _normEmail(email), p10 = _np(phone), day = localDateStr(at);
+  let n = 0, sum = 0;
+  (_allPayments || []).forEach(p => { if (p.d < day) return; if ((em && p.email === em) || (p10 && p.phone10 === p10)) { n++; sum += p.price; } });
+  return { n, sum };
+}
+// Активации кода: кто и когда (одноразовый — один, многоразовый — список)
+function _certActs(c) {
+  const tsd = v => (v && v.toDate) ? v.toDate() : (v ? new Date(v) : null);
+  if (c.multi) return (Array.isArray(c.redeemers) ? c.redeemers : []).map(r => ({ email: r.email, phone: r.phone, at: tsd(r.at) }));
+  if (!c.usedBy) return [];
+  const st = students.find(x => _normEmail(x.email) === _normEmail(c.usedBy));
+  return [{ email: c.usedBy, phone: c.usedByPhone || (st && st.phone) || '', at: tsd(c.usedAt) }];
+}
+// Статистика промокодов (14.11.2026, решение владельца — отдельным окном): по пачкам и многоразовым
+// кодам — сколько активировали, сколько из них потом платили деньгами, сколько раз и на какую сумму.
+function openCertStats() {
+  const groups = {};
+  _certDocs.forEach(c => {
+    const key = c.multi ? '♾ ' + c.id : (c.batch || 'Без названия');
+    const g = groups[key] || (groups[key] = { key, multi: !!c.multi, codes: 0, limit: c.limit || 0, people: {}, });
+    g.codes++;
+    _certActs(c).forEach(a => {
+      const pk = _np(a.phone) || _normEmail(a.email);
+      if (!pk) return;
+      const pa = _certPaidAfter(a.email, a.phone, a.at);
+      const prev = g.people[pk];
+      if (!prev || pa.sum > prev.sum) g.people[pk] = pa;
+    });
+  });
+  const rub = n => Math.round(n).toLocaleString('ru-RU') + ' ₽';
+  let tAct = 0, tPaid = 0, tN = 0, tSum = 0;
+  const rows = Object.values(groups).sort((a, b) => Object.keys(b.people).length - Object.keys(a.people).length).map(g => {
+    const ppl = Object.values(g.people), act = ppl.length, paid = ppl.filter(p => p.n > 0);
+    const n = paid.reduce((s, p) => s + p.n, 0), sum = paid.reduce((s, p) => s + p.sum, 0);
+    tAct += act; tPaid += paid.length; tN += n; tSum += sum;
+    return `<tr><td>${esc(g.key)}<small>${g.multi ? (g.limit ? 'лимит ' + g.limit : 'без лимита') : g.codes + ' ' + (g.codes % 10 === 1 && g.codes % 100 !== 11 ? 'код' : 'кодов')}</small></td>`
+      + `<td>${act}</td><td>${paid.length}<small>${act ? Math.round(paid.length * 100 / act) + '%' : '—'}</small></td><td>${n}</td><td>${sum ? rub(sum) : '—'}</td></tr>`;
+  }).join('');
+  document.getElementById('cert-stats-body').innerHTML = (rows
+    ? `<div class="pulse-wrap"><table class="pulse"><thead><tr><th>Пачка / код</th><th>Активировали, чел.</th><th>Купили потом, чел.</th><th>Оплат</th><th>Сумма</th></tr></thead><tbody>${rows}`
+      + `<tr class="pulse-grp"><td>Всего</td><td>${tAct}</td><td>${tPaid}<small>${tAct ? Math.round(tPaid * 100 / tAct) + '%' : '—'}</small></td><td>${tN}</td><td>${tSum ? rub(tSum) : '—'}</td></tr></tbody></table></div>`
+    : '<div class="dim" style="font-size:.85rem">Кодов пока нет.</div>')
+    + `<div class="dim" style="font-size:.72rem;margin-top:10px;line-height:1.45">«Купили потом» — оплаты деньгами (промокоды и подарки не считаются) в день активации и позже, по почте или телефону человека. Человек считается один раз на пачку.</div>`;
+  _openModal('cert-stats-modal');
+}
+
 async function exportCertCsv() {
   if (currentTrainer?.role !== 'admin') return;
   if (!Object.keys(_nickByEmail || {}).length) { try { await loadNickMap(); } catch (e) {} }
@@ -8240,9 +8380,10 @@ async function exportCertCsv() {
     const ph = phone || (s && s.phone) || '';
     const nk = String(nick || _nickByEmail[em] || _nickByPhone[_np(ph)] || '').replace(/^@/, '');
     const p10 = _np(ph);   // телефоны в базе записаны по-разному — в выгрузке один вид +7XXXXXXXXXX
-    return [dt(at), name || (s && s.name) || '', p10 ? '+7' + p10 : ph, em, nk ? '@' + nk : '', tg || (_chatByEmail && _chatByEmail[em]) || ''];
+    const pa = _certPaidAfter(em, ph, at);
+    return [dt(at), name || (s && s.name) || '', p10 ? '+7' + p10 : ph, em, nk ? '@' + nk : '', tg || (_chatByEmail && _chatByEmail[em]) || '', pa.n, pa.sum ? Math.round(pa.sum) : 0];
   };
-  const head = ['Код', 'Пачка', 'Тип', 'Номинал', 'Создан', 'Действует до', 'Статус', 'Лимит', 'Активирован', 'Имя', 'Телефон', 'Почта', 'Ник Telegram', 'Telegram ID'];
+  const head = ['Код', 'Пачка', 'Тип', 'Номинал', 'Создан', 'Действует до', 'Статус', 'Лимит', 'Активирован', 'Имя', 'Телефон', 'Почта', 'Ник Telegram', 'Telegram ID', 'Оплат после', 'Сумма после, ₽'];
   const rows = [];
   list.forEach(c => {
     const e = _certExpiry(c);
@@ -8253,13 +8394,13 @@ async function exportCertCsv() {
         : (e && e.getTime() <= now ? 'срок прошёл' : 'действует');
       const reds = Array.isArray(c.redeemers) ? c.redeemers : [];
       const lim = c.limit ? String(c.limit) : 'без лимита';
-      if (!reds.length) rows.push(base.concat([st, lim, '', '', '', '', '', '']));
+      if (!reds.length) rows.push(base.concat([st, lim, '', '', '', '', '', '', '', '']));
       reds.forEach(r => rows.push(base.concat([st, lim].concat(who(r.email, r.name, r.phone, r.nick, r.tg, tsd(r.at))))));
     } else if (c.usedBy) {
       rows.push(base.concat(['активирован', ''].concat(who(c.usedBy, c.usedByName, c.usedByPhone, c.usedByNick, c.usedByTg, tsd(c.usedAt)))));
     } else {
       const st = c.archived ? (c.archivedReason === 'expired' || (e && e.getTime() <= now) ? 'срок прошёл' : 'в архиве') : (e && e.getTime() <= now ? 'срок прошёл' : 'свободен');
-      rows.push(base.concat([st, '', '', '', '', '', '', '']));
+      rows.push(base.concat([st, '', '', '', '', '', '', '', '', '']));
     }
   });
   const q = v => { const t = String(v == null ? '' : v); return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
@@ -8545,6 +8686,7 @@ function renderCertCodes() {
     </select>
     <button onclick="window.open('certificate.html','_blank')" title="Сертификат со свободными полями, без привязки к коду" style="${btnS};color:var(--text)">📄 Пустой шаблон</button>
     <button onclick="exportCertCsv()" style="${btnS};color:var(--text)">⬇ CSV${_certBatch !== null ? ' пачки' : ''}</button>
+    <button onclick="openCertStats()" style="${btnS};color:var(--text)">📊 Статистика</button>
     ${free.length || multiLive.length ? `<button onclick="toggleCertSelect()" style="${btnS};color:var(--text2)">${_certSelectMode ? '✕ Отменить выбор' : '☑ Выбрать коды → в архив'}</button>` : ''}
   </div>`;
   if (_certSelectMode) {
