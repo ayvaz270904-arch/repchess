@@ -180,6 +180,37 @@ async function main() {
     eq((await call('/v1/links/archive', { body: { slug: 'Плохая' }, who: 'admin' })).status, 400, 'плохая метка')
   })
 
+  await t('удаление ссылок: только архивные; переход по удалённой — в бота без метки', async () => {
+    eq((await call('/v1/links/delete', { body: { slugs: [A + '_2'] }, who: 't1' })).status, 403, 'тренер — нет')
+    eq((await call('/v1/links/delete', { body: { slugs: [] }, who: 'admin' })).status, 400, 'пусто')
+    await call('/v1/links/archive', { body: { slug: A + '_2' }, who: 'admin' })
+    const r = await call('/v1/links/delete', { body: { slugs: [A + '_2', B] }, who: 'admin' })
+    eq(r.json.deleted, [A + '_2'], 'удалена только архивная')
+    const left = (await call('/v1/links/list', { body: {}, who: 'admin' })).json.links.map(l => l.slug)
+    eq([left.includes(A + '_2'), left.includes(B)], [false, true], 'список')
+    eq((await call('/go/' + A + '_2', { method: 'GET', ua: 'Mozilla' })).location, 'https://t.me/RepChessEducation_bot', 'удалённая — в бота без метки')
+  })
+
+  await t('удаление промокодов: только архивные без активаций; обычный DELETE запрещён; только админ', async () => {
+    const put = (id, doc) => client.query(`INSERT INTO ${S}.cert_codes (id, doc) VALUES ($1, $2)`, [id, doc])
+    await put('REP-AAAA-22', { archived: true, usedBy: '' })                         // можно
+    await put('REP-BBBB-22', { archived: true, usedBy: 'x@x.ru' })                   // активирован
+    await put('REP-CCCC-22', { archived: false, usedBy: '' })                        // не в архиве
+    await put('MULTI-0', { archived: true, multi: true, uses: 0, redeemers: [] })    // можно
+    await put('MULTI-1', { archived: true, multi: true, uses: 1, redeemers: [{ phone: '9' }] })
+    eq((await call('/v1/certs/delete', { body: { codes: ['REP-AAAA-22'] }, who: 't1' })).status, 403, 'тренер — нет')
+    eq((await call('/v1/certs/delete', { body: { codes: ['REP-AAAA-22'] }, who: 'service' })).status, 403, 'бот — нет')
+    const r = await call('/v1/certs/delete', { body: { codes: ['REP-AAAA-22', 'REP-BBBB-22', 'REP-CCCC-22', 'MULTI-0', 'MULTI-1', 'REP-ZZZZ-22'] }, who: 'admin' })
+    eq(r.status, 200, 'код')
+    eq(r.json.deleted.sort(), ['MULTI-0', 'REP-AAAA-22'], 'удалены')
+    eq(Object.fromEntries(r.json.kept.map(k => [k.code, k.why])), { 'REP-ZZZZ-22': 'not_found', 'REP-BBBB-22': 'used', 'REP-CCCC-22': 'not_archived', 'MULTI-1': 'used' }, 'оставлены')
+    const ids = (await client.query(`SELECT id FROM ${S}.cert_codes ORDER BY id`)).rows.map(x => x.id)
+    eq(ids, ['MULTI-1', 'REP-BBBB-22', 'REP-CCCC-22'], 'в базе')
+    const fsDel = await call('/fs/documents/certCodes/REP-CCCC-22', { method: 'DELETE', who: 'admin' })
+    eq(fsDel.status, 403, 'обычный DELETE — нет')
+    eq((await client.query(`SELECT count(*)::int n FROM ${S}.cert_codes WHERE id = 'REP-CCCC-22'`)).rows[0].n, 1, 'код цел')
+  })
+
   await t('сводка «Пульса» без кликов по ссылкам', async () => {
     const d = (await call('/v1/events/daily', { body: { days: 3 }, who: 'admin' })).json
     eq('link_click' in d.keys, false, 'link_click нет'); eq('start' in d.keys, true, 'start есть')

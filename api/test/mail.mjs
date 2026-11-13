@@ -261,6 +261,21 @@ async function main() {
     eq((await call('/v1/mail/archive', { who: 't1', body: { id: r.id } })).status, 403, 'тренер — нет')
   })
 
+  await t('удаление: только из архива, вместе с очередью и памятью правила; тренер — нет', async () => {
+    const a = (await call('/v1/mail/save', { who: 'admin', body: { when: 'draft', body: 'Черновик' } })).json.mailing
+    const b = (await call('/v1/mail/save', { who: 'admin', body: { when: 'draft', body: 'Живая' } })).json.mailing
+    await call('/v1/mail/archive', { who: 'admin', body: { id: a.id } })
+    await client.query(`INSERT INTO ${S}.mailing_sends (mailing_id, tg_id, status) VALUES ($1, '101', 'sent')`, [a.id])
+    await client.query(`INSERT INTO ${S}.mailing_rule_state (mailing_id, tg_id) VALUES ($1, '101')`, [a.id])
+    eq((await call('/v1/mail/delete', { who: 't1', body: { ids: [a.id] } })).status, 403, 'тренер — нет')
+    eq((await call('/v1/mail/delete', { who: 'admin', body: { ids: [] } })).status, 400, 'пусто')
+    const r = await call('/v1/mail/delete', { who: 'admin', body: { ids: [a.id, b.id, 'nope'] } })
+    eq([r.status, r.json.deleted], [200, [a.id]], 'удалена только архивная')
+    eq(await mailing(a.id), undefined, 'нет в списке'); eq(!!(await mailing(b.id)), true, 'живая на месте')
+    const left = (await client.query(`SELECT (SELECT count(*) FROM ${S}.mailing_sends WHERE mailing_id = $1)::int s, (SELECT count(*) FROM ${S}.mailing_rule_state WHERE mailing_id = $1)::int r`, [a.id])).rows[0]
+    eq([left.s, left.r], [0, 0], 'хвосты удалены')
+  })
+
   await client.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`)
   await client.end()
   console.log(`\nИтог: ${passed} прошло, ${failed.length} не прошло` + (inWindow ? '' : ' (вне окна 9–21 МСК часть проверок отправки пропущена)'))

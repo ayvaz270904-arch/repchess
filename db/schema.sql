@@ -72,7 +72,8 @@ CREATE TABLE IF NOT EXISTS trainer_schedules (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
--- Промокоды/сертификаты REP-XXXX-XX. НИКОГДА не удалять — только архив (правило владельца).
+-- Промокоды/сертификаты REP-XXXX-XX. Не удалять — только архив (правило владельца). Исключение с 14.11.2026:
+-- неактивированные коды из архива — только через POST /v1/certs/delete (api/src/certs.js).
 CREATE TABLE IF NOT EXISTS cert_codes (
   id         text PRIMARY KEY,
   doc        jsonb NOT NULL,

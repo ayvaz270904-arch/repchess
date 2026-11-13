@@ -101,6 +101,11 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 @media (max-width:480px){.lk-stats{grid-template-columns:repeat(2,1fr)}}
 /* 13.11: рассылки */
 .ml-item{border-top:1px solid color-mix(in srgb,var(--border) 50%,transparent);padding:12px 0}
+.arc-bar{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 10px;margin:8px 0;border:1px solid var(--border);border-radius:8px;background:var(--surface2)}
+.arc-all{display:flex;align-items:center;gap:6px;font-size:.8rem;cursor:pointer}
+.arc-chk,.arc-all input{width:16px;height:16px;margin:0;accent-color:#c94a42;cursor:pointer;flex:none}
+.arc-chk{margin-right:8px;vertical-align:-3px}
+.btn-sm.arc-del{color:#c94a42}.btn-sm.arc-del:disabled{opacity:.45;cursor:default}
 .ml-item:first-of-type{border-top:none;padding-top:2px}
 .ml-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .ml-name{font-weight:700;font-size:.92rem;overflow-wrap:anywhere}
@@ -1867,7 +1872,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.14-nomailbtn';
+const APP_VERSION = '11.14-arcdel';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -5604,9 +5609,9 @@ function _mlItem(m) {
   if (m.testPending) sub += ' · тест отправляется';
   // Архив (14.11.2026): завершённые, отменённые, черновики и выключенные правила
   const canArch = m.kind === 'rule' ? m.status === 'off' : ['done', 'cancelled', 'draft'].includes(m.status);
-  if (m.archived) btns = b('Открыть', `mlOpen('${escJs(m.id)}')`) + b('↩ Вернуть из архива', `mlArchive('${escJs(m.id)}', false)`);
+  if (m.archived) btns = b('Открыть', `mlOpen('${escJs(m.id)}')`) + b('↩ Вернуть из архива', `mlArchive('${escJs(m.id)}', false)`) + _arcDelBtn('mail', m.id);
   else if (canArch) btns += b('В архив', `mlArchive('${escJs(m.id)}', true)`);
-  return `<div class="ml-item"><div class="ml-top"><span class="ml-name">${esc(m.title)}</span>${_mlChip(m)}</div>`
+  return `<div class="ml-item"><div class="ml-top"><span class="ml-name">${m.archived ? _arcChk('mail', m.id) : ''}${esc(m.title)}</span>${_mlChip(m)}</div>`
     + `<div class="ml-sub">${sub}</div>${extra}<div class="ml-btns">${btns}</div></div>`;
 }
 function renderMailList() {
@@ -5625,7 +5630,7 @@ function renderMailList() {
         : 'Рассылок пока нет. Нажмите «+ Новая», выберите, кому, и напишите текст.'}</div>`);
   if (arch.length) {
     box.innerHTML += `<div style="margin-top:12px"><button class="btn-sm" onclick="_ml.showArch=!_ml.showArch;renderMailList()">${_ml.showArch ? 'Скрыть архив' : 'Архив (' + arch.length + ')'}</button></div>`
-      + (_ml.showArch ? `<div style="margin-top:8px;opacity:.75">${arch.map(_mlItem).join('')}</div>` : '');
+      + (_ml.showArch ? _arcBar('mail', arch.map(m => m.id)) + `<div style="margin-top:8px">${arch.map(_mlItem).join('')}</div>` : '');
   }
 }
 
@@ -5861,6 +5866,56 @@ async function mlArchive(id, on) {
     loadMail(true);
   } catch (e) { toast('Не получилось: ' + (e.message || e), 'err'); }
 }
+// ── Удаление из архива (решение владельца 14.11.2026): рассылки, ссылки-источники, промокоды ──
+// Галочки у пунктов архива, «Выбрать все», «Удалить выбранные» и «Удалить» у каждого. Сервер
+// удаляет только то, что в архиве; промокоды — только неактивированные (api/src/certs.js).
+const _arcSel = { mail: new Set(), link: new Set(), cert: new Set() };
+const _arcIds = { mail: [], link: [], cert: [] };
+const _ARC_RENDER = { mail: () => renderMailList(), link: () => renderLinks(), cert: () => renderCertCodes() };
+function _arcBar(kind, ids) {
+  _arcIds[kind] = ids;
+  const sel = _arcSel[kind];
+  [...sel].forEach(id => { if (!ids.includes(id)) sel.delete(id); });
+  if (!ids.length) return '';
+  const n = sel.size;
+  return `<div class="arc-bar"><label class="arc-all"><input type="checkbox" ${n && n === ids.length ? 'checked' : ''} onchange="arcAll('${kind}', this.checked)"> Выбрать все (${ids.length})</label>`
+    + `<button class="btn-sm arc-del" ${n ? '' : 'disabled'} onclick="arcDelete('${kind}')">🗑 Удалить выбранные${n ? ' (' + n + ')' : ''}</button></div>`;
+}
+function _arcChk(kind, id) {
+  return `<input type="checkbox" class="arc-chk" ${_arcSel[kind].has(id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="arcPick('${kind}', '${escJs(id)}', this.checked)" title="Выбрать для удаления">`;
+}
+function _arcDelBtn(kind, id) { return `<button class="btn-sm arc-del" onclick="arcDelete('${kind}', ['${escJs(id)}'])">🗑 Удалить</button>`; }
+function arcPick(kind, id, on) { if (on) _arcSel[kind].add(id); else _arcSel[kind].delete(id); _ARC_RENDER[kind](); }
+function arcAll(kind, on) { _arcSel[kind] = new Set(on ? _arcIds[kind] : []); _ARC_RENDER[kind](); }
+async function arcDelete(kind, ids) {
+  if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
+  ids = ids || [..._arcSel[kind]];
+  if (!ids.length) return;
+  if (!window.RC_DATA || !RC_DATA.api) { toast('Удаление работает только на своей базе', 'err'); return; }
+  const name = id => kind === 'mail' ? ((_ml.list || []).find(m => m.id === id) || {}).title || id
+    : kind === 'link' ? ((_lk || []).find(l => l.slug === id) || {}).name || id : id;
+  const what = ids.length === 1 ? `«${name(ids[0])}»` : ids.length + ' шт.:\n' + ids.slice(0, 12).map(name).join('\n') + (ids.length > 12 ? `\n… и ещё ${ids.length - 12}` : '');
+  const note = {
+    mail: 'Вместе с рассылкой удалится её отчёт: кому ушла и сколько доставлено.',
+    link: 'Клики и запуски останутся в «Пульсе», но без названия. Если ссылка ещё где-то опубликована, она откроет бота, но запуски по ней больше не посчитаются.',
+    cert: 'Если кто-то введёт удалённый код, бот ответит, что такого кода нет. Активированные коды не удаляются.',
+  }[kind];
+  if (!confirm(`Удалить безвозвратно ${what}\n\n${note}\n\nВернуть будет нельзя.`)) return;
+  try {
+    const res = kind === 'mail' ? await RC_DATA.api('/v1/mail/delete', { ids })
+      : kind === 'link' ? await RC_DATA.api('/v1/links/delete', { slugs: ids })
+      : await RC_DATA.api('/v1/certs/delete', { codes: ids });
+    const del = new Set(res.deleted || []);
+    ids.forEach(id => _arcSel[kind].delete(id));
+    if (kind === 'mail') _ml.list = (_ml.list || []).filter(m => !del.has(m.id));
+    else if (kind === 'link') _lk = (_lk || []).filter(l => !del.has(l.slug));
+    else _certDocs = _certDocs.filter(c => !del.has(c.id));
+    const left = ids.length - del.size;
+    toast(`Удалено: ${del.size}` + (left ? `, не удалено: ${left} — уже не в архиве или код активировали` : ''), left ? 'err' : 'ok');
+  } catch (e) { toast('Не получилось: ' + (e.message || e), 'err'); }
+  _ARC_RENDER[kind]();
+}
+
 async function mlRule(id, on) {
   try {
     await RC_DATA.api('/v1/mail/rule', { id, on });
@@ -6072,7 +6127,7 @@ function _lkItem(l) {
   const date = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Moscow' });
   const tile = (v, label) => `<div class="lk-stat"><b>${v}</b><span>${label}</span></div>`;
   return `<div class="lk-item${l.slug === _lkFresh ? ' fresh' : ''}">`
-    + `<div class="lk-top"><span class="lk-name">${esc(l.name)}</span><span class="lk-date">${esc(date)}</span></div>`
+    + `<div class="lk-top"><span class="lk-name">${l.archived ? _arcChk('link', l.slug) : ''}${esc(l.name)}</span><span class="lk-date">${esc(date)}</span></div>`
     + `<div class="lk-slug">src_${esc(l.slug)}</div>`
     + `<div class="lk-stats">`
     + tile(st.clicks || 0, `кликов · ${st.clicksUniq || 0} чел.`)
@@ -6083,6 +6138,7 @@ function _lkItem(l) {
     + `<button class="btn-sm" onclick="lkCopy('${escJs(_lkGo(l.slug))}')">Копировать</button>`
     + `<button class="btn-sm" onclick="lkCopy('${escJs(l.bot)}','Прямая ссылка скопирована (без счёта кликов)')">Прямая t.me</button>`
     + `<button class="btn-sm" onclick="lkArchive('${escJs(l.slug)}', ${!l.archived})">${l.archived ? '↩ Вернуть' : 'В архив'}</button>`
+    + (l.archived ? _arcDelBtn('link', l.slug) : '')
     + `</div></div>`;
 }
 function renderLinks() {
@@ -6093,7 +6149,7 @@ function renderLinks() {
     : '<div class="dim" style="font-size:.82rem">Ссылок пока нет. Нажмите «+ Новая» и напишите, где будет ссылка: «ВК пост про ярмарку», «Школа 1514, родительский чат».</div>';
   if (arch.length) {
     html += `<button class="btn-sm" style="margin-top:10px" onclick="_lkShowArch=!_lkShowArch;renderLinks()">${_lkShowArch ? 'Скрыть архив' : 'Архив (' + arch.length + ')'}</button>`;
-    if (_lkShowArch) html += `<div style="margin-top:8px;opacity:.75">${arch.map(_lkItem).join('')}</div>`;
+    if (_lkShowArch) html += _arcBar('link', arch.map(l => l.slug)) + `<div style="margin-top:8px">${arch.map(_lkItem).join('')}</div>`;
   }
   box.innerHTML = html;
 }
@@ -8753,6 +8809,8 @@ function renderCertCodes() {
     html += `<div style="margin-top:12px"><button onclick="_certShowArchive=!_certShowArchive;renderCertCodes()"
       style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:.75rem;padding:0">${_certShowArchive ? '▾' : '▸'} Архив (${arch.length})</button></div>`;
     if (_certShowArchive) {
+      const canDel = c => c.archived && !c.usedBy && !(c.multi && ((c.uses || 0) > 0 || (Array.isArray(c.redeemers) && c.redeemers.length)));
+      html += _arcBar('cert', arch.filter(canDel).map(c => c.id));
       html += arch.map(c => {
         const e = _certExpiry(c);
         let st;
@@ -8763,9 +8821,9 @@ function renderCertCodes() {
         else st = `<span class="dim">убран вручную</span>
           <button onclick="unarchiveCert('${c.id}')" style="${btnS};color:var(--accent);margin-left:6px">↩ Вернуть</button>`;
         return `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;font-size:.73rem;border-top:1px solid color-mix(in srgb, var(--border) 40%, transparent)">
-          <span style="font-family:monospace;opacity:.7">${esc(c.id)}</span>
+          <span style="font-family:monospace;opacity:.7;display:flex;align-items:center">${canDel(c) ? _arcChk('cert', c.id) : '<span style="display:inline-block;width:24px"></span>'}${esc(c.id)}</span>
           <span class="dim" style="flex:1;text-align:center">${esc(c.kind||'')} ${esc(c.format||'')} ×${c.lessons||0}</span>
-          <span style="display:flex;align-items:center">${st}</span>
+          <span style="display:flex;align-items:center;gap:6px">${st}${canDel(c) ? `<button onclick="arcDelete('cert', ['${escJs(c.id)}'])" title="Удалить безвозвратно — код никто не активировал" style="${btnS};color:#c94a42;flex:none">🗑</button>` : ''}</span>
         </div>`;
       }).join('');
     }

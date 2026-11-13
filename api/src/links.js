@@ -14,6 +14,7 @@
 //   POST /v1/links/list       — ссылки со статистикой (админ)
 //   POST /v1/links/create     { name }                → { link }
 //   POST /v1/links/archive    { slug, archived }      → { ok }
+//   POST /v1/links/delete     { slugs: [...] }        → { deleted: [...] } — только из архива (14.11.2026)
 
 import { ApiError, qualify } from './store.js'
 
@@ -95,6 +96,15 @@ export async function linksArchive(client, body) {
   const r = await client.query(`UPDATE ${L()} SET archived = $2 WHERE slug = $1`, [slug, body.archived !== false])
   if (!r.rowCount) throw new ApiError('not-found', 'ссылка не найдена')
   return { ok: true }
+}
+
+// Удаление из архива (решение владельца 14.11.2026): только архивные; события (клики, запуски)
+// остаются, но без названия ссылки. Переход /go по удалённой метке ведёт в бота без метки.
+export async function linksDelete(client, body) {
+  const slugs = Array.isArray(body && body.slugs) ? body.slugs.map(String).filter(s => SLUG_RE.test(s)).slice(0, 500) : []
+  if (!slugs.length) throw new ApiError('invalid-argument', 'нет ссылок для удаления')
+  const r = await client.query(`DELETE FROM ${L()} WHERE slug = ANY($1) AND archived RETURNING slug`, [slugs])
+  return { deleted: r.rows.map(x => x.slug) }
 }
 
 const rowOut = r => ({ slug: r.slug, name: r.name, createdAt: new Date(r.created_at).toISOString(), archived: !!r.archived })

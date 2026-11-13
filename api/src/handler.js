@@ -20,8 +20,9 @@ import { getDoc, queryDocs, commit, ApiError, qualify, table } from './store.js'
 import { handleFs, FsError } from './fsrest.js'
 import { paymentsSync, paymentsCsv, paymentsRows, paymentsMeta } from './payments.js'
 import { eventsAdd, eventsPerson, eventsDaily } from './events.js'
-import { goRedirect, linksList, linksCreate, linksArchive } from './links.js'
-import { mailAudience, mailList, mailSave, mailCancel, mailRule, mailTest, mailArchive, mailAudienceSync, mailClaim, mailReport } from './mail.js'
+import { goRedirect, linksList, linksCreate, linksArchive, linksDelete } from './links.js'
+import { certsDelete } from './certs.js'
+import { mailAudience, mailList, mailSave, mailCancel, mailRule, mailTest, mailArchive, mailDelete, mailAudienceSync, mailClaim, mailReport } from './mail.js'
 
 const STATUS = {
   'invalid-argument': 400, unauthenticated: 401, 'permission-denied': 403,
@@ -125,7 +126,7 @@ async function eventsRoute(request, env, deps, url) {
 
 // Рассылки (mail.js): выборки и рассылки — админ; снимок аудитории, очередь и отчёт — только бот.
 const MAIL_ADMIN = { '/v1/mail/audience': mailAudience, '/v1/mail/list': mailList, '/v1/mail/save': mailSave,
-  '/v1/mail/cancel': mailCancel, '/v1/mail/rule': mailRule, '/v1/mail/test': mailTest, '/v1/mail/archive': mailArchive }
+  '/v1/mail/cancel': mailCancel, '/v1/mail/rule': mailRule, '/v1/mail/test': mailTest, '/v1/mail/archive': mailArchive, '/v1/mail/delete': mailDelete }
 const MAIL_BOT = { '/v1/mail/audience-sync': mailAudienceSync, '/v1/mail/claim': mailClaim, '/v1/mail/report': mailReport }
 async function mailRoute(request, env, deps, url) {
   const path = url.pathname
@@ -146,7 +147,7 @@ async function mailRoute(request, env, deps, url) {
 }
 
 // Ссылки-источники (links.js): только админ.
-const LINK_PATHS = ['/v1/links/list', '/v1/links/create', '/v1/links/archive']
+const LINK_PATHS = ['/v1/links/list', '/v1/links/create', '/v1/links/archive', '/v1/links/delete', '/v1/certs/delete']
 async function linksRoute(request, env, deps, url) {
   const path = url.pathname
   if (request.method !== 'POST' || !LINK_PATHS.includes(path)) throw NOT_FOUND()
@@ -159,8 +160,11 @@ async function linksRoute(request, env, deps, url) {
   return await deps.withClient(async client => {
     const auth = await authOf(client, who)
     if (!auth.isService && auth.role !== 'admin') throw new ApiError('permission-denied', 'ссылки — только админу')
+    if (path === '/v1/certs/delete' && auth.role !== 'admin') throw new ApiError('permission-denied', 'удалять промокоды может только админ')
     if (path === '/v1/links/list') return json(await linksList(client, env), 200, request, env)
     if (path === '/v1/links/create') return json(await linksCreate(client, body, who), 200, request, env)
+    if (path === '/v1/links/delete') return json(await linksDelete(client, body), 200, request, env)
+    if (path === '/v1/certs/delete') return json(await certsDelete(client, body), 200, request, env)
     return json(await linksArchive(client, body), 200, request, env)
   })
 }
@@ -219,6 +223,7 @@ export async function handle(request, env, deps) {
     if (url.pathname === '/v1/payments' || url.pathname.startsWith('/v1/payments/')) return await paymentsRoute(request, env, deps, url)
     if (url.pathname.startsWith('/v1/events/')) return await eventsRoute(request, env, deps, url)
     if (url.pathname.startsWith('/v1/links/')) return await linksRoute(request, env, deps, url)
+    if (url.pathname === '/v1/certs/delete') return await linksRoute(request, env, deps, url)
     if (url.pathname.startsWith('/v1/mail/')) return await mailRoute(request, env, deps, url)
     if (request.method === 'GET' && url.pathname.startsWith('/go/')) return await goRedirect(request, env, deps, url.pathname.slice(4))
     if (request.method !== 'POST' || !['/v1/get', '/v1/query', '/v1/commit'].includes(url.pathname)) {

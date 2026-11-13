@@ -217,6 +217,24 @@ export async function mailArchive(client, body) {
   return { ok: true }
 }
 
+// Удаление из архива (решение владельца 14.11.2026): только архивные; вместе с рассылкой — её
+// очередь/отчёт (mailing_sends) и память правила (mailing_rule_state). Одной транзакцией.
+export async function mailDelete(client, body) {
+  const ids = Array.isArray(body && body.ids) ? body.ids.map(String).filter(Boolean).slice(0, 500) : []
+  if (!ids.length) throw new ApiError('invalid-argument', 'нет рассылок для удаления')
+  await client.query('BEGIN')
+  try {
+    const del = (await client.query(`SELECT id FROM ${ML()} WHERE id = ANY($1) AND archived FOR UPDATE`, [ids])).rows.map(r => r.id)
+    if (del.length) {
+      await client.query(`DELETE FROM ${S()} WHERE mailing_id = ANY($1)`, [del])
+      await client.query(`DELETE FROM ${qualify('mailing_rule_state')} WHERE mailing_id = ANY($1)`, [del])
+      await client.query(`DELETE FROM ${ML()} WHERE id = ANY($1)`, [del])
+    }
+    await client.query('COMMIT')
+    return { deleted: del }
+  } catch (e) { await client.query('ROLLBACK').catch(() => {}); throw e }
+}
+
 export async function mailTest(client, body) {
   const r = await client.query(`UPDATE ${ML()} SET test_req = now() WHERE id = $1 RETURNING id`, [String((body && body.id) || '')])
   if (!r.rowCount) throw new ApiError('not-found', 'рассылка не найдена')
