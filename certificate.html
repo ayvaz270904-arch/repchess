@@ -61,7 +61,8 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
 .o-list .li{white-space:nowrap}
 .o-list a,.o-qr-a{color:#fff;text-decoration:none}
 .bul{width:.62em;height:.62em;margin-right:.35em;vertical-align:.05em}
-.o-qrbox{position:absolute;right:40px;bottom:40px;width:400px;height:470px;background:var(--red);border-radius:28px}
+.o-qrbox{position:absolute;right:40px;bottom:40px;width:400px;padding:30px 0 40px;background:var(--red);border-radius:28px;display:flex;flex-direction:column;align-items:center;gap:22px}
+.o-qrcap{font-size:42px;line-height:1.05;text-align:center;letter-spacing:-.03em}
 @media (max-width:860px){.app{grid-template-columns:minmax(0,1fr);padding:14px;gap:16px}.panel{position:static}}
 @page{size:250mm 110mm;margin:0}
 @media print{
@@ -128,9 +129,10 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
         <div class="li x-l3"><svg class="bul" viewBox="62 858 38 36"><use href="#s-layer" x="0" y="0" width="2500" height="1100"/></svg>по вопросам: tg @RepChess_Edu_Helper</div>
         <div class="li"><svg class="bul" viewBox="62 858 38 36"><use href="#s-layer" x="0" y="0" width="2500" height="1100"/></svg><span class="x-l4"></span></div>
       </div>
-      <div class="o-qrbox"></div>
-      <div class="o-abs" style="right:80px;top:650px;font-size:44px;letter-spacing:-.04em">бот в тг · rep chess edu</div>
-      <a class="o-qr-a" href="https://t.me/RepChessEducation_bot" target="_blank" style="position:absolute;right:80px;bottom:80px;width:320px;height:320px;display:block"><svg viewBox="-.6 -.6 34.2 34.2" style="width:320px;height:320px;display:block" aria-label="QR: бот Rep Chess в Telegram"><use href="#s-qr" x="0" y="0" width="33" height="33"/></svg></a>
+      <div class="o-qrbox">
+        <div class="o-qrcap">бот в тг<br>rep chess edu</div>
+        <a class="o-qr-a" href="https://t.me/RepChessEducation_bot" target="_blank" style="display:block;width:320px;height:320px"><svg viewBox="-.6 -.6 34.2 34.2" style="width:320px;height:320px;display:block" aria-label="QR: бот Rep Chess в Telegram"><use href="#s-qr" x="0" y="0" width="33" height="33"/></svg></a>
+      </div>
     </div></div>
   </div>
 </template>
