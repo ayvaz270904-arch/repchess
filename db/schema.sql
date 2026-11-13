@@ -246,5 +246,67 @@ CREATE TABLE IF NOT EXISTS links (
 ALTER TABLE events ADD COLUMN IF NOT EXISTS visitor text NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS events_links_idx ON events (event, detail) WHERE event IN ('start', 'link_click');
 
-INSERT INTO schema_meta (key, value) VALUES ('schema_version', '4')
+-- Рассылки (с 13.11.2026, схема 5): api/src/mail.js.
+-- audience — снимок, который бот считает тем же кодом остатков, что кабинет (раз в ~2 часа):
+-- одна строка на Telegram id привязанного человека (+ отписанные/заблокировавшие без привязки).
+CREATE TABLE IF NOT EXISTS audience (
+  tg_id        text        PRIMARY KEY,
+  name         text        NOT NULL DEFAULT '',
+  email        text        NOT NULL DEFAULT '',
+  linked       boolean     NOT NULL DEFAULT false,  -- поделился номером (есть привязка в боте)
+  has_purchase boolean     NOT NULL DEFAULT false,  -- любой пакет, вкл. промокод и подарок
+  has_paid     boolean     NOT NULL DEFAULT false,  -- оплата деньгами
+  lessons_done int         NOT NULL DEFAULT 0,
+  remaining    int         NOT NULL DEFAULT 0,      -- остаток, как в кабинете (долг — минусом)
+  expiry       date,                                -- ближайший срок пакета, где остались занятия
+  mail_off     boolean     NOT NULL DEFAULT false,  -- отписался от рассылок (не от афиши)
+  blocked      boolean     NOT NULL DEFAULT false,  -- заблокировал бота (снимается его /start)
+  synced_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS mailings (
+  id          text        PRIMARY KEY,
+  kind        text        NOT NULL CHECK (kind IN ('once', 'rule')),
+  title       text        NOT NULL,
+  body        text        NOT NULL,
+  button      jsonb,                                -- null | {"type":"cabinet"} | {"type":"url","text","url"}
+  filters     jsonb       NOT NULL,
+  status      text        NOT NULL,                 -- once: draft|scheduled|sending|done|cancelled; rule: on|off
+  send_at     timestamptz,
+  rule_time   text,                                 -- 'ЧЧ:ММ' по Москве
+  rule_last   date,                                 -- день последней проверки правила
+  test_req    timestamptz,                          -- просили тест себе — бот пришлёт админу
+  total       int         NOT NULL DEFAULT 0,
+  sent        int         NOT NULL DEFAULT 0,
+  failed      int         NOT NULL DEFAULT 0,
+  blocked     int         NOT NULL DEFAULT 0,
+  skipped     int         NOT NULL DEFAULT 0,
+  created_by  text        NOT NULL DEFAULT '',
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now(),
+  started_at  timestamptz,
+  finished_at timestamptz
+);
+CREATE TABLE IF NOT EXISTS mailing_sends (
+  id         bigserial   PRIMARY KEY,
+  mailing_id text        NOT NULL,
+  tg_id      text        NOT NULL,
+  status     text        NOT NULL DEFAULT 'queued', -- queued|claimed|sent|failed|blocked|skipped|cancelled
+  at         timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS mailing_sends_queue_idx ON mailing_sends (status, id) WHERE status IN ('queued', 'claimed');
+CREATE INDEX IF NOT EXISTS mailing_sends_mailing_idx ON mailing_sends (mailing_id);
+-- Регулярные правила: кто сейчас «внутри» условия (получил и ещё не вышел)
+CREATE TABLE IF NOT EXISTS mailing_rule_state (
+  mailing_id text        NOT NULL,
+  tg_id      text        NOT NULL,
+  inside     boolean     NOT NULL DEFAULT true,
+  changed_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (mailing_id, tg_id)
+);
+CREATE TABLE IF NOT EXISTS mail_meta (
+  id          int PRIMARY KEY CHECK (id = 1),
+  audience_at timestamptz                           -- когда бот последний раз прислал снимок
+);
+
+INSERT INTO schema_meta (key, value) VALUES ('schema_version', '5')
 ON CONFLICT (key) DO UPDATE SET value = excluded.value, at = now();

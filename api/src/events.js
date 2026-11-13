@@ -15,6 +15,7 @@
 // Сутки — московские. Человек в сводке — tg_id, а если его нет — почта.
 
 import { ApiError, qualify } from './store.js'
+import { mailUnblock } from './mail.js'
 
 const T = () => qualify('events')
 const MAX_ROWS = 100
@@ -57,6 +58,8 @@ export async function eventsAdd(client, body) {
     `INSERT INTO ${T()} (ts, src, tg_id, email, event, detail, ver)
      SELECT * FROM unnest($1::timestamptz[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[])`,
     [cols.ts, cols.src, cols.tg, cols.email, cols.ev, cols.det, cols.ver])
+  // Снова нажал /start — значит, разблокировал бота: рассылки ему снова можно слать
+  if (!isImport) await mailUnblock(client, cols.tg.filter((tg, i) => tg && cols.ev[i] === 'start'))
   return { added: cols.ev.length }
 }
 

@@ -11,6 +11,7 @@
 //   POST /v1/events/…                  — события бота и кабинета: журнал, сводка (events.js)
 //   GET  /go/<метка>                   — переход по ссылке-источнику в бота (links.js, без входа)
 //   POST /v1/links/…                   — ссылки-источники: список со статистикой, создание, архив
+//   POST /v1/mail/…                    — рассылки: выборки, сохранение, очередь для бота (mail.js)
 //
 // Ответ — JSON. Ошибка — { error: { code, message } } с кодом HTTP по смыслу.
 
@@ -20,6 +21,7 @@ import { handleFs, FsError } from './fsrest.js'
 import { paymentsSync, paymentsCsv, paymentsRows, paymentsMeta } from './payments.js'
 import { eventsAdd, eventsPerson, eventsDaily } from './events.js'
 import { goRedirect, linksList, linksCreate, linksArchive } from './links.js'
+import { mailAudience, mailList, mailSave, mailCancel, mailRule, mailTest, mailAudienceSync, mailClaim, mailReport } from './mail.js'
 
 const STATUS = {
   'invalid-argument': 400, unauthenticated: 401, 'permission-denied': 403,
@@ -121,6 +123,28 @@ async function eventsRoute(request, env, deps, url) {
   })
 }
 
+// Рассылки (mail.js): выборки и рассылки — админ; снимок аудитории, очередь и отчёт — только бот.
+const MAIL_ADMIN = { '/v1/mail/audience': mailAudience, '/v1/mail/list': mailList, '/v1/mail/save': mailSave,
+  '/v1/mail/cancel': mailCancel, '/v1/mail/rule': mailRule, '/v1/mail/test': mailTest }
+const MAIL_BOT = { '/v1/mail/audience-sync': mailAudienceSync, '/v1/mail/claim': mailClaim, '/v1/mail/report': mailReport }
+async function mailRoute(request, env, deps, url) {
+  const path = url.pathname
+  const fn = MAIL_ADMIN[path] || MAIL_BOT[path]
+  if (request.method !== 'POST' || !fn) throw NOT_FOUND()
+  const who = await identify(request, env, deps)
+  if (!who) throw new AuthError('нужен вход')
+  const text = await request.text()
+  if (text.length > MAX_BODY) throw new ApiError('invalid-argument', 'слишком большой запрос')
+  let body
+  try { body = JSON.parse(text || '{}') } catch { throw new ApiError('invalid-argument', 'тело — не JSON') }
+  return await deps.withClient(async client => {
+    const auth = await authOf(client, who)
+    if (MAIL_BOT[path] && !auth.isService) throw new ApiError('permission-denied', 'это — только для бота')
+    if (!auth.isService && auth.role !== 'admin') throw new ApiError('permission-denied', 'рассылки — только админу')
+    return json(await fn(client, body, who), 200, request, env)
+  })
+}
+
 // Ссылки-источники (links.js): только админ.
 const LINK_PATHS = ['/v1/links/list', '/v1/links/create', '/v1/links/archive']
 async function linksRoute(request, env, deps, url) {
@@ -195,6 +219,7 @@ export async function handle(request, env, deps) {
     if (url.pathname === '/v1/payments' || url.pathname.startsWith('/v1/payments/')) return await paymentsRoute(request, env, deps, url)
     if (url.pathname.startsWith('/v1/events/')) return await eventsRoute(request, env, deps, url)
     if (url.pathname.startsWith('/v1/links/')) return await linksRoute(request, env, deps, url)
+    if (url.pathname.startsWith('/v1/mail/')) return await mailRoute(request, env, deps, url)
     if (request.method === 'GET' && url.pathname.startsWith('/go/')) return await goRedirect(request, env, deps, url.pathname.slice(4))
     if (request.method !== 'POST' || !['/v1/get', '/v1/query', '/v1/commit'].includes(url.pathname)) {
       return json({ error: { code: 'not-found', message: 'нет такого адреса' } }, 404, request, env)

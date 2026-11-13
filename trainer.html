@@ -96,6 +96,32 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .lk-stat span{font-size:.66rem;color:var(--text2)}
 .lk-btns{display:flex;gap:6px;flex-wrap:wrap}
 @media (max-width:480px){.lk-stats{grid-template-columns:repeat(2,1fr)}}
+/* 13.11: рассылки */
+.ml-item{border-top:1px solid color-mix(in srgb,var(--border) 50%,transparent);padding:12px 0}
+.ml-item:first-of-type{border-top:none;padding-top:2px}
+.ml-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.ml-name{font-weight:700;font-size:.92rem;overflow-wrap:anywhere}
+.ml-sub{font-size:.74rem;color:var(--text2);margin-top:3px;line-height:1.4}
+.ml-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.ml-chip{display:inline-block;font-size:.68rem;font-weight:700;border-radius:6px;padding:2px 7px;border:1px solid var(--border);white-space:nowrap;flex:none}
+.ml-chip.draft{color:#666}.ml-chip.plan{border-color:#151515;color:#151515}.ml-chip.go{background:#151515;color:#fff;border-color:#151515}
+.ml-chip.done{color:#2f7a3b;border-color:#2f7a3b}.ml-chip.off{color:#999;border-style:dashed}.ml-chip.rule{background:#c94a42;color:#fff;border-color:#c94a42}
+.ml-bar{height:6px;background:#eee;border-radius:3px;margin-top:8px;overflow:hidden}.ml-bar i{display:block;height:100%;background:#151515}
+.ml-conds{display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:center;margin-bottom:14px}
+.ml-conds .k,.ml-row .k{font-size:.8rem;color:var(--text2)}
+.ml-conds .toggle-btn{padding:6px 11px;font-size:.8rem}
+.ml-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.ml-days{width:64px!important;min-width:0!important;margin:0!important;padding:6px 8px!important}
+.ml-count{border:1.5px solid #151515;border-radius:10px;padding:10px 14px;margin:4px 0 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.ml-count.err{border-color:#c94a42}
+.ml-count b{font-size:1.2rem}
+.ml-count small{display:block;font-size:.72rem;color:var(--text2);margin-top:2px}
+.ml-who{font-size:.8rem;line-height:1.7;margin:-4px 0 14px;padding:8px 12px;background:var(--surface2,#f6f6f6);border-radius:8px;max-height:260px;overflow:auto}
+.ml-who span{color:var(--text2)}
+.ml-ta{width:100%;box-sizing:border-box;min-height:120px;padding:10px 12px;border:1px solid #bdbdbd;border-radius:10px;font:inherit;font-size:.9rem;resize:vertical;background:#fff;color:var(--text)}
+.ml-hint{font-size:.72rem;color:var(--text2);margin:4px 0 14px;line-height:1.45}
+.toggle-btn:disabled{opacity:.45;cursor:default}
+@media (max-width:560px){.ml-conds{grid-template-columns:1fr;gap:4px}.ml-conds .k{margin-top:6px}}
 
 /* ── BOTTOM NAV ── */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;}
@@ -771,7 +797,18 @@ button,input,select,textarea{font-family:inherit;}
     </div>
 
     <!-- Ученики и Тренеры (админ). Карточки переносит сюда _adminLayout() из «Настроек» -->
-    <div class="page" id="page-students"></div>
+    <div class="page" id="page-students">
+      <div class="subtabs"><button type="button" data-sub="students" onclick="showPage('students')">База</button><button type="button" data-sub="mail" onclick="showPage('mail')">Рассылки</button></div>
+    </div>
+    <!-- Рассылки (13.11.2026): выборки, разовые и регулярные рассылки клиентам через бота -->
+    <div class="page" id="page-mail">
+      <div class="subtabs"><button type="button" data-sub="students" onclick="showPage('students')">База</button><button type="button" data-sub="mail" onclick="showPage('mail')">Рассылки</button></div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-head"><span class="card-title">📨 Рассылки</span>
+          <button class="btn-sm" style="color:#fff;background:var(--accent);border-color:var(--accent);font-weight:700" onclick="mlOpen()">+ Новая</button></div>
+        <div class="card-body"><div id="ml-list"><div class="dim" style="font-size:.82rem">Загружаю…</div></div></div>
+      </div>
+    </div>
     <div class="page" id="page-trainers">
       <div class="subtabs adm-only" style="display:none"><button type="button" data-sub="trainers" onclick="showPage('trainers')">Команда</button><button type="button" data-sub="schedule" onclick="showPage('schedule')">График окон</button></div>
     </div>
@@ -1519,6 +1556,53 @@ button,input,select,textarea{font-family:inherit;}
   </div>
 </div>
 
+<!-- РАССЫЛКА: редактор (13.11.2026) -->
+<div class="overlay" id="ml-modal" style="display:none" onclick="if(event.target===this)_closeModal('ml-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="ml-modal-title">Новая рассылка</div>
+    <div id="ml-ro-note" class="ml-hint" style="display:none;font-size:.8rem;color:var(--text)">Рассылка уже отправлена или отменена — её можно только посмотреть. Чтобы отправить ещё раз, сделайте копию.</div>
+    <div class="field-label">Название (видно только вам)</div>
+    <input class="field-inp" id="ml-title" maxlength="80" placeholder="Например: «Последний урок — продление»">
+    <div class="field-label">Кому</div>
+    <div class="ml-conds" id="ml-conds"></div>
+    <div class="ml-count" id="ml-count"></div>
+    <div class="ml-who" id="ml-who" style="display:none"></div>
+    <div class="field-label">Текст</div>
+    <textarea class="ml-ta" id="ml-body" maxlength="4100" oninput="mlBodyLen()" placeholder="Привет, {имя}! …"></textarea>
+    <div class="ml-hint">{имя} — подставится имя из кабинета; если имени нет — «друг». <span id="ml-body-len"></span></div>
+    <div class="field-label">Кнопка под сообщением</div>
+    <div class="toggle-group" id="ml-btn-type" style="margin-bottom:10px"></div>
+    <div class="ml-row" id="ml-btn-url-row" style="display:none;margin-bottom:12px">
+      <input class="form-inp" id="ml-btn-text" maxlength="40" placeholder="Текст кнопки" style="flex:1 1 140px;margin:0">
+      <input class="form-inp" id="ml-btn-url" maxlength="500" placeholder="https://…" style="flex:2 1 220px;margin:0">
+    </div>
+    <div class="ml-hint" style="margin-top:-4px">Под каждой рассылкой бот сам добавит кнопку «🔕 Не присылать рассылки».</div>
+    <div class="field-label">Когда</div>
+    <div class="toggle-group" id="ml-when" style="margin-bottom:10px"></div>
+    <div class="ml-row" id="ml-at-row" style="display:none;margin-bottom:8px"><input class="form-inp" id="ml-at" type="datetime-local" style="margin:0"><span class="k">по времени вашего устройства</span></div>
+    <div class="ml-row" id="ml-rule-row" style="display:none;margin-bottom:8px"><span class="k" style="font-size:.85rem">Каждый день в</span><input class="form-inp" id="ml-rule-time" type="time" min="09:00" max="20:59" style="margin:0;width:auto"></div>
+    <div class="ml-hint" id="ml-when-hint"></div>
+    <div class="ml-row" style="margin-top:6px">
+      <button class="btn-sm" id="ml-test-btn" onclick="mlTest()">Тест себе</button>
+      <button class="btn-sm" id="ml-draft-btn" onclick="mlSubmit(true)">Сохранить черновик</button>
+      <button class="btn-sm" id="ml-copy-btn" style="display:none" onclick="_closeModal('ml-modal');mlOpen(_mlEd.id, true)">Копия</button>
+      <button class="btn-full btn-gold" id="ml-go-btn" style="flex:1;min-width:170px;margin:0" onclick="mlSubmit(false)">Отправить</button>
+    </div>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('ml-modal')">Закрыть</button>
+  </div>
+</div>
+<!-- РАССЫЛКА: подтверждение перед отправкой -->
+<div class="overlay" id="ml-confirm" style="display:none" onclick="if(event.target===this)mlConfirmDone(false)">
+  <div class="modal" style="max-width:420px" onclick="event.stopPropagation()">
+    <div class="modal-title" id="mlc-title"></div>
+    <div id="mlc-text" style="font-size:.88rem;color:var(--text2);line-height:1.45;margin-bottom:16px"></div>
+    <div class="ml-row"><button class="btn-full btn-ghost" style="flex:1;margin:0" onclick="mlConfirmDone(false)">Отмена</button>
+      <button class="btn-full btn-gold" style="flex:1;margin:0" onclick="mlConfirmDone(true)">Отправить</button></div>
+  </div>
+</div>
+
 <!-- ЖУРНАЛ ДЕЙСТВИЙ УЧЕНИКА (13.11.2026): события кабинета и бота, только админ -->
 <div class="overlay" id="ev-journal-modal" style="display:none" onclick="if(event.target===this)_closeModal('ev-journal-modal')">
   <div class="modal" onclick="event.stopPropagation()">
@@ -1728,7 +1812,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-links';
+const APP_VERSION = '11.13-mail';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -5056,10 +5140,11 @@ function schedRenderExceptionList() {
 // поэтому при переключении разделов линия как будто продолжается).
 const DH_TITLES = { home:'Главная', history:'История', schedule:'График', finance:'Финансы', admin:'Настройки', group:'Группы', record:'Запись', students:'Ученики', trainers:'Тренеры' };
 // У админа те же страницы называются по задачам: «Занятия», «Деньги», «График окон».
-const DH_TITLES_ADM = { history:'Занятия', group:'Занятия · группы', finance:'Деньги', schedule:'График окон' };
+const DH_TITLES_ADM = { history:'Занятия', group:'Занятия · группы', finance:'Деньги', schedule:'График окон', mail:'Ученики · рассылки' };
 // Какой пункт меню подсветить: «Группы» живут внутри «Занятий», график окон у админа — внутри «Тренеров».
 function _navParent(name) {
   if (name === 'group') return 'history';
+  if (name === 'mail') return 'students';
   if (name === 'record') return 'home';
   if (name === 'schedule' && currentTrainer?.role === 'admin') return 'trainers';
   return name;
@@ -5101,7 +5186,7 @@ function _adminLayout() {
     else if (dest[sec]) document.getElementById(dest[sec]).appendChild(c);
   });
 }
-const DH_STEPS  = { home:[31,77], history:[10,85], schedule:[46,92], finance:[60,72], admin:[18,40], group:[64,80], record:[15,62], students:[22,58], trainers:[52,88] };
+const DH_STEPS  = { mail:[22,58], home:[31,77], history:[10,85], schedule:[46,92], finance:[60,72], admin:[18,40], group:[64,80], record:[15,62], students:[22,58], trainers:[52,88] };
 function _dhSet(name) {
   const adm = currentTrainer?.role === 'admin';
   const t = document.getElementById('dh-title'); if (t) t.textContent = (adm && DH_TITLES_ADM[name]) || DH_TITLES[name] || '';
@@ -5110,7 +5195,7 @@ function _dhSet(name) {
   if (p) p.setAttribute('d', `M0 60 H${a} V84 H${b} V60 H100`);
 }
 function showPage(name) {
-  if ((name === 'admin' || name === 'students' || name === 'trainers') && currentTrainer?.role !== 'admin') return;
+  if ((name === 'admin' || name === 'students' || name === 'trainers' || name === 'mail') && currentTrainer?.role !== 'admin') return;
   const prev = sessionStorage.getItem('_activePage');
   if (prev) sessionStorage.setItem(`_scroll_${prev}`, window.scrollY);
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
@@ -5126,6 +5211,7 @@ function showPage(name) {
   if (name==='history') loadHistory();
   if (name==='group')   loadGroupLessons();
   if (name==='admin')   { loadAdminData(); loadPulse(); loadLinks(); }
+  if (name==='mail')    loadMail();
   if (name==='finance') { finCheckAccess(); }
   if (name==='schedule') loadSchedulePage();
   const savedScroll = parseInt(sessionStorage.getItem(`_scroll_${name}`) || '0');
@@ -5309,6 +5395,352 @@ function renderPulse() {
       : `<div class="dim" style="font-size:.78rem;margin-bottom:8px">✓ Резких падений к вчерашнему дню нет.</div>`)
     + `<div class="pulse-wrap"><table class="pulse"><thead><tr><th></th><th>Сегодня</th><th>Вчера к этому часу</th>`
     + `<th class="c-yfull">Вчера весь день</th><th>Среднее за 7 дн.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// ══════════════════════════════════════════════
+//  РАССЫЛКИ (13.11.2026) — Ученики → Рассылки
+// ══════════════════════════════════════════════
+// Данные — своя база (api/src/mail.js): выборки считаются по «аудитории», которую бот раз в ~2 часа
+// пересчитывает тем же кодом остатков, что кабинет. Отправляет бот (токен только у него) — с 9 до 21
+// по Москве, порциями. После «Отправить сейчас» и «Тест себе» тренерка «пинает» бота (mailKick),
+// чтобы не ждать его пятиминутного триггера.
+const ML_BOT_URL = 'https://script.google.com/macros/s/AKfycbymBB1BkAnqLi_uLt9M1rVJ-rFGa0fK225hw-HvlhxgxsbVO4K5gka44FTFzYLss-tVZg/exec';
+const ML_CONDS = [
+  ['phone', 'Номер телефона', [['any', 'Все'], ['linked', 'Поделились'], ['start', 'Только /start']]],
+  ['purchase', 'Покупка', [['any', 'Неважно'], ['yes', 'Есть'], ['no', 'Нет']]],
+  ['paid', 'Оплата деньгами', [['any', 'Неважно'], ['yes', 'Есть'], ['no', 'Нет']]],
+  ['lessons', 'Проведённые занятия', [['any', 'Неважно'], ['yes', 'Есть'], ['no', 'Нет']]],
+  ['remaining', 'Остаток уроков', [['any', 'Любой'], ['one', 'Остался 1'], ['zero', 'Кончились (0)']]],
+];
+const ML_FILTERS0 = { phone: 'any', purchase: 'any', paid: 'any', lessons: 'any', remaining: 'any', expiryDays: 0 };
+let _ml = { list: null, at: 0, loading: false, tab: 'once' };
+let _mlEd = null, _mlCnt = null, _mlCntTimer = null, _mlCntSeq = 0, _mlShowWho = false, _mlBusy = false;
+
+function _mlKick() {
+  try { fetch(ML_BOT_URL + '?action=mailKick&t=' + Date.now(), { mode: 'no-cors' }).catch(() => {}); } catch (e) {}
+}
+const _mlPeople = n => (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'человека' : 'человек';
+const _mlTo = n => (n % 10 === 1 && n % 100 !== 11) ? 'человеку' : 'людям';
+const _mlDT = iso => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' }) + ' в '
+    + d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
+};
+const _mlVal = id => (document.getElementById(id)?.value || '').trim();
+
+function _mlFiltersText(f) {
+  f = Object.assign({}, ML_FILTERS0, f || {});
+  const p = [];
+  if (f.phone === 'linked') p.push('поделились номером');
+  if (f.phone === 'start') p.push('только /start');
+  if (f.purchase !== 'any') p.push('покупка ' + (f.purchase === 'yes' ? 'есть' : 'нет'));
+  if (f.paid !== 'any') p.push('оплата ' + (f.paid === 'yes' ? 'есть' : 'нет'));
+  if (f.lessons !== 'any') p.push('занятия ' + (f.lessons === 'yes' ? 'есть' : 'нет'));
+  if (f.remaining === 'one') p.push('остался 1 урок');
+  if (f.remaining === 'zero') p.push('уроки кончились');
+  if (f.expiryDays > 0) p.push('пакет сгорает за ' + f.expiryDays + ' дн.');
+  return p.length ? p.join(' · ') : 'все';
+}
+
+async function loadMail(force) {
+  const box = document.getElementById('ml-list');
+  if (!box || currentTrainer?.role !== 'admin') return;
+  if (!window.RC_DATA || !RC_DATA.api) { box.innerHTML = '<div class="dim" style="font-size:.82rem">Рассылки работают только на своей базе.</div>'; return; }
+  if (!force && _ml.list && Date.now() - _ml.at < 60000) { renderMailList(); return; }
+  if (_ml.loading) return;
+  _ml.loading = true;
+  if (!_ml.list) box.innerHTML = '<div class="dim" style="font-size:.82rem">Загружаю…</div>';
+  try {
+    _ml.list = (await RC_DATA.api('/v1/mail/list', {})).mailings || [];
+    _ml.at = Date.now();
+    renderMailList();
+  } catch (e) {
+    box.innerHTML = `<div style="color:var(--accent);font-size:.82rem;margin-bottom:8px">Не загрузилось: ${esc(e.message || e)}</div>`
+      + `<button class="btn-sm" onclick="loadMail(true)">Повторить</button>`;
+  } finally { _ml.loading = false; }
+}
+function mlTab(t) { _ml.tab = t; renderMailList(); }
+
+function _mlChip(m) {
+  if (m.kind === 'rule') return m.status === 'on' ? '<span class="ml-chip rule">Включено</span>' : '<span class="ml-chip off">Выключено</span>';
+  if (m.status === 'scheduled') return `<span class="ml-chip plan">${new Date(m.sendAt) <= new Date() ? 'В очереди' : esc(_mlDT(m.sendAt))}</span>`;
+  return { draft: '<span class="ml-chip draft">Черновик</span>', sending: '<span class="ml-chip go">Отправляется</span>',
+    done: '<span class="ml-chip done">Отправлена</span>', cancelled: '<span class="ml-chip off">Отменена</span>' }[m.status] || '';
+}
+function _mlItem(m) {
+  const c = m.counts || {};
+  let sub = esc(_mlFiltersText(m.filters)), extra = '', btns = '';
+  const b = (label, fn) => `<button class="btn-sm" onclick="${fn}">${label}</button>`;
+  if (m.kind === 'rule') {
+    sub = `Каждый день в ${esc(m.ruleTime || '')} · ${sub} · сейчас в условии ${m.insideNow || 0} · всего отправлено ${c.sent || 0}`;
+    btns = b('Открыть', `mlOpen('${escJs(m.id)}')`) + b(m.status === 'on' ? 'Выключить' : 'Включить', `mlRule('${escJs(m.id)}', ${m.status !== 'on'})`);
+  } else if (m.status === 'sending') {
+    const n = (c.sent || 0) + (c.failed || 0) + (c.blocked || 0);
+    const pct = c.total ? Math.round(n * 100 / c.total) : 0;
+    sub += ` · ${c.total || 0} ${_mlPeople(c.total || 0)} · начата ${esc(_mlDT(m.startedAt))}`;
+    extra = `<div class="ml-bar"><i style="width:${pct}%"></i></div><div class="ml-sub">${n} из ${c.total || 0} отправлено</div>`;
+    btns = b('Остановить', `mlCancel('${escJs(m.id)}', true)`);
+  } else if (m.status === 'done') {
+    sub += ` · ${esc(_mlDT(m.finishedAt))} · <b>${c.sent || 0}</b> доставлено`
+      + (c.blocked ? `, ${c.blocked} заблокировали бота` : '') + (c.failed ? `, ${c.failed} не дошло` : '') + (c.skipped ? `, ${c.skipped} отписаны` : '');
+    btns = b('Открыть', `mlOpen('${escJs(m.id)}')`) + b('Копия', `mlOpen('${escJs(m.id)}', true)`);
+  } else if (m.status === 'cancelled') {
+    sub += ' · отменена' + (c.sent ? `, успели получить ${c.sent}` : '');
+    btns = b('Открыть', `mlOpen('${escJs(m.id)}')`) + b('Копия', `mlOpen('${escJs(m.id)}', true)`);
+  } else {
+    btns = b('Открыть', `mlOpen('${escJs(m.id)}')`) + b('Отменить', `mlCancel('${escJs(m.id)}', false)`);
+  }
+  if (m.testPending) sub += ' · тест отправляется';
+  return `<div class="ml-item"><div class="ml-top"><span class="ml-name">${esc(m.title)}</span>${_mlChip(m)}</div>`
+    + `<div class="ml-sub">${sub}</div>${extra}<div class="ml-btns">${btns}</div></div>`;
+}
+function renderMailList() {
+  const box = document.getElementById('ml-list');
+  if (!box || !_ml.list) return;
+  const once = _ml.list.filter(m => m.kind === 'once'), rules = _ml.list.filter(m => m.kind === 'rule');
+  const cur = _ml.tab === 'rule' ? rules : once;
+  box.innerHTML = `<div class="toggle-group" style="margin-bottom:12px">`
+    + `<button class="toggle-btn${_ml.tab === 'once' ? ' on' : ''}" onclick="mlTab('once')">Разовые${once.length ? ' (' + once.length + ')' : ''}</button>`
+    + `<button class="toggle-btn${_ml.tab === 'rule' ? ' on' : ''}" onclick="mlTab('rule')">Регулярные${rules.length ? ' (' + rules.length + ')' : ''}</button></div>`
+    + (cur.length ? cur.map(_mlItem).join('')
+      : `<div class="dim" style="font-size:.82rem">${_ml.tab === 'rule'
+        ? 'Регулярных правил пока нет. Например: «остался 1 урок» — каждый день в 12:00, каждому один раз.'
+        : 'Рассылок пока нет. Нажмите «+ Новая», выберите, кому, и напишите текст.'}</div>`);
+}
+
+// ── Редактор ──
+function _mlLocalInput(d) {
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+function mlOpen(id, copy) {
+  if (!window.RC_DATA || !RC_DATA.api) { toast('Рассылки работают только на своей базе', 'err'); return; }
+  const m = id ? (_ml.list || []).find(x => x.id === id) : null;
+  const fresh = !m || copy;
+  _mlEd = {
+    id: fresh ? null : m.id,
+    kind: m ? m.kind : 'once',
+    status: fresh ? 'new' : m.status,
+    filters: Object.assign({}, ML_FILTERS0, m ? m.filters : {}),
+    button: m ? (m.button || null) : { type: 'cabinet' },
+    when: m ? (m.kind === 'rule' ? 'rule' : (m.sendAt && new Date(m.sendAt) > new Date() ? 'at' : 'now')) : 'now',
+    readOnly: !!(m && !copy && m.kind === 'once' && !['draft', 'scheduled'].includes(m.status)),
+  };
+  if (m && !copy && m.status === 'draft') _mlEd.when = 'now';
+  document.getElementById('ml-title').value = m ? (copy ? m.title + ' (копия)' : m.title) : '';
+  document.getElementById('ml-body').value = m ? m.body : '';
+  document.getElementById('ml-btn-text').value = m && m.button && m.button.type === 'url' ? m.button.text : '';
+  document.getElementById('ml-btn-url').value = m && m.button && m.button.type === 'url' ? m.button.url : '';
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(12, 0, 0, 0);
+  document.getElementById('ml-at').value = _mlLocalInput(m && !copy && m.sendAt && new Date(m.sendAt) > new Date() ? new Date(m.sendAt) : tomorrow);
+  document.getElementById('ml-rule-time').value = (m && m.ruleTime) || '12:00';
+  document.getElementById('ml-modal-title').textContent = fresh ? 'Новая рассылка' : (m.kind === 'rule' ? 'Регулярная рассылка' : 'Рассылка');
+  _mlShowWho = false; _mlCnt = null;
+  renderMlEditor();
+  _openModal('ml-modal');
+  mlCount();
+}
+function renderMlEditor() {
+  const e = _mlEd, ro = e.readOnly, dis = ro ? ' disabled' : '';
+  const f = e.filters;
+  let h = '';
+  ML_CONDS.forEach(([k, label, opts]) => {
+    h += `<span class="k">${label}</span><div class="toggle-group">` + opts.map(([v, t]) =>
+      `<button type="button" class="toggle-btn${f[k] === v ? ' on' : ''}"${dis} onclick="mlSet('${k}','${v}')">${t}</button>`).join('') + '</div>';
+  });
+  h += `<span class="k">Сгорание пакета</span><div class="ml-row"><div class="toggle-group">`
+    + `<button type="button" class="toggle-btn${!f.expiryDays ? ' on' : ''}"${dis} onclick="mlSet('expiryDays', 0)">Неважно</button>`
+    + `<button type="button" class="toggle-btn${f.expiryDays ? ' on' : ''}"${dis} onclick="mlSet('expiryDays', Math.min(90, Math.max(1, +document.getElementById('ml-days').value || 7)))">Истекает в ближайшие</button></div>`
+    + `<input id="ml-days" class="form-inp ml-days" type="number" min="1" max="90" value="${f.expiryDays || 7}"${dis} onchange="if(_mlEd.filters.expiryDays) mlSet('expiryDays', Math.min(90, Math.max(1, +this.value || 7)))"><span class="k">дн.</span></div>`;
+  document.getElementById('ml-conds').innerHTML = h;
+  const bt = e.button ? e.button.type : 'none';
+  document.getElementById('ml-btn-type').innerHTML = [['none', 'Без кнопки'], ['cabinet', 'Открыть кабинет'], ['url', 'Ссылка…']].map(([v, t]) =>
+    `<button type="button" class="toggle-btn${bt === v ? ' on' : ''}"${dis} onclick="mlBtn('${v}')">${t}</button>`).join('');
+  document.getElementById('ml-btn-url-row').style.display = bt === 'url' ? '' : 'none';
+  const existing = e.status !== 'new';
+  document.getElementById('ml-when').innerHTML = [['now', 'Сейчас'], ['at', 'В дату и время'], ['rule', 'Регулярно']].map(([v, t]) => {
+    const lock = ro || (existing && ((e.kind === 'rule') !== (v === 'rule')));   // разовую в правило и обратно — только копией
+    return `<button type="button" class="toggle-btn${e.when === v ? ' on' : ''}"${lock ? ' disabled' : ''} onclick="mlWhen('${v}')">${t}</button>`;
+  }).join('');
+  document.getElementById('ml-at-row').style.display = e.when === 'at' ? '' : 'none';
+  document.getElementById('ml-rule-row').style.display = e.when === 'rule' ? '' : 'none';
+  document.getElementById('ml-when-hint').innerHTML = e.when === 'rule'
+    ? 'Каждый день в это время бот проверяет условие. Человек получает сообщение <b>один раз</b>, когда попал в условие. Снова — только если вышел из него и попал опять (например, купил новый пакет и снова дошёл до 1 урока). При включении сообщение получат все, кто уже в условии.'
+    : 'Рассылки уходят с 9:00 до 21:00 по Москве; позже — продолжат утром.';
+  ['ml-title', 'ml-body', 'ml-btn-text', 'ml-btn-url', 'ml-at', 'ml-rule-time'].forEach(id => { document.getElementById(id).disabled = ro; });
+  document.getElementById('ml-ro-note').style.display = ro ? '' : 'none';
+  document.getElementById('ml-draft-btn').style.display = (!ro && e.kind === 'once' && e.when !== 'rule') ? '' : 'none';
+  document.getElementById('ml-go-btn').style.display = ro ? 'none' : '';
+  document.getElementById('ml-copy-btn').style.display = ro ? '' : 'none';
+  mlBodyLen();
+  _mlGoLabel();
+}
+function _mlGoLabel() {
+  const b = document.getElementById('ml-go-btn'), e = _mlEd;
+  if (!b || !e) return;
+  if (e.when === 'rule') b.textContent = e.status === 'new' || e.status === 'off' ? 'Включить правило' : 'Сохранить правило';
+  else if (e.when === 'at') b.textContent = 'Запланировать';
+  else b.textContent = _mlCnt ? `Отправить ${_mlCnt.willGet} ${_mlTo(_mlCnt.willGet)}` : 'Отправить';
+}
+function mlSet(k, v) { _mlEd.filters[k] = v; renderMlEditor(); mlCount(); }
+function mlBtn(t) {
+  _mlEd.button = t === 'none' ? null : { type: t };
+  renderMlEditor();
+  if (t === 'url') document.getElementById('ml-btn-text').focus();
+}
+function mlWhen(w) { _mlEd.when = w; if (w === 'rule') _mlEd.kind = 'rule'; else if (_mlEd.status === 'new') _mlEd.kind = 'once'; renderMlEditor(); }
+function mlBodyLen() {
+  const n = (document.getElementById('ml-body').value || '').length;
+  const el = document.getElementById('ml-body-len');
+  el.textContent = n + ' / 4000';
+  el.style.color = n > 4000 ? 'var(--accent)' : '';
+}
+function mlWho() { _mlShowWho = !_mlShowWho; mlCount(); }
+function mlCount() {
+  clearTimeout(_mlCntTimer);
+  const box = document.getElementById('ml-count');
+  box.classList.remove('err');
+  box.innerHTML = '<div><b style="color:var(--text2)">Считаю…</b><small>по снимку аудитории, обычно секунда</small></div>';
+  _mlCntTimer = setTimeout(async () => {
+    const seq = ++_mlCntSeq;
+    try {
+      const r = await RC_DATA.api('/v1/mail/audience', { filters: _mlEd.filters, list: _mlShowWho });
+      if (seq !== _mlCntSeq) return;
+      _mlCnt = r;
+      renderMlCount();
+    } catch (e) {
+      if (seq !== _mlCntSeq) return;
+      box.classList.add('err');
+      box.innerHTML = `<div><b style="color:var(--accent);font-size:1rem">Не удалось посчитать</b><small>${esc(e.message || e)}</small></div>`
+        + `<button class="btn-sm" onclick="mlCount()">Повторить</button>`;
+      document.getElementById('ml-who').style.display = 'none';
+    }
+  }, 250);
+}
+function renderMlCount() {
+  const r = _mlCnt, box = document.getElementById('ml-count');
+  const parts = ['из ' + r.total + ' в боте'];
+  const ex = [];
+  if (r.off) ex.push(r.off + ' отписаны');
+  if (r.blocked) ex.push(r.blocked + ' заблокировали бота');
+  if (ex.length) parts.push(ex.join(' и ') + ' — им не уйдёт');
+  parts.push(r.audienceAt ? 'остатки на ' + new Date(r.audienceAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' })
+    : 'бот ещё не посчитал остатки — условия по покупкам пока пустые');
+  box.innerHTML = `<div><b>${r.count} ${_mlPeople(r.count)}</b><small>${esc(parts.join(' · '))}</small></div>`
+    + (r.count ? `<button class="btn-sm" onclick="mlWho()">${_mlShowWho ? 'Скрыть список' : 'Показать список'}</button>` : '');
+  const who = document.getElementById('ml-who');
+  if (_mlShowWho && r.list) {
+    const dm = s => s ? s.slice(8, 10) + '.' + s.slice(5, 7) : '';
+    who.innerHTML = r.list.map(p => `${esc(p.name || 'Без имени · Telegram …' + p.tg)} <span>· `
+      + (p.remaining != null ? 'остаток ' + p.remaining : (p.linked ? 'без покупок' : 'не делился номером'))
+      + (p.expiry ? ' · пакет до ' + dm(p.expiry) : '') + (p.off ? ' · отписан' : '') + (p.blocked ? ' · заблокировал бота' : '') + '</span>').join('<br>')
+      + (r.count > r.list.length ? `<br><span>…и ещё ${r.count - r.list.length}</span>` : '');
+    who.style.display = '';
+  } else who.style.display = 'none';
+  _mlGoLabel();
+}
+
+function _mlPayload(when) {
+  const e = _mlEd;
+  const b = { when, title: _mlVal('ml-title'), body: document.getElementById('ml-body').value, filters: e.filters, button: e.button };
+  if (e.id) b.id = e.id;
+  if (e.button && e.button.type === 'url') b.button = { type: 'url', text: _mlVal('ml-btn-text'), url: _mlVal('ml-btn-url') };
+  if (when === 'at') b.sendAt = new Date(document.getElementById('ml-at').value).toISOString();
+  if (when === 'rule') { b.ruleTime = _mlVal('ml-rule-time'); if (e.ruleOff) b.ruleOff = true; }
+  return b;
+}
+function _mlCheck(when) {
+  if (!document.getElementById('ml-body').value.trim()) { toast('Напишите текст сообщения', 'err'); return false; }
+  if (_mlEd.button && _mlEd.button.type === 'url' && (!_mlVal('ml-btn-text') || !/^https?:\/\//i.test(_mlVal('ml-btn-url')))) {
+    toast('У кнопки нужен текст и ссылка вида https://…', 'err'); return false;
+  }
+  if (when === 'at') {
+    const t = new Date(document.getElementById('ml-at').value).getTime();
+    if (!isFinite(t) || t < Date.now()) { toast('Выберите время в будущем', 'err'); return false; }
+  }
+  return true;
+}
+let _mlConfirmRes = null;
+function mlConfirm(n) {
+  document.getElementById('mlc-title').textContent = `Отправить ${n} ${_mlTo(n)} сейчас?`;
+  document.getElementById('mlc-text').textContent = `Сообщение «${_mlVal('ml-title') || 'без названия'}» уйдёт ${n} ${_mlTo(n)} из выборки. `
+    + 'После начала можно только остановить на оставшихся.';
+  _openModal('ml-confirm');
+  return new Promise(res => { _mlConfirmRes = res; });
+}
+function mlConfirmDone(yes) { _closeModal('ml-confirm'); if (_mlConfirmRes) _mlConfirmRes(yes); _mlConfirmRes = null; }
+
+async function mlSubmit(asDraft) {
+  if (_mlBusy) return;
+  const when = asDraft ? 'draft' : _mlEd.when;
+  if (!_mlCheck(when)) return;
+  if (when === 'now') {
+    if (!_mlCnt) { toast('Дождитесь подсчёта людей', 'err'); return; }
+    if (!_mlCnt.willGet) { toast('Под условия сейчас никто не подходит', 'err'); return; }
+    if (!(await mlConfirm(_mlCnt.willGet))) return;
+  }
+  if (when === 'rule' && _mlEd.status !== 'on') _mlEd.ruleOff = false;
+  _mlBusy = true;
+  const btn = document.getElementById(asDraft ? 'ml-draft-btn' : 'ml-go-btn'), was = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Сохраняю…';
+  try {
+    const r = await RC_DATA.api('/v1/mail/save', _mlPayload(when));
+    const m = r.mailing;
+    toast(when === 'now' ? 'Рассылка запущена — уходит порциями'
+      : when === 'at' ? 'Запланировано на ' + _mlDT(m.sendAt)
+      : when === 'rule' ? (m.status === 'on' ? 'Правило включено' : 'Правило сохранено')
+      : 'Черновик сохранён', 'ok');
+    if (when === 'now' || when === 'rule') _mlKick();
+    _closeModal('ml-modal');
+    _ml.tab = m.kind;
+    loadMail(true);
+  } catch (e) {
+    toast('Не сохранилось: ' + (e.message || e), 'err');
+  } finally { _mlBusy = false; btn.disabled = false; btn.textContent = was; _mlGoLabel(); }
+}
+// Тест себе: нужна сохранённая версия текста. Новая разовая — черновиком, правило — выключенным,
+// запланированная — с тем же временем; отправленную/отменённую — как есть.
+async function mlTest() {
+  if (_mlBusy) return;
+  const e = _mlEd;
+  _mlBusy = true;
+  const btn = document.getElementById('ml-test-btn');
+  btn.disabled = true; btn.textContent = 'Отправляю…';
+  try {
+    if (!e.readOnly) {
+      let when = 'draft';
+      if (e.when === 'rule' || e.kind === 'rule') { when = 'rule'; if (e.status !== 'on') e.ruleOff = true; }
+      else if (e.status === 'scheduled') when = new Date(document.getElementById('ml-at').value) > new Date() && e.when === 'at' ? 'at' : null;
+      if (!_mlCheck(when || 'draft')) return;
+      if (when) {
+        const r = await RC_DATA.api('/v1/mail/save', _mlPayload(when));
+        e.id = r.mailing.id; e.status = r.mailing.status; e.kind = r.mailing.kind;
+      }
+    }
+    await RC_DATA.api('/v1/mail/test', { id: e.id });
+    _mlKick();
+    toast('Тест отправлен вам в Telegram — придёт в течение минуты', 'ok');
+    loadMail(true);
+  } catch (err) {
+    toast('Тест не отправился: ' + (err.message || err), 'err');
+  } finally { _mlBusy = false; btn.disabled = false; btn.textContent = 'Тест себе'; }
+}
+async function mlCancel(id, running) {
+  if (!confirm(running ? 'Остановить рассылку? Кто уже получил — получил, остальным не уйдёт.' : 'Отменить рассылку? Её можно будет скопировать.')) return;
+  try {
+    await RC_DATA.api('/v1/mail/cancel', { id });
+    toast(running ? 'Рассылка остановлена' : 'Рассылка отменена', 'ok');
+    loadMail(true);
+  } catch (e) { toast('Не получилось: ' + (e.message || e), 'err'); }
+}
+async function mlRule(id, on) {
+  try {
+    await RC_DATA.api('/v1/mail/rule', { id, on });
+    toast(on ? 'Правило включено' : 'Правило выключено', 'ok');
+    if (on) _mlKick();
+    loadMail(true);
+  } catch (e) { toast('Не получилось: ' + (e.message || e), 'err'); }
 }
 
 // ── Ссылки-источники ──
