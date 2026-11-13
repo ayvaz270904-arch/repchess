@@ -790,8 +790,8 @@ button,input,select,textarea{font-family:inherit;}
         <div class="card-body">
           <div class="dim" style="font-size:.75rem;margin-bottom:10px">
             Сколько раз за сегодня запускали бота, открывали кабинет и разделы, записывались, ловили ошибки —
-            против того же часа вчера. Красным — упало больше чем вдвое (если вчера к этому часу было от 5)
-            или ошибок стало вдвое больше.
+            против того же часа вчера. Большое число — сколько раз, маленькое — сколько человек. Красным — людей
+            стало вдвое меньше (если вчера к этому часу было от 5 человек) или ошибок вдвое больше.
           </div>
           <div id="pulse-body"><div class="dim" style="font-size:.82rem">Загружаю…</div></div>
         </div>
@@ -1690,7 +1690,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-events';
+const APP_VERSION = '11.13-events2';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -5230,9 +5230,11 @@ function _pulseNums(d, k) {
     avg: full.length ? full.reduce((s, day) => s + at(day).n, 0) / full.length : 0,
   };
 }
+// Падение — по ЛЮДЯМ, а не нажатиям: людей 5–15 в день, и один человек, переоткрывший кабинет
+// 20 раз, иначе давал бы ложную тревогу. Ошибки — по числу, но хотя бы у двух человек.
 function _pulseBad(k, v) {
-  if (_evIsErr(k)) return v.today.n >= 5 && v.today.n >= 2 * v.same.n;
-  return v.same.n >= 5 && v.today.n < v.same.n * 0.5;
+  if (_evIsErr(k)) return v.today.n >= 5 && v.today.u >= 2 && v.today.n >= 2 * v.same.n;
+  return v.same.u >= 5 && v.today.u < v.same.u * 0.5;
 }
 function renderPulse() {
   const d = _pulse, box = document.getElementById('pulse-body');
@@ -5256,7 +5258,8 @@ function renderPulse() {
     rows += `<tr class="pulse-grp"><td colspan="5">${esc(title)}</td></tr>`;
     for (const k of keys) {
       const v = _pulseNums(d, k), isBad = _pulseBad(k, v);
-      if (isBad) bad.push(`${_evName(k)}: ${v.today.n} против ${v.same.n}`);
+      if (isBad) bad.push(_evIsErr(k) ? `${_evName(k)}: ${v.today.n} раз против ${v.same.n}`
+        : `${_evName(k)}: ${v.today.u} чел. против ${v.same.u}`);
       rows += `<tr${isBad ? ' class="bad"' : ''}><td>${esc(_evName(k))}${isBad ? (_evIsErr(k) ? ' ↑' : ' ↓') : ''}</td>`
         + `<td>${num(v.today, true)}</td><td>${num(v.same, true)}</td>`
         + `<td class="c-yfull">${v.yday.n}</td><td>${Math.round(v.avg * 10) / 10}</td></tr>`;
