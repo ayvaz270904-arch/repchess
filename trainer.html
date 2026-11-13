@@ -1850,7 +1850,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-profile';
+const APP_VERSION = '11.13-cert';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -8174,6 +8174,7 @@ async function generateCertCodes() {
     toast(mode === 'multi' ? `Код ${codes[0]} создан ✓` : `Создано кодов: ${codes.length} ✓`, 'ok');
     try { await navigator.clipboard.writeText(codes.join('\n')); toast(codes.length > 1 ? 'Новые коды скопированы в буфер' : 'Код скопирован в буфер', 'ok'); } catch(e) {}
     if (batchName) _certBatch = batchName;
+    _certJustMade = codes.slice();
     loadCertCodes();
   } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
   finally { btn.disabled = false; btn.textContent = was; }
@@ -8181,6 +8182,22 @@ async function generateCertCodes() {
 
 let _certShowArchive = false;
 let _certBatch = null;   // фильтр по пачке: null — все, '' — без названия
+let _certJustMade = [];  // только что созданные коды — плашка «📄 Сертификаты» над списком
+
+// Сертификат по образцу из Figma (certificate.html, 13.11.2026): печать — лицевая и оборот на код (PDF),
+// онлайн — одна сторона (PNG и PDF); переключатель «Вручение» — в самом шаблоне.
+// Один код — именной (имя впишут или снимут галочку); несколько — на предъявителя.
+// Номинал и срок — из промокода (_certExpiry), как их проверит бот.
+function openCertPdf(ids) {
+  const list = (ids || []).map(id => _certDocs.find(c => c.id === id)).filter(Boolean);
+  if (!list.length) { toast('Коды ещё загружаются — попробуйте через секунду', 'err'); return; }
+  const c0 = list[0];
+  const ymd = d => d ? d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') : '';
+  const q = new URLSearchParams({ n: c0.lessons || 1, kind: c0.kind === 'Индив.' ? 'indiv' : 'group', format: c0.format === 'онлайн' ? 'online' : 'offline' });
+  if (list.length === 1) { q.set('code', c0.id); const u = ymd(_certExpiry(c0)); if (u) q.set('until', u); }
+  else { q.set('codes', list.map(c => c.id + (_certExpiry(c) ? ':' + ymd(_certExpiry(c)) : '')).join(',')); q.set('named', '0'); }
+  window.open('certificate.html?' + q.toString(), '_blank');
+}
 
 // Выгрузка CSV для Google Таблиц (решение владельца 13.11.2026: разделитель «,», UTF-8).
 // Строка на код; у многоразового — строка на каждую активацию. Кто активировал: из самого кода
@@ -8492,7 +8509,12 @@ function renderCertCodes() {
   const btnS = 'font-size:.72rem;background:var(--surface2);border:1px solid var(--border);padding:4px 10px;border-radius:6px;cursor:pointer';
   const now = Date.now();
 
-  let html = `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+  const made = _certJustMade.filter(id => _certDocs.some(c => c.id === id));
+  let html = made.length ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;margin-bottom:10px;border:1.5px solid var(--text);border-radius:10px">
+      <span style="font-size:.8rem">Созданы ${made.length === 1 ? 'код <b>' + esc(made[0]) + '</b>' : '<b>' + made.length + '</b> кодов'}</span>
+      <span style="display:flex;gap:6px;flex:none"><button onclick="openCertPdf(${esc(JSON.stringify(made))})" style="${btnS};color:#fff;background:var(--accent);border-color:var(--accent);font-weight:700">📄 Сертификат${made.length > 1 ? 'ы' : ''}</button>
+      <button onclick="_certJustMade=[];renderCertCodes()" style="${btnS};color:var(--text2)" title="Скрыть">✕</button></span></div>` : '';
+  html += `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
     <select class="form-sel" style="font-size:.78rem;padding:4px 8px;max-width:230px" onchange="_certBatch=this.value==='__all'?null:this.value;renderCertCodes()">
       <option value="__all"${_certBatch === null ? ' selected' : ''}>Все пачки</option>
       ${batches.map(b => `<option value="${esc(b)}"${_certBatch === b ? ' selected' : ''}>${esc(b || 'Без названия')}</option>`).join('')}
@@ -8526,15 +8548,16 @@ function renderCertCodes() {
         ${_certSelectMode
           ? `<button onclick="toggleCertGroup('${ids.join(',')}')"
               style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:3px 9px;border-radius:6px;cursor:pointer">${allSel ? '☐ снять все' : '☑ все'}</button>`
-          : `<button onclick="navigator.clipboard.writeText('${ids.join('\\n')}').then(()=>toast('Скопированы все (${ids.length})','ok'))"
-              style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--accent);padding:3px 9px;border-radius:6px;cursor:pointer">📋 все</button>`}
+          : `<span style="display:flex;gap:5px"><button onclick="openCertPdf(${esc(JSON.stringify(ids))})" title="Сертификаты на все коды группы"
+              style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:3px 9px;border-radius:6px;cursor:pointer">📄 сертификаты</button><button onclick="navigator.clipboard.writeText('${ids.join('\\n')}').then(()=>toast('Скопированы все (${ids.length})','ok'))"
+              style="font-size:.7rem;background:var(--surface2);border:1px solid var(--border);color:var(--accent);padding:3px 9px;border-radius:6px;cursor:pointer">📋 все</button></span>`}
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:5px">${list.map(c => {
         const e = _certExpiry(c);
         const soon = e && e.getTime() - now < 7 * 864e5;
         const until = `<span style="font-family:inherit;font-size:.68rem;${soon ? 'color:var(--orange);font-weight:700' : 'opacity:.6'}">до ${_certDM(e)}</span>`;
         if (!_certSelectMode) return `<span onclick="navigator.clipboard.writeText('${c.id}').then(()=>toast('${c.id} скопирован','ok'))"
-          style="${chipS}background:var(--surface2);border:1px solid var(--border)">${c.id} ${until}</span>`;
+          style="${chipS}background:var(--surface2);border:1px solid var(--border)">${c.id} ${until} <span role="button" title="Сертификат" onclick="event.stopPropagation();openCertPdf(['${escJs(c.id)}'])" style="font-family:inherit;cursor:pointer">📄</span></span>`;
         const sel = _certSelected.has(c.id);
         return `<span onclick="toggleCertPick('${c.id}')"
           style="${chipS}${sel ? 'background:color-mix(in srgb, var(--accent2) 18%, var(--surface2));border:1px solid var(--accent2)' : 'background:var(--surface2);border:1px solid var(--border)'}">${sel ? '✓ ' : ''}${c.id} ${until}</span>`;
@@ -8551,6 +8574,7 @@ function renderCertCodes() {
           <span onclick="navigator.clipboard.writeText('${escJs(c.id)}').then(()=>toast('${escJs(c.id)} скопирован','ok'))" style="${chipS}background:var(--surface2);border:1px solid var(--border)">${esc(c.id)}</span>
           <span class="dim" style="flex:1;font-size:.72rem">${c.batch ? esc(c.batch) + ' · ' : ''}${esc(c.kind || '')} ${esc(c.format || '')} ×${c.lessons || 0}</span>
           <span style="font-size:.72rem;white-space:nowrap"><b>${c.uses || 0}</b>${c.limit ? ' из ' + c.limit : ''} активаций · <span style="${soon ? 'color:var(--orange);font-weight:700' : 'opacity:.6'}">до ${_certDM(e)}</span></span>
+          <button onclick="openCertPdf(['${escJs(c.id)}'])" title="Сертификат" style="${btnS};flex:none">📄</button>
         </div>`;
       }).join('') + `</div>`;
   }
