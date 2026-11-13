@@ -1604,7 +1604,6 @@ button,input,select,textarea{font-family:inherit;}
       <input class="form-inp" id="ml-btn-text" maxlength="40" placeholder="Текст кнопки" style="flex:1 1 140px;margin:0">
       <input class="form-inp" id="ml-btn-url" maxlength="500" placeholder="https://…" style="flex:2 1 220px;margin:0">
     </div>
-    <div class="ml-hint" style="margin-top:-4px">Под каждой рассылкой бот сам добавит кнопку «🔕 Не присылать рассылки».</div>
     <div class="field-label">Когда</div>
     <div class="toggle-group" id="ml-when" style="margin-bottom:10px"></div>
     <div class="ml-row" id="ml-at-row" style="display:none;margin-bottom:8px"><input class="form-inp" id="ml-at" type="datetime-local" style="margin:0"><span class="k">по времени вашего устройства</span></div>
@@ -1868,7 +1867,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.14-pulse';
+const APP_VERSION = '11.14-nomailbtn';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
