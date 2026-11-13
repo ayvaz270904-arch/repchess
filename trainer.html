@@ -1570,6 +1570,7 @@ button,input,select,textarea{font-family:inherit;}
     <div class="modal-title" id="si-name"></div>
     <div id="si-body"></div>
     <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" id="si-edit-btn" style="display:none;margin-bottom:8px" onclick="openStudentEdit()">✏️ Имя и почта</button>
     <button class="btn-full btn-ghost" id="si-journal-btn" style="display:none;margin-bottom:8px" onclick="openEventsJournal()">📜 Журнал действий в кабинете</button>
     <button class="btn-full btn-ghost" onclick="_closeModal('student-info-modal')">Закрыть</button>
   </div>
@@ -1619,6 +1620,24 @@ button,input,select,textarea{font-family:inherit;}
     <div id="mlc-text" style="font-size:.88rem;color:var(--text2);line-height:1.45;margin-bottom:16px"></div>
     <div class="ml-row"><button class="btn-full btn-ghost" style="flex:1;margin:0" onclick="mlConfirmDone(false)">Отмена</button>
       <button class="btn-full btn-gold" style="flex:1;margin:0" onclick="mlConfirmDone(true)">Отправить</button></div>
+  </div>
+</div>
+
+<!-- ПРАВКА ПРОФИЛЯ УЧЕНИКА (13.11.2026): имя и почта, только админ -->
+<div class="overlay" id="student-edit-modal" style="display:none" onclick="if(event.target===this)_closeModal('student-edit-modal')">
+  <div class="modal" style="max-width:480px" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">✏️ Имя и почта</div>
+    <div id="se-svc" class="ml-hint" style="display:none;font-size:.8rem;color:var(--text);margin-bottom:12px">Сейчас у ученика служебная почта (@repchess.local) — впишите настоящую.</div>
+    <div class="field-label">Имя</div>
+    <input class="field-inp" id="se-name" maxlength="120">
+    <div class="field-label">Почта</div>
+    <input class="field-inp" id="se-email" type="email" maxlength="120" autocomplete="off" autocapitalize="off">
+    <div class="ml-hint" style="margin-top:-6px">Телефон: <b id="se-phone"></b> — не меняется (по нему кабинет ищет покупки).</div>
+    <div class="ml-hint">Новая почта заменит старую во всём: строки оплат, занятия, группы, закреплённые у тренеров, привязка в Telegram-боте. Имя поменяется в оплатах и в записях занятий.</div>
+    <div id="se-err" style="display:none;color:var(--accent);font-size:.82rem;line-height:1.4;margin-bottom:12px"></div>
+    <div class="ml-row"><button class="btn-full btn-ghost" style="flex:1;margin:0" onclick="_closeModal('student-edit-modal')">Отмена</button>
+      <button class="btn-full btn-gold" id="se-save" style="flex:1;margin:0" onclick="submitStudentEdit()">Сохранить</button></div>
   </div>
 </div>
 
@@ -1831,7 +1850,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-promo';
+const APP_VERSION = '11.13-profile';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -5762,6 +5781,150 @@ async function mlRule(id, on) {
   } catch (e) { toast('Не получилось: ' + (e.message || e), 'err'); }
 }
 
+// ══════════════════════════════════════════════
+//  ПРАВКА ПРОФИЛЯ УЧЕНИКА: имя и почта (13.11.2026, только админ)
+// ══════════════════════════════════════════════
+// Почта — ключ занятий и групп, поэтому её замена идёт во всех местах сразу:
+//   1) проверка в листе оплат (CRM-прокси, check: true) — ничего не пишет: общая почта у людей
+//      с разными телефонами (занятия не разделить) и почта другого человека — запрет;
+//   2) своя база одной операцией: занятия, группы (состав, пришедшие, гости), закреплённые у тренеров;
+//   3) лист оплат (прокси): почта в строках человека, имя во всех его строках, привязка Telegram в боте.
+// Лист не сохранился — шаг 2 откатывается теми же значениями, что были.
+// Телефон не правится (решение владельца 13.11.2026): по нему кабинет ищет покупки.
+const _SE_ERR = {
+  shared_email: 'На этой почте числятся несколько учеников с разными телефонами — занятия на ней не разделить, менять почту нельзя. Имя поменять можно.',
+  bad_email: 'Проверьте адрес почты', no_name: 'Укажите имя', not_found: 'Строк оплат этого ученика с такой почтой не нашлось — обновите базу и попробуйте снова',
+  no_email: 'У ученика нет почты в базе', no_columns: 'В листе оплат нет колонок Email/Name — напишите разработчику',
+};
+let _seStudent = null;
+function openStudentEdit() {
+  const s = students.find(x => x.email === _balEmail);
+  if (!s) { toast('Ученик не найден', 'err'); return; }
+  _seStudent = s;
+  document.getElementById('se-name').value = s._rawName || s.name || '';
+  document.getElementById('se-email').value = s.email || '';
+  document.getElementById('se-phone').textContent = s.phone ? '+7' + (_np(s.phone) || s.phone) : 'нет';
+  const svc = /@repchess\.local$/.test(s.email || '');
+  document.getElementById('se-svc').style.display = svc ? '' : 'none';
+  document.getElementById('se-err').style.display = 'none';
+  document.getElementById('se-save').disabled = false;
+  document.getElementById('se-save').textContent = 'Сохранить';
+  _openModal('student-edit-modal');
+  if (svc) document.getElementById('se-email').select();
+}
+function _seErr(msg) { const e = document.getElementById('se-err'); e.textContent = msg; e.style.display = ''; }
+async function _seProxy(body) {
+  const token = await firebase.auth().currentUser.getIdToken();
+  // Content-Type не задаём (text/plain) — иначе браузер шлёт preflight, который GAS не умеет
+  const res = await fetch(_CSV, { method: 'POST', body: JSON.stringify(Object.assign({ action: 'editStudent', token }, body)) });
+  const txt = await res.text();
+  try { return JSON.parse(txt); } catch (e) { return { ok: false, error: (txt || 'пустой ответ').slice(0, 150) }; }
+}
+// Заменить почту в массиве (сравнение без регистра и пробелов, как assignedHas)
+function _seSwap(arr, from, to) {
+  if (!Array.isArray(arr)) return null;
+  let hit = false;
+  const out = arr.map(x => { if (_normEmail(x) === from) { hit = true; return to; } return x; });
+  return hit ? out : null;
+}
+async function submitStudentEdit() {
+  const s = _seStudent;
+  if (!s) return;
+  const oldEmail = _normEmail(s.email);
+  const email = _normEmail(document.getElementById('se-email').value);
+  const name = document.getElementById('se-name').value.replace(/\s+/g, ' ').trim();
+  const nameBefore = (s._rawName || s.name || '').trim();
+  const emailChanged = email !== oldEmail, nameChanged = name !== nameBefore;
+  if (!emailChanged && !nameChanged) { _closeModal('student-edit-modal'); return; }
+  if (!name) { _seErr('Укажите имя'); return; }
+  if (!/^[^\s@,;"']+@[^\s@,;"']+\.[a-z]{2,}$/i.test(email)) { _seErr('Проверьте адрес почты'); return; }
+  const btn = document.getElementById('se-save');
+  btn.disabled = true; btn.textContent = 'Проверяю…';
+  document.getElementById('se-err').style.display = 'none';
+  const undo = [];
+  let wroteDb = false, nL = 0, nG = 0, nT = 0;
+  try {
+    // 1) Проверка в листе
+    const chk = await _seProxy({ check: true, oldEmail, email, name, phone: s.phone || '' });
+    if (!chk.ok) {
+      _seErr(chk.error === 'email_taken' ? `Эта почта уже у ученика «${chk.name}» — склеивать двух людей нельзя` : (_SE_ERR[chk.error] || ('Не получилось: ' + chk.error)));
+      return;
+    }
+    // 2) Своя база — одной операцией
+    btn.textContent = 'Переношу занятия…';
+    const batch = db.batch();
+    const renameLessons = !chk.shared;   // на общей почте занятия разных людей — имя в них не трогаем
+    if (emailChanged || (nameChanged && renameLessons)) {
+      const ls = await db.collection('lessons').where('studentEmail', '==', oldEmail).get();
+      ls.docs.forEach(d => {
+        const x = d.data(), upd = {}, before = {};
+        if (emailChanged) { upd.studentEmail = email; before.studentEmail = x.studentEmail; }
+        if (nameChanged && renameLessons && !x.isGuestCharge && !x.isExtraAttendee && x.studentName !== name) { upd.studentName = name; before.studentName = x.studentName || ''; }
+        if (Object.keys(upd).length) { batch.update(d.ref, upd); undo.push([d.ref, before]); nL++; }
+      });
+    }
+    if (emailChanged) {
+      const gs = await db.collection('groupLessons').get();
+      gs.docs.forEach(d => {
+        const g = d.data(), upd = {}, before = {};
+        ['studentEmails', 'attendedEmails', 'guestOf'].forEach(k => {
+          const v = _seSwap(g[k], oldEmail, email);
+          if (v) { upd[k] = v; before[k] = g[k]; }
+        });
+        if (nameChanged && upd.studentEmails && Array.isArray(g.studentNames)) {
+          const names = g.studentNames.slice();
+          (g.studentEmails || []).forEach((e, i) => { if (_normEmail(e) === oldEmail && i < names.length) names[i] = name; });
+          upd.studentNames = names; before.studentNames = g.studentNames;
+        }
+        if (Object.keys(upd).length) { batch.update(d.ref, upd); undo.push([d.ref, before]); nG++; }
+      });
+      const ts = await db.collection('trainers').get();
+      ts.docs.forEach(d => {
+        const v = _seSwap(d.data().assignedStudents, oldEmail, email);
+        if (v) { batch.update(d.ref, { assignedStudents: v }); undo.push([d.ref, { assignedStudents: d.data().assignedStudents }]); nT++; }
+      });
+    }
+    if (undo.length) { await batch.commit(); wroteDb = true; }
+    // 3) Лист оплат + привязка Telegram
+    btn.textContent = 'Сохраняю в оплатах…';
+    let res;
+    try { res = await _seProxy({ oldEmail, email, name, phone: s.phone || '' }); } catch (e) { res = { ok: false, error: e.message }; }
+    if (!res.ok) {
+      if (wroteDb) {   // откат базы: те же значения, что были до правки
+        const rb = db.batch();
+        undo.forEach(([ref, before]) => rb.update(ref, before));
+        await rb.commit();
+      }
+      _seErr((res.error === 'email_taken' ? `Эта почта уже у ученика «${res.name}»` : (_SE_ERR[res.error] || ('Не сохранилось: ' + res.error)))
+        + (wroteDb ? ' Перенос занятий отменён.' : ''));
+      return;
+    }
+    wroteDb = false; undo.length = 0;   // лист сохранён — дальше откатывать базу нельзя (оплаты уже на новой почте)
+    const parts = [`строк оплат: ${res.rows}`];
+    if (nL) parts.push(`занятий: ${nL}`);
+    if (nG) parts.push(`групп: ${nG}`);
+    if (nT) parts.push(`у тренеров: ${nT}`);
+    if (emailChanged) parts.push(res.links ? `Telegram: ${res.links}` : 'Telegram: привязка не найдена');
+    toast('Сохранено — ' + parts.join(', '), 'ok');
+    _closeModal('student-edit-modal');
+    try { sessionStorage.removeItem(_CACHE_KEY); sessionStorage.removeItem('repchess_used_v1'); } catch (e) {}
+    _trainersCache = [];
+    await loadStudents();
+    await _enrichStudentsWithRemaining();
+    if (document.getElementById('sdb-list')) renderStudentDB(document.getElementById('sdb-search')?.value || '');
+    _balEmail = email;
+    openStudentInfoModal(email);
+  } catch (e) {
+    if (wroteDb) {
+      try { const rb = db.batch(); undo.forEach(([ref, before]) => rb.update(ref, before)); await rb.commit(); wroteDb = false; }
+      catch (e2) { _seErr('Сбой посреди сохранения, и откатить перенос занятий не удалось: ' + e2.message + '. Напишите разработчику, ничего не меняйте.'); return; }
+    }
+    _seErr('Не сохранилось: ' + (e.message || e) + (undo.length ? ' Перенос занятий отменён.' : ''));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Сохранить';
+  }
+}
+
 // ── Ссылки-источники ──
 let _lk = null, _lkAt = 0, _lkLoading = false, _lkFresh = '', _lkShowArch = false;
 const _lkGo = slug => RC_DATA.apiBase + '/go/' + slug;
@@ -6775,6 +6938,8 @@ async function openStudentInfoModal(email) {
   _siEmails = [email];
   document.getElementById('si-journal-btn').style.display =
     (currentTrainer?.role === 'admin' && window.RC_DATA && RC_DATA.api) ? '' : 'none';
+  // Правка имени и почты — админу; ученикам «только с анкетой» нечего править в оплатах
+  document.getElementById('si-edit-btn').style.display = (currentTrainer?.role === 'admin' && !s.profileOnly) ? '' : 'none';
   document.getElementById('si-body').innerHTML = '<div style="color:var(--text2);font-size:.85rem">Загрузка...</div>';
   _openModal('student-info-modal');
 
