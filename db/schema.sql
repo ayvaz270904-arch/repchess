@@ -308,5 +308,8 @@ CREATE TABLE IF NOT EXISTS mail_meta (
   audience_at timestamptz                           -- когда бот последний раз прислал снимок
 );
 
-INSERT INTO schema_meta (key, value) VALUES ('schema_version', '5')
+-- Архив рассылок (14.11.2026, схема 6)
+ALTER TABLE mailings ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false;
+
+INSERT INTO schema_meta (key, value) VALUES ('schema_version', '6')
 ON CONFLICT (key) DO UPDATE SET value = excluded.value, at = now();

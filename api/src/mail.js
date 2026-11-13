@@ -121,6 +121,7 @@ function out(m, inside) {
     insideNow: inside == null ? null : inside,
     createdAt: new Date(m.created_at).toISOString(), startedAt: m.started_at ? new Date(m.started_at).toISOString() : null,
     finishedAt: m.finished_at ? new Date(m.finished_at).toISOString() : null, testPending: !!m.test_req,
+    archived: !!m.archived,
   }
 }
 
@@ -199,6 +200,20 @@ export async function mailRule(client, body) {
   const r = await client.query(`UPDATE ${ML()} SET status = $2, updated_at = now() WHERE id = $1 AND kind = 'rule' RETURNING id`, [id, on ? 'on' : 'off'])
   if (!r.rowCount) throw new ApiError('not-found', 'правило не найдено')
   if (!on) await client.query(`UPDATE ${S()} SET status = 'cancelled', at = now() WHERE mailing_id = $1 AND status = 'queued'`, [id])
+  return { ok: true }
+}
+
+// Архив (14.11.2026): убрать из списка завершённую/отменённую/черновую разовую или выключенное правило.
+// Идущую рассылку и включённое правило в архив не убрать — сначала остановить/выключить.
+export async function mailArchive(client, body) {
+  const id = String((body && body.id) || '')
+  const on = body.archived !== false
+  const cur = (await client.query(`SELECT kind, status FROM ${ML()} WHERE id = $1`, [id])).rows[0]
+  if (!cur) throw new ApiError('not-found', 'рассылка не найдена')
+  if (on && ((cur.kind === 'once' && ['scheduled', 'sending'].includes(cur.status)) || (cur.kind === 'rule' && cur.status === 'on'))) {
+    throw new ApiError('invalid-argument', cur.kind === 'rule' ? 'сначала выключите правило' : 'сначала отмените или остановите рассылку')
+  }
+  await client.query(`UPDATE ${ML()} SET archived = $2, updated_at = now() WHERE id = $1`, [id, on])
   return { ok: true }
 }
 

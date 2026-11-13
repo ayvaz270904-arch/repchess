@@ -194,6 +194,16 @@ async function main() {
     eq(keys.start.days[y], { n: 1, u: 1 }, 'start')
   })
 
+  await t('сводка за период: from/to, дни периода, люди за весь период', async () => {
+    const y = day(M - 86400000), y2 = day(M - 2 * 86400000)
+    const r = await call('/v1/events/daily', { who: 'admin', body: { from: y, to: y2 } })   // перепутаны местами — поправит
+    eq([r.json.from, r.json.to, r.json.days], [y2, y, [y, y2]], 'период')
+    eq(r.json.keys['tab:book'].total, { n: 3, u: 2 }, 'за период tab:book')
+    eq(r.json.keys.open.total, { n: 2, u: 2 }, 'open: вчера 500 и позавчера 900 — двое')
+    const far = await call('/v1/events/daily', { who: 'admin', body: { from: '2020-01-01', to: '2099-01-01' } })
+    eq(far.json.to, day(M), 'конец не позже сегодня'); eq(far.json.days.length, 92, 'не длиннее 92 дней')
+  })
+
   await client.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`)
   await client.end()
   console.log(`\nИтог: ${passed} прошло, ${failed.length} не прошло`)

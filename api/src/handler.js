@@ -21,7 +21,7 @@ import { handleFs, FsError } from './fsrest.js'
 import { paymentsSync, paymentsCsv, paymentsRows, paymentsMeta } from './payments.js'
 import { eventsAdd, eventsPerson, eventsDaily } from './events.js'
 import { goRedirect, linksList, linksCreate, linksArchive } from './links.js'
-import { mailAudience, mailList, mailSave, mailCancel, mailRule, mailTest, mailAudienceSync, mailClaim, mailReport } from './mail.js'
+import { mailAudience, mailList, mailSave, mailCancel, mailRule, mailTest, mailArchive, mailAudienceSync, mailClaim, mailReport } from './mail.js'
 
 const STATUS = {
   'invalid-argument': 400, unauthenticated: 401, 'permission-denied': 403,
@@ -125,7 +125,7 @@ async function eventsRoute(request, env, deps, url) {
 
 // Рассылки (mail.js): выборки и рассылки — админ; снимок аудитории, очередь и отчёт — только бот.
 const MAIL_ADMIN = { '/v1/mail/audience': mailAudience, '/v1/mail/list': mailList, '/v1/mail/save': mailSave,
-  '/v1/mail/cancel': mailCancel, '/v1/mail/rule': mailRule, '/v1/mail/test': mailTest }
+  '/v1/mail/cancel': mailCancel, '/v1/mail/rule': mailRule, '/v1/mail/test': mailTest, '/v1/mail/archive': mailArchive }
 const MAIL_BOT = { '/v1/mail/audience-sync': mailAudienceSync, '/v1/mail/claim': mailClaim, '/v1/mail/report': mailReport }
 async function mailRoute(request, env, deps, url) {
   const path = url.pathname

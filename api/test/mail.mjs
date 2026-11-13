@@ -248,6 +248,19 @@ async function main() {
     eq((await mailing(e.id)).status, 'done', 'done')
   })
 
+  await t('архив: завершённую можно, запланированную и включённое правило — нет, вернуть можно', async () => {
+    const at = (await call('/v1/mail/save', { who: 'admin', body: { when: 'at', body: 'X', sendAt: new Date(Date.now() + 86400000).toISOString() } })).json.mailing
+    eq((await call('/v1/mail/archive', { who: 'admin', body: { id: at.id } })).status, 400, 'запланированную нельзя')
+    await call('/v1/mail/cancel', { who: 'admin', body: { id: at.id } })
+    eq((await call('/v1/mail/archive', { who: 'admin', body: { id: at.id } })).status, 200, 'отменённую можно')
+    eq((await mailing(at.id)).archived, true, 'в архиве')
+    eq((await call('/v1/mail/archive', { who: 'admin', body: { id: at.id, archived: false } })).status, 200, 'вернуть')
+    eq((await mailing(at.id)).archived, false, 'вернулась')
+    const r = (await call('/v1/mail/save', { who: 'admin', body: { when: 'rule', ruleTime: '12:00', body: 'R' } })).json.mailing
+    eq((await call('/v1/mail/archive', { who: 'admin', body: { id: r.id } })).status, 400, 'включённое правило нельзя')
+    eq((await call('/v1/mail/archive', { who: 't1', body: { id: r.id } })).status, 403, 'тренер — нет')
+  })
+
   await client.query(`DROP SCHEMA IF EXISTS ${SCHEMA} CASCADE`)
   await client.end()
   console.log(`\nИтог: ${passed} прошло, ${failed.length} не прошло` + (inWindow ? '' : ' (вне окна 9–21 МСК часть проверок отправки пропущена)'))

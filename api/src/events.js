@@ -99,33 +99,50 @@ const WHO_SQL = `coalesce(nullif(tg_id, ''), nullif(email, ''), '?')`
 
 // Сводка: по каждому ключу — число событий и людей за каждый из последних N московских суток,
 // плюс «вчера к этому же часу» — чтобы сразу после выкладки сравнивать неполный сегодняшний день.
+// days — последние N суток (по умолчанию 8). Или период from/to ('ГГГГ-ММ-ДД', МСК, не длиннее 92 дней):
+// тогда days — дни периода, новые первыми, а total у ключа — события и РАЗНЫЕ люди за весь период.
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 export async function eventsDaily(client, body) {
-  const days = Math.min(Math.max(parseInt(body && body.days, 10) || 8, 2), 60)
+  const t = await client.query(`SELECT to_char(now() AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD"T"HH24:MI') AS now`)
+  const nowMsk = t.rows[0].now, today = nowMsk.slice(0, 10)
+  const shift = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10)
+  let from, to
+  if (body && DAY_RE.test(body.from || '') && DAY_RE.test(body.to || '')) {
+    from = body.from < body.to ? body.from : body.to
+    to = body.from < body.to ? body.to : body.from
+    if (to > today) to = today
+    if (from > to) from = to
+    if ((Date.parse(to) - Date.parse(from)) / 86400000 > 91) from = shift(to, -91)
+  } else {
+    const days = Math.min(Math.max(parseInt(body && body.days, 10) || 8, 2), 60)
+    to = today
+    from = shift(today, -(days - 1))
+  }
   const r = await client.query(
-    `WITH b AS (
-        SELECT (date_trunc('day', now() AT TIME ZONE 'Europe/Moscow') AT TIME ZONE 'Europe/Moscow') AS today
-     ), e AS (
+    `WITH e AS (
         SELECT ${KEY_SQL} AS key, (ts AT TIME ZONE 'Europe/Moscow')::date AS day, ts, ${WHO_SQL} AS who
-          FROM ${T()}, b WHERE ts >= b.today - make_interval(days => $1::int - 1)
+          FROM ${T()}
+         WHERE ts >= ($1::date::timestamp AT TIME ZONE 'Europe/Moscow')
+           AND ts < (($2::date + 1)::timestamp AT TIME ZONE 'Europe/Moscow')
            AND event <> 'link_click'   -- клики по ссылкам-источникам зависят от рекламы, не от работы кабинета
-     )
-     SELECT key, day::text AS day, count(*)::int AS n, count(DISTINCT who)::int AS u, false AS same
+     ), b AS (SELECT (date_trunc('day', now() AT TIME ZONE 'Europe/Moscow') AT TIME ZONE 'Europe/Moscow') AS today)
+     SELECT key, day::text AS day, count(*)::int AS n, count(DISTINCT who)::int AS u, 'day' AS kind
        FROM e GROUP BY key, day
      UNION ALL
-     SELECT key, NULL, count(*)::int, count(DISTINCT who)::int, true
+     SELECT key, NULL, count(*)::int, count(DISTINCT who)::int, 'total' FROM e GROUP BY key
+     UNION ALL
+     SELECT key, NULL, count(*)::int, count(DISTINCT who)::int, 'same'
        FROM e, b WHERE e.ts >= b.today - interval '1 day' AND e.ts < now() - interval '1 day'
       GROUP BY key`,
-    [days])
-  const t = await client.query(`SELECT to_char(now() AT TIME ZONE 'Europe/Moscow', 'YYYY-MM-DD"T"HH24:MI') AS now`)
+    [from, to])
   const keys = {}
   for (const x of r.rows) {
-    const k = keys[x.key] || (keys[x.key] = { days: {}, yesterdaySameTime: { n: 0, u: 0 } })
-    if (x.same) k.yesterdaySameTime = { n: x.n, u: x.u }
+    const k = keys[x.key] || (keys[x.key] = { days: {}, total: { n: 0, u: 0 }, yesterdaySameTime: { n: 0, u: 0 } })
+    if (x.kind === 'same') k.yesterdaySameTime = { n: x.n, u: x.u }
+    else if (x.kind === 'total') k.total = { n: x.n, u: x.u }
     else k.days[x.day] = { n: x.n, u: x.u }
   }
-  const nowMsk = t.rows[0].now
   const list = []
-  const d0 = new Date(nowMsk.slice(0, 10) + 'T00:00:00Z')
-  for (let i = 0; i < days; i++) list.push(new Date(d0.getTime() - i * 86400000).toISOString().slice(0, 10))
-  return { now: nowMsk, days: list, keys }
+  for (let d = to; d >= from; d = shift(d, -1)) list.push(d)
+  return { now: nowMsk, from, to, days: list, keys }
 }
