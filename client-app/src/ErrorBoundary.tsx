@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { trackError } from './data'
 
 // Последний рубеж: любая ошибка рендера показывает дружелюбный экран с перезагрузкой,
 // а не белый экран внутри Telegram.
@@ -11,6 +12,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { crashed:
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error('Rep Chess cabinet crashed:', error, info)
+    trackError('crash', (error && error.message) || String(error))
   }
 
   render(): ReactNode {

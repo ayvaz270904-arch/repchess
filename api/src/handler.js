@@ -8,6 +8,7 @@
 //   *    /fs/documents…                 — вход в формате Firestore REST для бота и прокси
 //                                         (fsrest.js), только по служебному ключу
 //   *    /v1/payments…                  — оплаты, копия листа Table 2 (payments.js)
+//   POST /v1/events/…                  — события бота и кабинета: журнал, сводка (events.js)
 //
 // Ответ — JSON. Ошибка — { error: { code, message } } с кодом HTTP по смыслу.
 
@@ -15,6 +16,7 @@ import { identify, AuthError } from './auth.js'
 import { getDoc, queryDocs, commit, ApiError, qualify, table } from './store.js'
 import { handleFs, FsError } from './fsrest.js'
 import { paymentsSync, paymentsCsv, paymentsRows, paymentsMeta } from './payments.js'
+import { eventsAdd, eventsPerson, eventsDaily } from './events.js'
 
 const STATUS = {
   'invalid-argument': 400, unauthenticated: 401, 'permission-denied': 403,
@@ -93,6 +95,29 @@ async function authOf(client, who) {
 
 const NOT_FOUND = () => new ApiError('not-found', 'нет такого адреса')
 
+// События (events.js): пишет только бот (служебный ключ), читают админ и бот.
+const EVENT_PATHS = ['/v1/events/add', '/v1/events/person', '/v1/events/daily']
+async function eventsRoute(request, env, deps, url) {
+  const path = url.pathname
+  if (request.method !== 'POST' || !EVENT_PATHS.includes(path)) throw NOT_FOUND()
+  const who = await identify(request, env, deps)
+  if (!who) throw new AuthError('нужен вход')
+  const text = await request.text()
+  if (text.length > MAX_BODY) throw new ApiError('invalid-argument', 'слишком большой запрос')
+  let body
+  try { body = JSON.parse(text || '{}') } catch { throw new ApiError('invalid-argument', 'тело — не JSON') }
+  return await deps.withClient(async client => {
+    const auth = await authOf(client, who)
+    if (path === '/v1/events/add') {
+      if (!auth.isService) throw new ApiError('permission-denied', 'события пишет только бот')
+      return json(await eventsAdd(client, body), 200, request, env)
+    }
+    if (!auth.isService && auth.role !== 'admin') throw new ApiError('permission-denied', 'события видит только админ')
+    if (path === '/v1/events/person') return json(await eventsPerson(client, body), 200, request, env)
+    return json(await eventsDaily(client, body), 200, request, env)
+  })
+}
+
 // Оплаты (payments.js). Копию присылает и читает построчно только служебный ключ (прокси, бот);
 // CSV — админ и тренер (тренер — только своих учеников), сводку — админ.
 async function paymentsRoute(request, env, deps, url) {
@@ -145,6 +170,7 @@ export async function handle(request, env, deps) {
     }
     if (url.pathname.startsWith(FS_PREFIX)) return await fsRoute(request, env, deps, url)
     if (url.pathname === '/v1/payments' || url.pathname.startsWith('/v1/payments/')) return await paymentsRoute(request, env, deps, url)
+    if (url.pathname.startsWith('/v1/events/')) return await eventsRoute(request, env, deps, url)
     if (request.method !== 'POST' || !['/v1/get', '/v1/query', '/v1/commit'].includes(url.pathname)) {
       return json({ error: { code: 'not-found', message: 'нет такого адреса' } }, 404, request, env)
     }

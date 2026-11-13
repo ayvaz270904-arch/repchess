@@ -1,5 +1,5 @@
 import { retrieveRawInitData, popup } from '@telegram-apps/sdk-react'
-import { BACKEND } from './config'
+import { BACKEND, APP_BUILD } from './config'
 import type { Cabinet, IndivSlots, Profile } from './types'
 import { adapt, type RawCabinet, type RawSlots } from './adapt'
 import { MOCK_CABINET, MOCK_CABINET_EMPTY } from './mock/cabinet'
@@ -32,15 +32,18 @@ function rawInitData(): string {
 
 async function api<T = unknown>(params: string): Promise<T> {
   const url = BACKEND + '?' + params + '&initData=' + encodeURIComponent(rawInitData()) + '&t=' + Date.now()
+  const act = (/(?:^|&)action=([^&]*)/.exec(params) || [])[1] || 'load'
   let res: Response
   try {
     res = await fetch(url)
   } catch {
+    trackError('api', act + ':network')
     throw new ApiError('network')
   }
   try {
     return (await res.json()) as T
   } catch {
+    trackError('api', act + ':server:HTTP ' + res.status)
     throw new ApiError('server')
   }
 }
@@ -361,6 +364,8 @@ function flushTrack(): void {
       encodeURIComponent(packed) +
       '&initData=' +
       encodeURIComponent(rawInitData()) +
+      '&v=' +
+      encodeURIComponent(APP_BUILD) +
       '&t=' +
       now
     fetch(u, { keepalive: true }).catch(() => {})
@@ -404,6 +409,17 @@ export function track(event: string, detail?: string): void {
   } catch {
     /* noop */
   }
+}
+
+// Ошибки кабинета — в события (с 13.11.2026): «Пульс кабинета» в тренерке показывает их
+// по видам (api — нет связи с ботом, js — ошибка скрипта, crash — упал экран), бот утром
+// сигналит о всплеске. Не больше TRACK_ERR_MAX за запуск: зацикленная ошибка не засыплет базу.
+const TRACK_ERR_MAX = 5
+let trackErrCount = 0
+export function trackError(kind: string, message: string): void {
+  if (trackErrCount >= TRACK_ERR_MAX) return
+  trackErrCount++
+  track('error', kind + ':' + String(message || '').replace(/\s+/g, ' ').slice(0, 70))
 }
 
 // Нативное подтверждение Telegram; вне клиента — window.confirm.

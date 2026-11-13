@@ -217,5 +217,21 @@ BEGIN
   RETURN jsonb_build_object('changed', true, 'rows', n, 'digest', dig);
 END $$;
 
-INSERT INTO schema_meta (key, value) VALUES ('schema_version', '2')
+-- События бота и кабинета клиента (с 13.11.2026, схема 3): журнал действий человека,
+-- сводка по дням и сигнал о резком падении. Пишет только бот (api/src/events.js).
+CREATE TABLE IF NOT EXISTS events (
+  id     bigserial   PRIMARY KEY,
+  ts     timestamptz NOT NULL,              -- время самого события (кабинет шлёт пачками)
+  src    text        NOT NULL,              -- 'app' — кабинет, 'bot' — бот
+  tg_id  text        NOT NULL DEFAULT '',   -- Telegram id человека
+  email  text        NOT NULL DEFAULT '',   -- почта из привязки на момент события ('' у гостя)
+  event  text        NOT NULL,              -- open, tab, start, error, …
+  detail text        NOT NULL DEFAULT '',   -- раздел, метка ссылки, текст ошибки
+  ver    text        NOT NULL DEFAULT ''    -- версия кабинета или бота
+);
+CREATE INDEX IF NOT EXISTS events_ts_idx    ON events (ts);
+CREATE INDEX IF NOT EXISTS events_tg_idx    ON events (tg_id, ts) WHERE tg_id <> '';
+CREATE INDEX IF NOT EXISTS events_email_idx ON events (email, ts) WHERE email <> '';
+
+INSERT INTO schema_meta (key, value) VALUES ('schema_version', '3')
 ON CONFLICT (key) DO UPDATE SET value = excluded.value, at = now();

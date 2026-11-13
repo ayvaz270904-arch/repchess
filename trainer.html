@@ -14,7 +14,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <!-- Слой данных: при переезде на свою базу подменяет firebase.firestore() на API (см. datalayer.js) -->
-<script src="datalayer.js?v=5"></script>
+<script src="datalayer.js?v=6"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -58,6 +58,27 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .admin-badge{background:color-mix(in srgb, var(--accent) 14%, transparent);color:var(--accent);border-color:color-mix(in srgb, var(--accent) 34%, transparent);}
 .btn-sm{padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:.78rem;cursor:pointer;}
 .btn-sm:hover{color:var(--text);background:var(--surface2);}
+/* 13.11: «Пульс кабинета» и журнал действий */
+.pulse-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pulse{width:100%;border-collapse:collapse;font-size:.8rem}
+.pulse th{font-weight:600;color:var(--text2);font-size:.68rem;text-align:right;padding:4px 6px;line-height:1.2;vertical-align:bottom}
+.pulse th:first-child{text-align:left;padding-left:0}
+.pulse td{padding:6px;text-align:right;border-top:1px solid color-mix(in srgb,var(--border) 50%,transparent);white-space:nowrap;vertical-align:top}
+.pulse td:first-child{text-align:left;white-space:normal;padding-left:0}
+.pulse td small{display:block;color:var(--text2);font-size:.66rem;font-weight:400}
+.pulse tr.pulse-grp td{font-weight:700;padding-top:14px;border-top:none;font-size:.74rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text2)}
+.pulse tr.bad td{color:var(--accent);font-weight:600}
+.pulse tr.bad td small{color:var(--accent)}
+@media (max-width:480px){.pulse .c-yfull{display:none}}
+.pulse-alert{border:1px solid var(--accent);color:var(--accent);border-radius:10px;padding:8px 12px;font-size:.8rem;margin-bottom:10px;line-height:1.4}
+.evj-day{font-size:.72rem;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin:14px 0 4px}
+.evj-day:first-child{margin-top:0}
+.evj-row{display:flex;gap:10px;align-items:baseline;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--border) 45%,transparent);font-size:.84rem}
+.evj-t{color:var(--text2);font-variant-numeric:tabular-nums;flex:none;width:3em}
+.evj-x{flex:1;min-width:0;overflow-wrap:anywhere}
+.evj-x small{display:block;color:var(--text2);font-size:.72rem}
+.evj-src{flex:none;font-size:.66rem;color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:1px 6px}
+.evj-row.err .evj-x{color:var(--accent)}
 
 /* ── BOTTOM NAV ── */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;}
@@ -759,6 +780,23 @@ button,input,select,textarea{font-family:inherit;}
         </div>
       </div>
 
+      <!-- Пульс кабинета (13.11.2026): события бота и кабинета за сегодня против того же часа
+           вчера. Смотреть после каждой выкладки — раздел, который перестал работать, сразу
+           «проседает». Данные — своя база (api/src/events.js), пишет бот. -->
+      <div class="card" data-sec="settings" style="margin-bottom:14px">
+        <div class="card-head"><span class="card-title">📈 Пульс кабинета</span>
+          <span style="display:flex;align-items:center;gap:8px"><span class="dim" id="pulse-when" style="font-size:.75rem"></span>
+          <button class="btn-sm" id="pulse-refresh" onclick="loadPulse(true)" title="Обновить" aria-label="Обновить">↻</button></span></div>
+        <div class="card-body">
+          <div class="dim" style="font-size:.75rem;margin-bottom:10px">
+            Сколько раз за сегодня запускали бота, открывали кабинет и разделы, записывались, ловили ошибки —
+            против того же часа вчера. Красным — упало больше чем вдвое (если вчера к этому часу было от 5)
+            или ошибок стало вдвое больше.
+          </div>
+          <div id="pulse-body"><div class="dim" style="font-size:.82rem">Загружаю…</div></div>
+        </div>
+      </div>
+
       <!-- Разовая починка данных: занятия, сохранённые с пустым именем ученика.
            Появились 07.09.2026, когда в Таблице 2 пропала колонка «Name» и база
            учеников приехала без имён — занятия тех дней записали пустое ФИО. -->
@@ -1438,7 +1476,20 @@ button,input,select,textarea{font-family:inherit;}
     <div class="modal-title" id="si-name"></div>
     <div id="si-body"></div>
     <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" id="si-journal-btn" style="display:none;margin-bottom:8px" onclick="openEventsJournal()">📜 Журнал действий в кабинете</button>
     <button class="btn-full btn-ghost" onclick="_closeModal('student-info-modal')">Закрыть</button>
+  </div>
+</div>
+
+<!-- ЖУРНАЛ ДЕЙСТВИЙ УЧЕНИКА (13.11.2026): события кабинета и бота, только админ -->
+<div class="overlay" id="ev-journal-modal" style="display:none" onclick="if(event.target===this)_closeModal('ev-journal-modal')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="evj-title">📜 Журнал действий</div>
+    <div class="dim" id="evj-sub" style="font-size:.74rem;margin:-6px 0 12px;overflow-wrap:anywhere"></div>
+    <div id="evj-body"></div>
+    <div style="height:10px"></div>
+    <button class="btn-full btn-ghost" onclick="_closeModal('ev-journal-modal')">Закрыть</button>
   </div>
 </div>
 
@@ -1639,7 +1690,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-nodup';
+const APP_VERSION = '11.13-events';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -5036,7 +5087,7 @@ function showPage(name) {
   if (name==='record')  loadHomePage(Date.now() - _homeLoadedAt < 60000);
   if (name==='history') loadHistory();
   if (name==='group')   loadGroupLessons();
-  if (name==='admin')   loadAdminData();
+  if (name==='admin')   { loadAdminData(); loadPulse(); }
   if (name==='finance') { finCheckAccess(); }
   if (name==='schedule') loadSchedulePage();
   const savedScroll = parseInt(sessionStorage.getItem(`_scroll_${name}`) || '0');
@@ -5110,6 +5161,179 @@ function toast(msg, type='ok'){
   el.textContent=msg; el.className=`toast ${type} show`;
   if(_toastTimer)clearTimeout(_toastTimer);
   _toastTimer=setTimeout(()=>el.classList.remove('show'), type==='err' ? 8000 : 3000);   // ошибку успеть прочитать
+}
+
+// ══════════════════════════════════════════════
+//  ПУЛЬС КАБИНЕТА И ЖУРНАЛ ДЕЙСТВИЙ (13.11.2026)
+// ══════════════════════════════════════════════
+// События бота и кабинета лежат в своей базе (api/src/events.js): пишет бот, читает админ.
+// «Пульс» — сегодня против того же часа вчера по каждому разделу и действию: после выкладки
+// сразу видно, если что-то перестало работать. Журнал — все события одного человека.
+// Названия ключей — те же, что в боте (EV_LABELS, утренний сигнал о падении).
+const EV_GROUPS = [
+  ['Вход', ['start', 'start_new', 'phone_button', 'phone_text', 'open']],
+  ['Разделы кабинета', ['tab:home', 'tab:book', 'tab:events', 'tab:history', 'tab:profile']],
+  ['Действия', ['group_join', 'group_join_guest', 'group_leave', 'book_indiv', 'buy_from_book', 'link', 'cert_redeem', 'ref_share']],
+];
+const EV_NAMES = {
+  start: '/start в боте', start_new: 'Новые: просьба поделиться номером', phone_button: 'Поделились номером',
+  phone_text: 'Номер текстом вместо кнопки', phone_text_linked: 'Номер текстом (уже в кабинете)', phone_other: 'Чужой контакт вместо своего',
+  open: 'Открытие кабинета',
+  'tab:home': 'Главная', 'tab:book': 'Запись', 'tab:events': 'Афиша', 'tab:history': 'История', 'tab:profile': 'Профиль',
+  group_join: 'Запись в группу', group_join_guest: 'Запись в группу с другом', group_leave: 'Отмена записи в группу',
+  book_indiv: 'Запись на индивидуальное', buy_from_book: '«Купить» в Записи', link: '«Купить» на Главной',
+  cert_redeem: 'Ввод промокода', ref_share: 'Приглашение друга', bday_gift: 'Подарок на день рождения',
+};
+const EV_ERR_KINDS = { api: 'нет связи с ботом', js: 'ошибка скрипта', crash: 'экран упал', doGet: 'запрос кабинета', update: 'сообщение боту' };
+function _evName(k) {
+  if (EV_NAMES[k]) return EV_NAMES[k];
+  const m = /^(error|bot_error):(.*)$/.exec(k);
+  if (m) return (m[1] === 'error' ? 'Кабинет: ' : 'Бот: ') + (EV_ERR_KINDS[m[2]] || m[2] || '—');
+  if (k.startsWith('tab:')) return 'Раздел ' + k.slice(4);
+  return k;
+}
+const _evIsErr = k => /^(error|bot_error):/.test(k);
+
+let _pulse = null, _pulseAt = 0, _pulseLoading = false;
+async function loadPulse(force) {
+  const box = document.getElementById('pulse-body');
+  if (!box || currentTrainer?.role !== 'admin') return;
+  if (!window.RC_DATA || !RC_DATA.api) {
+    box.innerHTML = '<div class="dim" style="font-size:.82rem">Пульс работает только на своей базе — сейчас страница открыта на Firebase.</div>';
+    return;
+  }
+  if (!force && _pulse && Date.now() - _pulseAt < 120000) { renderPulse(); return; }
+  if (_pulseLoading) return;
+  _pulseLoading = true;
+  const btn = document.getElementById('pulse-refresh');
+  if (btn) btn.disabled = true;
+  if (!_pulse) box.innerHTML = '<div class="dim" style="font-size:.82rem">Загружаю…</div>';
+  try {
+    _pulse = await RC_DATA.api('/v1/events/daily', { days: 8 });
+    _pulseAt = Date.now();
+    renderPulse();
+  } catch (e) {
+    box.innerHTML = `<div style="color:var(--accent);font-size:.82rem;margin-bottom:8px">Не загрузилось: ${esc(e.message || e)}</div>`
+      + `<button class="btn-sm" onclick="loadPulse(true)">Повторить</button>`;
+  } finally {
+    _pulseLoading = false;
+    if (btn) btn.disabled = false;
+  }
+}
+// Числа по ключу: сегодня, вчера к этому часу, вчера целиком, среднее за 7 полных дней
+function _pulseNums(d, k) {
+  const x = d.keys[k] || { days: {}, yesterdaySameTime: { n: 0, u: 0 } };
+  const at = day => x.days[day] || { n: 0, u: 0 };
+  const full = d.days.slice(1, 8);
+  return {
+    today: at(d.days[0]), same: x.yesterdaySameTime || { n: 0, u: 0 }, yday: at(d.days[1]),
+    avg: full.length ? full.reduce((s, day) => s + at(day).n, 0) / full.length : 0,
+  };
+}
+function _pulseBad(k, v) {
+  if (_evIsErr(k)) return v.today.n >= 5 && v.today.n >= 2 * v.same.n;
+  return v.same.n >= 5 && v.today.n < v.same.n * 0.5;
+}
+function renderPulse() {
+  const d = _pulse, box = document.getElementById('pulse-body');
+  if (!d || !box) return;
+  document.getElementById('pulse-when').textContent = 'сегодня к ' + String(d.now || '').slice(11, 16);
+  const all = Object.keys(d.keys || {});
+  if (!all.length) {
+    box.innerHTML = '<div class="dim" style="font-size:.82rem">Событий пока нет. Они появятся после обновления бота '
+      + '(и истории из листа «События» — после разовой функции setupEventsApi).</div>';
+    return;
+  }
+  const listed = new Set(EV_GROUPS.flatMap(g => g[1]));
+  const errs = all.filter(_evIsErr).sort((a, b) => _pulseNums(d, b).today.n - _pulseNums(d, a).today.n);
+  const rest = all.filter(k => !listed.has(k) && !_evIsErr(k)).sort();
+  const groups = EV_GROUPS.map(g => [g[0], g[1].filter(k => all.includes(k))])
+    .concat([['Ошибки', errs], ['Прочее', rest]]).filter(g => g[1].length);
+  const num = (v, people) => `${v.n}${people && v.n ? `<small>${v.u} чел.</small>` : ''}`;
+  const bad = [];
+  let rows = '';
+  for (const [title, keys] of groups) {
+    rows += `<tr class="pulse-grp"><td colspan="5">${esc(title)}</td></tr>`;
+    for (const k of keys) {
+      const v = _pulseNums(d, k), isBad = _pulseBad(k, v);
+      if (isBad) bad.push(`${_evName(k)}: ${v.today.n} против ${v.same.n}`);
+      rows += `<tr${isBad ? ' class="bad"' : ''}><td>${esc(_evName(k))}${isBad ? (_evIsErr(k) ? ' ↑' : ' ↓') : ''}</td>`
+        + `<td>${num(v.today, true)}</td><td>${num(v.same, true)}</td>`
+        + `<td class="c-yfull">${v.yday.n}</td><td>${Math.round(v.avg * 10) / 10}</td></tr>`;
+    }
+  }
+  box.innerHTML = (bad.length
+      ? `<div class="pulse-alert"><b>Проверьте:</b> ${bad.map(esc).join('; ')}</div>`
+      : `<div class="dim" style="font-size:.78rem;margin-bottom:8px">✓ Резких падений к вчерашнему дню нет.</div>`)
+    + `<div class="pulse-wrap"><table class="pulse"><thead><tr><th></th><th>Сегодня</th><th>Вчера к этому часу</th>`
+    + `<th class="c-yfull">Вчера весь день</th><th>Среднее за 7 дн.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+let _siEmails = [];
+let _evj = { emails: [], rows: [], more: false, loading: false };
+function openEventsJournal() {
+  const s = students.find(x => x.email === _balEmail);
+  _evj = { emails: _siEmails.slice(0, 10), rows: [], more: false, loading: false };
+  document.getElementById('evj-title').textContent = '📜 ' + (s ? s.name : _balEmail);
+  document.getElementById('evj-sub').textContent = 'Кабинет и бот, новые сверху · ' + _evj.emails.join(', ');
+  document.getElementById('evj-body').innerHTML = '<div class="dim" style="font-size:.85rem">Загрузка...</div>';
+  _openModal('ev-journal-modal');
+  loadJournalPage();
+}
+const EVJ_PAGE = 100;
+async function loadJournalPage() {
+  if (_evj.loading) return;
+  _evj.loading = true;
+  const btn = document.getElementById('evj-more');
+  if (btn) { btn.disabled = true; btn.textContent = 'Загружаю…'; }
+  try {
+    const last = _evj.rows[_evj.rows.length - 1];
+    const r = await RC_DATA.api('/v1/events/person', { emails: _evj.emails, limit: EVJ_PAGE, before: last ? last.ts : undefined });
+    _evj.rows = _evj.rows.concat(r.rows || []);
+    _evj.more = (r.rows || []).length === EVJ_PAGE;
+    renderJournal();
+  } catch (e) {
+    renderJournal('Не загрузилось: ' + (e.message || e));
+  } finally {
+    _evj.loading = false;
+  }
+}
+function _evjText(r) {
+  const det = r.det || '';
+  switch (r.ev) {
+    case 'tab': return { text: 'Раздел «' + (EV_NAMES['tab:' + det] || det) + '»' };
+    case 'start': return { text: '/start в боте', sub: det ? 'метка: ' + det : '' };
+    case 'error': {
+      const kind = det.split(':')[0];
+      return { text: 'Ошибка в кабинете: ' + (EV_ERR_KINDS[kind] || kind), sub: det.slice(kind.length + 1) + (r.ver ? ' · версия ' + r.ver : ''), err: true };
+    }
+    case 'bot_error': return { text: 'Ошибка бота', sub: det, err: true };
+    default: return { text: EV_NAMES[r.ev] || r.ev, sub: det };
+  }
+}
+function renderJournal(errText) {
+  const box = document.getElementById('evj-body');
+  if (!_evj.rows.length) {
+    box.innerHTML = errText
+      ? `<div style="color:var(--accent);font-size:.85rem;margin-bottom:8px">${esc(errText)}</div><button class="btn-sm" onclick="loadJournalPage()">Повторить</button>`
+      : '<div class="dim" style="font-size:.85rem">Действий не найдено. Журнал ведётся по почте человека: '
+        + 'если в кабинет он входит с другой почтой или ещё гость — его действий здесь не будет.</div>';
+    return;
+  }
+  let html = '', lastDay = '';
+  for (const r of _evj.rows) {
+    const d = new Date(r.ts);
+    const day = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short', timeZone: 'Europe/Moscow' });
+    if (day !== lastDay) { html += `<div class="evj-day">${esc(day)}</div>`; lastDay = day; }
+    const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Moscow' });
+    const t = _evjText(r);
+    html += `<div class="evj-row${t.err ? ' err' : ''}"><span class="evj-t">${time}</span>`
+      + `<span class="evj-x">${esc(t.text)}${t.sub ? `<small>${esc(t.sub)}</small>` : ''}</span>`
+      + `<span class="evj-src">${r.src === 'bot' ? 'бот' : 'кабинет'}</span></div>`;
+  }
+  if (errText) html += `<div style="color:var(--accent);font-size:.82rem;margin-top:10px">${esc(errText)}</div>`;
+  if (_evj.more || errText) html += `<button class="btn-sm" id="evj-more" style="margin-top:10px;width:100%" onclick="loadJournalPage()">${errText ? 'Повторить' : 'Показать ещё'}</button>`;
+  box.innerHTML = html;
 }
 
 // ══════════════════════════════════════════════
@@ -5971,6 +6195,9 @@ async function openStudentInfoModal(email) {
 
   document.getElementById('si-name').textContent = '👤 ' + s.name;
   _balEmail = email;   // для инлайн-панели ручного баланса
+  _siEmails = [email];
+  document.getElementById('si-journal-btn').style.display =
+    (currentTrainer?.role === 'admin' && window.RC_DATA && RC_DATA.api) ? '' : 'none';
   document.getElementById('si-body').innerHTML = '<div style="color:var(--text2);font-size:.85rem">Загрузка...</div>';
   _openModal('student-info-modal');
 
@@ -5980,6 +6207,7 @@ async function openStudentInfoModal(email) {
     // записанные на вторую почту, не найдутся и баланс будет завышен
     const _mails = Object.keys(_emailAlias).filter(e => _emailAlias[e] === email);
     if (!_mails.includes(email)) _mails.push(email);
+    _siEmails = _mails.slice();   // для журнала действий
     const _q = _mails.length > 1
       ? db.collection('lessons').where('studentEmail','in', _mails.slice(0,10))
       : db.collection('lessons').where('studentEmail','==', email);

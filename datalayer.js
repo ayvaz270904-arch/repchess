@@ -264,4 +264,7 @@
   } catch (e) { firebase.firestore = factory }
   window.RC_DATA.db = db
   window.RC_DATA.Timestamp = Timestamp
+  // Прямой вызов API для экранов, которых нет в Firestore (события: журнал, «Пульс кабинета»).
+  // Только при своей базе; страница проверяет наличие RC_DATA.api.
+  window.RC_DATA.api = function (path, body) { return call(path, body || {}) }
 })()

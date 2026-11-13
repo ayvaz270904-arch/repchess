@@ -116,7 +116,7 @@ async function main() {
   await t('поддельная подпись (выдаёт себя за админа) — 401', async () => eq((await call('/v1/query', q('lessons'), 'forged')).status, 401))
   await t('неверный служебный ключ — 401', async () => eq((await call('/v1/query', q('lessons'), 'badservice')).status, 401))
   await t('вошёл, но не тренер — 403', async () => eq((await call('/v1/query', q('priceOverrides'), 'stranger')).status, 403))
-  await t('health без входа отвечает, версия схемы 2', async () => eq((await call('/v1/health')).body, { ok: true, schema: '2' }))
+  await t('health без входа отвечает, версия схемы 3', async () => eq((await call('/v1/health')).body, { ok: true, schema: '3' }))
   await t('CORS: свой сайт получает разрешение', async () => eq((await call('/v1/health')).cors, ORIGIN))
 
   // Чтение — тренер
@@ -341,6 +341,7 @@ async function main() {
     firebase: { auth: () => ({ currentUser: { getIdToken: async () => tok[current] } }), firestore: () => { throw new Error('настоящий Firestore не должен вызываться') } },
     fetch: (url, init) => handle(new Request(String(url).replace(/^https:\/\/[^/]+/, 'https://api.test'), init), env, deps),
     crypto, URLSearchParams, Promise, console,
+    setTimeout, clearTimeout, AbortController,   // предел ожидания ответа (с 13.11.2026)
   }
   vm.runInNewContext(fs.readFileSync(new URL('../../datalayer.js', import.meta.url), 'utf8'), ctx)
   const fb = ctx.firebase
