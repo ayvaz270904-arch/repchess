@@ -104,6 +104,7 @@ export async function eventsDaily(client, body) {
      ), e AS (
         SELECT ${KEY_SQL} AS key, (ts AT TIME ZONE 'Europe/Moscow')::date AS day, ts, ${WHO_SQL} AS who
           FROM ${T()}, b WHERE ts >= b.today - make_interval(days => $1::int - 1)
+           AND event <> 'link_click'   -- клики по ссылкам-источникам зависят от рекламы, не от работы кабинета
      )
      SELECT key, day::text AS day, count(*)::int AS n, count(DISTINCT who)::int AS u, false AS same
        FROM e GROUP BY key, day

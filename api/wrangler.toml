@@ -15,6 +15,8 @@ PGSCHEMA = "prod"
 FIREBASE_PROJECT_ID = "repchess-trainer"
 ALLOWED_ORIGINS = "https://repchess.ayvaz-270904.workers.dev,https://ayvaz270904-arch.github.io"
 AUTH_PROVIDERS = "firebase,service"
+# Бот для ссылок-источников: /go/<метка> → https://t.me/<BOT_USERNAME>?start=src_<метка> (src/links.js)
+BOT_USERNAME = "RepChessEducation_bot"
 # CRM-прокси (Apps Script): раз в минуту расписание ниже просит его сверить лист оплат Table 2
 # с копией в базе (src/payments.js). Тот же адрес, что _CSV в trainer.html.
 PAYMENTS_PROXY_URL = "https://script.google.com/macros/s/AKfycbx7_UDm2N5BXftfgZbHa66gAs_ZnbT7ed-N9BuuGJowd3qcVztlrncg_bI_Hzsm_7_cAA/exec"

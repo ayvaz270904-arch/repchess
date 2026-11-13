@@ -79,6 +79,23 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .evj-x small{display:block;color:var(--text2);font-size:.72rem}
 .evj-src{flex:none;font-size:.66rem;color:var(--text2);border:1px solid var(--border);border-radius:6px;padding:1px 6px}
 .evj-row.err .evj-x{color:var(--accent)}
+/* 13.11: ссылки-источники */
+.lk-form{display:none;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.lk-form.on{display:flex}
+.lk-form input{flex:1 1 220px;min-width:0;padding:9px 12px;border:1px solid var(--border);border-radius:8px;font:inherit;font-size:.86rem;background:var(--surface,#fff);color:var(--text)}
+.lk-item{border-top:1px solid color-mix(in srgb,var(--border) 50%,transparent);padding:12px 0}
+.lk-item:first-child{border-top:none;padding-top:2px}
+.lk-item.fresh{background:color-mix(in srgb,var(--accent) 6%,transparent);border-radius:10px;padding:12px 10px;margin:0 -10px}
+.lk-top{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.lk-name{font-weight:700;font-size:.92rem;overflow-wrap:anywhere}
+.lk-date{font-size:.72rem;color:var(--text2);flex:none}
+.lk-slug{font-size:.72rem;color:var(--text2);font-family:ui-monospace,Menlo,monospace;overflow-wrap:anywhere;margin-top:2px}
+.lk-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:10px 0}
+.lk-stat{border:1px solid color-mix(in srgb,var(--border) 70%,transparent);border-radius:8px;padding:6px 8px;line-height:1.2}
+.lk-stat b{display:block;font-size:1rem}
+.lk-stat span{font-size:.66rem;color:var(--text2)}
+.lk-btns{display:flex;gap:6px;flex-wrap:wrap}
+@media (max-width:480px){.lk-stats{grid-template-columns:repeat(2,1fr)}}
 
 /* ── BOTTOM NAV ── */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;z-index:100;}
@@ -794,6 +811,27 @@ button,input,select,textarea{font-family:inherit;}
             стало вдвое меньше (если вчера к этому часу было от 5 человек) или ошибок вдвое больше.
           </div>
           <div id="pulse-body"><div class="dim" style="font-size:.82rem">Загружаю…</div></div>
+        </div>
+      </div>
+
+      <!-- Ссылки-источники (13.11.2026): откуда приходят в бота и сколько платят. Метка
+           «транслит_ДДММГГ», переход /go/<метка> на сервере API считает клики (api/src/links.js). -->
+      <div class="card" data-sec="settings" style="margin-bottom:14px">
+        <div class="card-head"><span class="card-title">🔗 Ссылки-источники</span>
+          <button class="btn-sm" id="lk-new-btn" onclick="lkToggleForm(true)">+ Новая</button></div>
+        <div class="card-body">
+          <div class="dim" style="font-size:.75rem;margin-bottom:10px">
+            Ссылка ведёт в бота с меткой источника. Клики видны только у ссылки «Копировать» (она идёт
+            через наш сервер), запуски и оплаты — у обеих. Оплаты — у людей, для которых это первая ссылка,
+            после запуска по ней и только если они потом вошли в кабинет по номеру.
+          </div>
+          <div class="lk-form" id="lk-form">
+            <input id="lk-name" maxlength="80" placeholder="Откуда ссылка: «ВК пост про ярмарку»"
+              onkeydown="if(event.key==='Enter')lkCreate();if(event.key==='Escape')lkToggleForm(false)">
+            <button class="btn-sm" id="lk-create-btn" style="color:#fff;background:var(--accent);border-color:var(--accent);font-weight:700" onclick="lkCreate()">Создать</button>
+            <button class="btn-sm" onclick="lkToggleForm(false)">Отмена</button>
+          </div>
+          <div id="lk-body"><div class="dim" style="font-size:.82rem">Загружаю…</div></div>
         </div>
       </div>
 
@@ -1690,7 +1728,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-events2';
+const APP_VERSION = '11.13-links';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -5087,7 +5125,7 @@ function showPage(name) {
   if (name==='record')  loadHomePage(Date.now() - _homeLoadedAt < 60000);
   if (name==='history') loadHistory();
   if (name==='group')   loadGroupLessons();
-  if (name==='admin')   { loadAdminData(); loadPulse(); }
+  if (name==='admin')   { loadAdminData(); loadPulse(); loadLinks(); }
   if (name==='finance') { finCheckAccess(); }
   if (name==='schedule') loadSchedulePage();
   const savedScroll = parseInt(sessionStorage.getItem(`_scroll_${name}`) || '0');
@@ -5183,6 +5221,7 @@ const EV_NAMES = {
   group_join: 'Запись в группу', group_join_guest: 'Запись в группу с другом', group_leave: 'Отмена записи в группу',
   book_indiv: 'Запись на индивидуальное', buy_from_book: '«Купить» в Записи', link: '«Купить» на Главной',
   cert_redeem: 'Ввод промокода', ref_share: 'Приглашение друга', bday_gift: 'Подарок на день рождения',
+  profile_save: 'Сохранение профиля',
 };
 const EV_ERR_KINDS = { api: 'нет связи с ботом', js: 'ошибка скрипта', crash: 'экран упал', doGet: 'запрос кабинета', update: 'сообщение боту' };
 function _evName(k) {
@@ -5270,6 +5309,90 @@ function renderPulse() {
       : `<div class="dim" style="font-size:.78rem;margin-bottom:8px">✓ Резких падений к вчерашнему дню нет.</div>`)
     + `<div class="pulse-wrap"><table class="pulse"><thead><tr><th></th><th>Сегодня</th><th>Вчера к этому часу</th>`
     + `<th class="c-yfull">Вчера весь день</th><th>Среднее за 7 дн.</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// ── Ссылки-источники ──
+let _lk = null, _lkAt = 0, _lkLoading = false, _lkFresh = '', _lkShowArch = false;
+const _lkGo = slug => RC_DATA.apiBase + '/go/' + slug;
+async function loadLinks(force) {
+  const box = document.getElementById('lk-body');
+  if (!box || currentTrainer?.role !== 'admin') return;
+  if (!window.RC_DATA || !RC_DATA.api) { box.innerHTML = '<div class="dim" style="font-size:.82rem">Ссылки работают только на своей базе.</div>'; return; }
+  if (!force && _lk && Date.now() - _lkAt < 120000) { renderLinks(); return; }
+  if (_lkLoading) return;
+  _lkLoading = true;
+  if (!_lk) box.innerHTML = '<div class="dim" style="font-size:.82rem">Загружаю…</div>';
+  try {
+    _lk = (await RC_DATA.api('/v1/links/list', {})).links || [];
+    _lkAt = Date.now();
+    renderLinks();
+  } catch (e) {
+    box.innerHTML = `<div style="color:var(--accent);font-size:.82rem;margin-bottom:8px">Не загрузилось: ${esc(e.message || e)}</div>`
+      + `<button class="btn-sm" onclick="loadLinks(true)">Повторить</button>`;
+  } finally { _lkLoading = false; }
+}
+function lkToggleForm(on) {
+  document.getElementById('lk-form').classList.toggle('on', on);
+  document.getElementById('lk-new-btn').style.display = on ? 'none' : '';
+  if (on) { const i = document.getElementById('lk-name'); i.value = ''; i.focus(); }
+}
+async function lkCreate() {
+  const inp = document.getElementById('lk-name'), btn = document.getElementById('lk-create-btn');
+  const name = inp.value.trim();
+  if (!name) { toast('Напишите, откуда ссылка', 'err'); inp.focus(); return; }
+  btn.disabled = true; btn.textContent = 'Создаю…';
+  try {
+    const r = await RC_DATA.api('/v1/links/create', { name });
+    _lkFresh = r.link.slug;
+    lkToggleForm(false);
+    await loadLinks(true);
+    lkCopy(_lkGo(r.link.slug), 'Ссылка создана и скопирована');
+  } catch (e) {
+    toast('Не создалась: ' + (e.message || e), 'err');
+  } finally { btn.disabled = false; btn.textContent = 'Создать'; }
+}
+function lkCopy(text, okMsg) {
+  navigator.clipboard.writeText(text).then(() => toast(okMsg || 'Ссылка скопирована', 'ok'),
+    () => { prompt('Скопируйте ссылку:', text); });
+}
+async function lkArchive(slug, archived) {
+  try {
+    await RC_DATA.api('/v1/links/archive', { slug, archived });
+    const l = (_lk || []).find(x => x.slug === slug);
+    if (l) l.archived = archived;
+    renderLinks();
+    toast(archived ? 'Ссылка в архиве — по ней по-прежнему можно перейти' : 'Ссылка возвращена', 'ok');
+  } catch (e) { toast('Не получилось: ' + (e.message || e), 'err'); }
+}
+function _lkItem(l) {
+  const st = l.stats || {}, d = new Date(l.createdAt);
+  const date = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Europe/Moscow' });
+  const tile = (v, label) => `<div class="lk-stat"><b>${v}</b><span>${label}</span></div>`;
+  return `<div class="lk-item${l.slug === _lkFresh ? ' fresh' : ''}">`
+    + `<div class="lk-top"><span class="lk-name">${esc(l.name)}</span><span class="lk-date">${esc(date)}</span></div>`
+    + `<div class="lk-slug">src_${esc(l.slug)}</div>`
+    + `<div class="lk-stats">`
+    + tile(st.clicks || 0, `кликов · ${st.clicksUniq || 0} чел.`)
+    + tile(st.startsPeople || 0, `запустили бота · новых ${st.newcomers || 0}`)
+    + tile(st.payers || 0, `оплатили · ${st.payments || 0} опл.`)
+    + tile(((st.sum || 0).toLocaleString('ru-RU')) + ' ₽', 'сумма оплат')
+    + `</div><div class="lk-btns">`
+    + `<button class="btn-sm" onclick="lkCopy('${escJs(_lkGo(l.slug))}')">Копировать</button>`
+    + `<button class="btn-sm" onclick="lkCopy('${escJs(l.bot)}','Прямая ссылка скопирована (без счёта кликов)')">Прямая t.me</button>`
+    + `<button class="btn-sm" onclick="lkArchive('${escJs(l.slug)}', ${!l.archived})">${l.archived ? '↩ Вернуть' : 'В архив'}</button>`
+    + `</div></div>`;
+}
+function renderLinks() {
+  const box = document.getElementById('lk-body');
+  if (!box || !_lk) return;
+  const live = _lk.filter(l => !l.archived), arch = _lk.filter(l => l.archived);
+  let html = live.length ? live.map(_lkItem).join('')
+    : '<div class="dim" style="font-size:.82rem">Ссылок пока нет. Нажмите «+ Новая» и напишите, где будет ссылка: «ВК пост про ярмарку», «Школа 1514, родительский чат».</div>';
+  if (arch.length) {
+    html += `<button class="btn-sm" style="margin-top:10px" onclick="_lkShowArch=!_lkShowArch;renderLinks()">${_lkShowArch ? 'Скрыть архив' : 'Архив (' + arch.length + ')'}</button>`;
+    if (_lkShowArch) html += `<div style="margin-top:8px;opacity:.75">${arch.map(_lkItem).join('')}</div>`;
+  }
+  box.innerHTML = html;
 }
 
 let _siEmails = [];

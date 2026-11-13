@@ -9,6 +9,8 @@
 //                                         (fsrest.js), только по служебному ключу
 //   *    /v1/payments…                  — оплаты, копия листа Table 2 (payments.js)
 //   POST /v1/events/…                  — события бота и кабинета: журнал, сводка (events.js)
+//   GET  /go/<метка>                   — переход по ссылке-источнику в бота (links.js, без входа)
+//   POST /v1/links/…                   — ссылки-источники: список со статистикой, создание, архив
 //
 // Ответ — JSON. Ошибка — { error: { code, message } } с кодом HTTP по смыслу.
 
@@ -17,6 +19,7 @@ import { getDoc, queryDocs, commit, ApiError, qualify, table } from './store.js'
 import { handleFs, FsError } from './fsrest.js'
 import { paymentsSync, paymentsCsv, paymentsRows, paymentsMeta } from './payments.js'
 import { eventsAdd, eventsPerson, eventsDaily } from './events.js'
+import { goRedirect, linksList, linksCreate, linksArchive } from './links.js'
 
 const STATUS = {
   'invalid-argument': 400, unauthenticated: 401, 'permission-denied': 403,
@@ -118,6 +121,26 @@ async function eventsRoute(request, env, deps, url) {
   })
 }
 
+// Ссылки-источники (links.js): только админ.
+const LINK_PATHS = ['/v1/links/list', '/v1/links/create', '/v1/links/archive']
+async function linksRoute(request, env, deps, url) {
+  const path = url.pathname
+  if (request.method !== 'POST' || !LINK_PATHS.includes(path)) throw NOT_FOUND()
+  const who = await identify(request, env, deps)
+  if (!who) throw new AuthError('нужен вход')
+  const text = await request.text()
+  if (text.length > MAX_BODY) throw new ApiError('invalid-argument', 'слишком большой запрос')
+  let body
+  try { body = JSON.parse(text || '{}') } catch { throw new ApiError('invalid-argument', 'тело — не JSON') }
+  return await deps.withClient(async client => {
+    const auth = await authOf(client, who)
+    if (!auth.isService && auth.role !== 'admin') throw new ApiError('permission-denied', 'ссылки — только админу')
+    if (path === '/v1/links/list') return json(await linksList(client, env), 200, request, env)
+    if (path === '/v1/links/create') return json(await linksCreate(client, body, who), 200, request, env)
+    return json(await linksArchive(client, body), 200, request, env)
+  })
+}
+
 // Оплаты (payments.js). Копию присылает и читает построчно только служебный ключ (прокси, бот);
 // CSV — админ и тренер (тренер — только своих учеников), сводку — админ.
 async function paymentsRoute(request, env, deps, url) {
@@ -171,6 +194,8 @@ export async function handle(request, env, deps) {
     if (url.pathname.startsWith(FS_PREFIX)) return await fsRoute(request, env, deps, url)
     if (url.pathname === '/v1/payments' || url.pathname.startsWith('/v1/payments/')) return await paymentsRoute(request, env, deps, url)
     if (url.pathname.startsWith('/v1/events/')) return await eventsRoute(request, env, deps, url)
+    if (url.pathname.startsWith('/v1/links/')) return await linksRoute(request, env, deps, url)
+    if (request.method === 'GET' && url.pathname.startsWith('/go/')) return await goRedirect(request, env, deps, url.pathname.slice(4))
     if (request.method !== 'POST' || !['/v1/get', '/v1/query', '/v1/commit'].includes(url.pathname)) {
       return json({ error: { code: 'not-found', message: 'нет такого адреса' } }, 404, request, env)
     }

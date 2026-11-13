@@ -233,5 +233,18 @@ CREATE INDEX IF NOT EXISTS events_ts_idx    ON events (ts);
 CREATE INDEX IF NOT EXISTS events_tg_idx    ON events (tg_id, ts) WHERE tg_id <> '';
 CREATE INDEX IF NOT EXISTS events_email_idx ON events (email, ts) WHERE email <> '';
 
-INSERT INTO schema_meta (key, value) VALUES ('schema_version', '3')
+-- Ссылки-источники (с 13.11.2026, схема 4): метка «транслит_ДДММГГ» → бот ?start=src_<метка>.
+-- Клики пишет переход /go/<метка> в events (event = 'link_click', detail = метка,
+-- visitor = обезличенный отпечаток IP+браузер для уникальных кликов). api/src/links.js.
+CREATE TABLE IF NOT EXISTS links (
+  slug       text        PRIMARY KEY,
+  name       text        NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  created_by text        NOT NULL DEFAULT '',
+  archived   boolean     NOT NULL DEFAULT false
+);
+ALTER TABLE events ADD COLUMN IF NOT EXISTS visitor text NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS events_links_idx ON events (event, detail) WHERE event IN ('start', 'link_click');
+
+INSERT INTO schema_meta (key, value) VALUES ('schema_version', '4')
 ON CONFLICT (key) DO UPDATE SET value = excluded.value, at = now();
