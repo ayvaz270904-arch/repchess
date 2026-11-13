@@ -134,14 +134,34 @@
     return e
   }
 
+  // Предел ожидания ответа. Без него зависшее соединение держало кнопку «Сохранение...»
+  // бесконечно: 12.11.2026 у тренера без VPN запись дошла до базы, а ответ до страницы — нет;
+  // она нажимала ещё раз, и занятие записалось трижды. После предела запрос обрывается,
+  // страница показывает ошибку. Запись при этом МОГЛА сохраниться — поэтому страницы
+  // создают документы с id, выданным заранее (повтор перезаписывает тот же документ).
+  var TIMEOUT_WRITE_MS = 25000
+  var TIMEOUT_READ_MS = 45000   // «Все занятия» и «Финансы» тянут сотни документов
+
   function call(path, body) {
     var user = firebase.auth().currentUser
     if (!user) return Promise.reject(apiError('unauthenticated'))
-    return user.getIdToken().then(function (token) {
+    var ms = path === '/v1/commit' ? TIMEOUT_WRITE_MS : TIMEOUT_READ_MS
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null
+    var timer
+    var timeout = new Promise(function (_, reject) {
+      timer = setTimeout(function () {
+        if (ctrl) ctrl.abort()
+        reject(apiError('deadline-exceeded', 'Сервер не ответил за ' + Math.round(ms / 1000)
+          + ' с. Проверьте интернет или включите VPN и попробуйте ещё раз.'))
+      }, ms)
+    })
+    // getIdToken тоже внутри предела: обновление токена идёт в Google и тоже может зависнуть
+    var work = user.getIdToken().then(function (token) {
       return fetch(RC_API_BASE + path, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
         body: JSON.stringify(body),
+        signal: ctrl ? ctrl.signal : undefined,
       })
     }).then(function (res) {
       return res.json().then(function (j) {
@@ -152,6 +172,9 @@
       if (e && e.code) throw e
       throw apiError('unavailable', 'Нет связи с сервером данных: ' + (e && e.message))
     })
+    return Promise.race([work, timeout]).then(
+      function (j) { clearTimeout(timer); return j },
+      function (e) { clearTimeout(timer); throw e })
   }
 
   // ── Документы и запросы ──

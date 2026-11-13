@@ -14,7 +14,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <!-- Слой данных: при переезде на свою базу подменяет firebase.firestore() на API (см. datalayer.js) -->
-<script src="datalayer.js?v=4"></script>
+<script src="datalayer.js?v=5"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -1639,7 +1639,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.11-admin2';
+const APP_VERSION = '11.13-nodup';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1689,6 +1689,12 @@ function personKey(email, phone){
 }
 let _trainersCache = [];    // all trainers from Firestore
 let grpSelectedStudents = []; // for group lesson modal
+// id новых документов выдаются при открытии окна, а не при нажатии «Записать»/«Создать».
+// Повторное нажатие после зависшего ответа перезаписывает ТОТ ЖЕ документ, а не создаёт копию
+// (12.11.2026: занятие у тренера без VPN записалось трижды). Ключ индив. — «почта|дата»:
+// сменил ученика или дату — это уже другое занятие.
+let _recLessonIds = {};
+let _newGrpId = null, _newGrpLessonIds = {};
 let editingGroupId = null;
 let _editGroupCache = {};
 let _priceOverrides = {};   // price (string) → { lessons, group }
@@ -3017,8 +3023,10 @@ async function submitLesson() {
   const btn = document.getElementById('rec-submit');
   btn.disabled = true; btn.textContent = 'Сохранение...';
 
+  const idKey = email + '|' + date;
+  if (!_recLessonIds[idKey]) _recLessonIds[idKey] = db.collection('lessons').doc().id;
   try {
-    await db.collection('lessons').add({
+    await db.collection('lessons').doc(_recLessonIds[idKey]).set({
       trainerId, trainerName,
       studentEmail: email,
       studentName:  s?.name || '',
@@ -3032,7 +3040,8 @@ async function submitLesson() {
     closeIndivModal();
     loadHomePage();
   } catch(e) {
-    toast('Ошибка: ' + e.message, 'err');
+    const net = e && (e.code === 'deadline-exceeded' || e.code === 'unavailable');
+    toast('Ошибка: ' + e.message + (net ? ' Повторное нажатие не создаст второе занятие.' : ''), 'err');
   }
   btn.disabled = false; btn.textContent = 'Записать занятие';
 }
@@ -3041,6 +3050,7 @@ async function submitLesson() {
 //  GROUP LESSONS
 // ══════════════════════════════════════════════
 function openIndivModal() {
+  _recLessonIds = {};
   clearStudent('rec');
   document.getElementById('rec-notes').value = '';
   document.getElementById('rec-date').value = localDateStr(new Date());
@@ -3175,6 +3185,7 @@ async function openGroupModal() {
   if (currentTrainer?.role !== 'admin') { toast('Групповые занятия создаёт администратор', 'err'); return; }
   _setGroupModalReadOnly(false);
   editingGroupId = null;
+  _newGrpId = null; _newGrpLessonIds = {};
   grpSelectedStudents = [];
   renderGrpTags();
   document.getElementById('grp-date').value = localDateStr(new Date());
@@ -3383,8 +3394,9 @@ async function submitGroupLesson() {
       return;
     }
 
-    // ── РЕЖИМ СОЗДАНИЯ ──
-    const grpRef = db.collection('groupLessons').doc();
+    // ── РЕЖИМ СОЗДАНИЯ ── (id постоянные на время окна: повтор не создаёт вторую группу)
+    if (!_newGrpId) _newGrpId = db.collection('groupLessons').doc().id;
+    const grpRef = db.collection('groupLessons').doc(_newGrpId);
     batch.set(grpRef, {
       trainerId, trainerName,
       _date: date, time, venue, format, notes, isPublic, regOpen, regOpensAt,
@@ -3403,7 +3415,8 @@ async function submitGroupLesson() {
 
     // Create individual lesson records for each student
     for (const s of grpSelectedStudents) {
-      const lesRef = db.collection('lessons').doc();
+      if (!_newGrpLessonIds[s.email]) _newGrpLessonIds[s.email] = db.collection('lessons').doc().id;
+      const lesRef = db.collection('lessons').doc(_newGrpLessonIds[s.email]);
       batch.set(lesRef, {
         trainerId, trainerName,
         studentEmail: s.email,
@@ -5096,7 +5109,7 @@ function toast(msg, type='ok'){
   const el=document.getElementById('toast');
   el.textContent=msg; el.className=`toast ${type} show`;
   if(_toastTimer)clearTimeout(_toastTimer);
-  _toastTimer=setTimeout(()=>el.classList.remove('show'),3000);
+  _toastTimer=setTimeout(()=>el.classList.remove('show'), type==='err' ? 8000 : 3000);   // ошибку успеть прочитать
 }
 
 // ══════════════════════════════════════════════
