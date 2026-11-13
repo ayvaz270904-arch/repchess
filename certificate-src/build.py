@@ -167,6 +167,10 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
       <input type="text" id="f-code" maxlength="24" placeholder="REP-XXXX-XX" style="text-transform:uppercase"></div>
     <div id="f-codes-box" style="display:none"><span class="lbl" id="f-codes-lbl">Коды</span><div class="codes" id="f-codes"></div>
       <div class="hint">На каждый код — свой сертификат, срок — как у промокода.</div></div>
+    <div id="f-locked" style="display:none"><span class="lbl">Из промокода</span>
+      <div class="codes" id="f-locked-text" style="font-family:inherit;font-size:13px"></div>
+      <div class="hint">Номинал и срок заданы промокодом — так их проверит бот. Свободный шаблон — кнопка «Пустой шаблон» в тренерке.</div></div>
+    <div id="f-free">
     <span class="lbl">Занятий</span>
     <div class="seg" id="f-nq"><button type="button" data-n="1">1</button><button type="button" data-n="4">4</button><button type="button" data-n="10">10</button><button type="button" data-n="">другое</button></div>
     <input type="number" id="f-n" min="1" max="99" style="margin-top:6px;display:none">
@@ -176,6 +180,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
     <div class="seg" id="f-format"><button type="button" data-v="online">онлайн</button><button type="button" data-v="offline">офлайн</button></div>
     <div id="f-until-box"><span class="lbl">Срок действия до</span>
       <input type="date" id="f-until"><div class="hint" id="f-until-hint"></div></div>
+    </div>
     <button class="go" type="button" id="b-png" onclick="RepCert.png()">Скачать картинку PNG</button>
     <button class="go" type="button" id="b-pdf" onclick="RepCert.print()">Скачать PDF</button>
     <button class="ghost" type="button" onclick="RepCert.copyLink()">Скопировать ссылку с этими данными</button>
@@ -191,7 +196,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
   const PACK_MONTHS = n => (n <= 1 ? 1 : n <= 4 ? 3 : 6)
   const MAX_TEXT_RIGHT = 2075            // правее — колонка с QR
   const CODE_RE = /^[A-Z0-9][A-Z0-9-]{0,23}$/
-  const st = { name: '', code: '', n: 4, kind: 'group', format: 'offline', until: '', named: true, codes: [], nOther: false, delivery: 'offline' }
+  const st = { name: '', code: '', n: 4, kind: 'group', format: 'offline', until: '', named: true, codes: [], nOther: false, delivery: 'offline', locked: false }
   const $ = id => document.getElementById(id)
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
   const ru = iso => (/^\d{4}-\d{2}-\d{2}$/.test(iso || '') ? iso.slice(8, 10) + '.' + iso.slice(5, 7) + '.' + iso.slice(0, 4) : '')
@@ -293,6 +298,15 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
     $('f-name-box').style.display = st.named ? '' : 'none'
     $('f-named-hint').textContent = st.named ? (batch ? 'Одно имя — на всех сертификатах пачки' : '') : 'Без строки «для кого» — сертификат на предъявителя'
     if (document.activeElement !== $('f-name')) $('f-name').value = st.name
+    // открыт по промокоду — номинал, срок и код закреплены
+    $('f-free').style.display = st.locked ? 'none' : ''
+    $('f-locked').style.display = st.locked ? '' : 'none'
+    if (st.locked) {
+      const p = phrases(st)
+      $('f-locked-text').innerHTML = esc(p.l1.replace(' в rep chess education', ''))
+        + (batch ? '' : '<br>срок до ' + esc(ru(st.until || defUntil(st.n))) )
+    }
+    $('f-code').readOnly = st.locked
     $('f-code-box').style.display = batch ? 'none' : ''
     $('f-codes-box').style.display = batch ? '' : 'none'
     if (batch) {
@@ -322,6 +336,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
     if (date(q.get('until'))) d.until = q.get('until')
     if (q.get('named') === '0') d.named = false
     if (q.get('delivery') === 'online') d.delivery = 'online'
+    if (q.has('code') || q.has('codes')) d.locked = true   // из тренерки по промокоду
     if (q.get('codes')) {
       d.codes = q.get('codes').split(',').slice(0, 200).map(s => {
         const [c, u] = s.trim().toUpperCase().split(':')

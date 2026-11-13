@@ -1850,7 +1850,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-cert';
+const APP_VERSION = '11.13-cert2';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -8519,6 +8519,7 @@ function renderCertCodes() {
       <option value="__all"${_certBatch === null ? ' selected' : ''}>Все пачки</option>
       ${batches.map(b => `<option value="${esc(b)}"${_certBatch === b ? ' selected' : ''}>${esc(b || 'Без названия')}</option>`).join('')}
     </select>
+    <button onclick="window.open('certificate.html','_blank')" title="Сертификат со свободными полями, без привязки к коду" style="${btnS};color:var(--text)">📄 Пустой шаблон</button>
     <button onclick="exportCertCsv()" style="${btnS};color:var(--text)">⬇ CSV${_certBatch !== null ? ' пачки' : ''}</button>
     ${free.length ? `<button onclick="toggleCertSelect()" style="${btnS};color:var(--text2)">${_certSelectMode ? '✕ Отменить выбор' : '☑ Выбрать коды → в архив'}</button>` : ''}
   </div>`;
