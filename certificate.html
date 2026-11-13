@@ -147,7 +147,8 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
     <div id="f-name-box"><input type="text" id="f-name" maxlength="60" placeholder="Имя и фамилия"></div>
     <div class="hint" id="f-named-hint"></div>
     <div id="f-code-box"><span class="lbl">Код (промокод)</span>
-      <input type="text" id="f-code" maxlength="24" placeholder="REP-XXXX-XX" style="text-transform:uppercase"></div>
+      <input type="text" id="f-code" maxlength="24" placeholder="REP-XXXX-XX" style="text-transform:uppercase">
+      <div class="hint" id="f-code-hint">Нового кода нет в базе — после скачивания он создастся сам (одноразовый, номинал — как ниже).</div></div>
     <div id="f-codes-box" style="display:none"><span class="lbl" id="f-codes-lbl">Коды</span><div class="codes" id="f-codes"></div>
       <div class="hint">На каждый код — свой сертификат, срок — как у промокода.</div></div>
     <div id="f-locked" style="display:none"><span class="lbl">Из промокода</span>
@@ -179,6 +180,9 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
   const PACK_MONTHS = n => (n <= 1 ? 1 : n <= 4 ? 3 : 6)
   const MAX_TEXT_RIGHT = 2075            // правее — колонка с QR
   const CODE_RE = /^[A-Z0-9][A-Z0-9-]{0,23}$/
+  // как _certNormJs в trainer.html: похожие русские буквы → латиница, остальное лишнее — убрать
+  const HOMO = { А: 'A', В: 'B', Е: 'E', Ё: 'E', К: 'K', М: 'M', Н: 'H', О: 'O', Р: 'P', С: 'C', Т: 'T', У: 'Y', Х: 'X' }
+  const normCode = v => String(v || '').toUpperCase().replace(/[А-ЯЁ]/g, ch => HOMO[ch] || ch).replace(/[^A-Z0-9-]/g, '').slice(0, 24)
   const st = { name: '', code: '', n: 4, kind: 'group', format: 'offline', until: '', named: true, codes: [], nOther: false, delivery: 'offline', locked: false }
   const $ = id => document.getElementById(id)
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
@@ -230,7 +234,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
   function render(d) {
     Object.assign(st, d || {})
     st.n = Math.max(1, Math.min(99, parseInt(st.n, 10) || 1))
-    st.code = String(st.code || '').toUpperCase().trim()
+    st.code = normCode(st.code)
     const list = items(), p = phrases(st), nm = (st.name || '').trim()
     build(list.length)
     scale()
@@ -290,6 +294,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
         + (batch ? '' : '<br>срок до ' + esc(ru(st.until || defUntil(st.n))) )
     }
     $('f-code').readOnly = st.locked
+    $('f-code-hint').style.display = st.locked ? 'none' : ''
     $('f-code-box').style.display = batch ? 'none' : ''
     $('f-codes-box').style.display = batch ? '' : 'none'
     if (batch) {
@@ -337,6 +342,28 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
     return location.origin + location.pathname + '?' + q.toString()
   }
 
+  // Пустой шаблон: вписанного кода нет в базе — после скачивания создаём его через вкладку тренерки,
+  // из которой открыт шаблон (у самого шаблона входа нет). Существующий код не трогаем.
+  async function ensureCode() {
+    if (st.locked || st.codes.length || !st.code) return
+    const op = window.opener
+    let fn = null
+    try { fn = op && !op.closed && typeof op.rcCertEnsureCode === 'function' ? op.rcCertEnsureCode : null } catch (e) {}
+    if (!fn) { $('f-msg').textContent = 'Код ' + st.code + ' в базе не проверен: шаблон открыт не из тренерки. Откройте «📄 Пустой шаблон» в тренерке.'; return }
+    $('f-msg').textContent = 'Проверяю код ' + st.code + '…'
+    try {
+      const r = await fn({ code: st.code, n: st.n, kind: st.kind, format: st.format })
+      if (r.status === 'created') {
+        $('f-msg').textContent = '✓ Промокод ' + r.code + ' создан: ' + r.nominal + ', срок — по пакету от сегодня.'
+          + (st.until && st.until !== defUntil(st.n) ? ' Внимание: на сертификате другой срок (' + ru(st.until) + ').' : '')
+      } else if (r.status === 'exists') {
+        $('f-msg').textContent = r.same
+          ? 'Промокод ' + r.code + ' уже есть в базе — не меняли.' + (r.used ? ' Он уже активирован!' : r.archived ? ' Он в архиве!' : '')
+          : '⚠ Промокод ' + r.code + ' уже есть с другим номиналом (' + r.nominal + ') — сертификат с ним не совпадает. В базе ничего не меняли.'
+      } else $('f-msg').textContent = 'Код не создан: ' + (r.message || 'ошибка')
+    } catch (e) { $('f-msg').textContent = 'Код не создан: ' + (e.message || e) }
+  }
+
   window.RepCert = {
     render,
     data: () => JSON.parse(JSON.stringify(st)),
@@ -349,6 +376,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
         : kind + ' ' + (list[0].code || '') + (st.named && st.name ? ' — ' + st.name : '')   // имя PDF-файла
       window.print()
       setTimeout(() => { document.title = t }, 1000)
+      await ensureCode()
     },
     // PNG онлайн-листа: лист со стилями, шрифтом и векторами — в SVG (foreignObject) → canvas → файл.
     // Всё уже вшито в страницу, сторонние библиотеки не нужны. Пачка — по картинке на код.
@@ -392,6 +420,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
           if (list.length > 1) await new Promise(r => setTimeout(r, 500))
         }
         $('f-msg').textContent = list.length > 1 ? 'Картинок: ' + list.length + ' — браузер может спросить разрешение на несколько загрузок' : ''
+        await ensureCode()
       } catch (e) {
         $('f-msg').textContent = 'Картинка не получилась: ' + (e.message || e) + '. Скачайте PDF.'
       } finally { btn.disabled = false; btn.textContent = was }
