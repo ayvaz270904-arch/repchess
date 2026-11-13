@@ -1850,7 +1850,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.13-cert2';
+const APP_VERSION = '11.13-cert3';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -8576,6 +8576,7 @@ function renderCertCodes() {
           <span class="dim" style="flex:1;font-size:.72rem">${c.batch ? esc(c.batch) + ' · ' : ''}${esc(c.kind || '')} ${esc(c.format || '')} ×${c.lessons || 0}</span>
           <span style="font-size:.72rem;white-space:nowrap"><b>${c.uses || 0}</b>${c.limit ? ' из ' + c.limit : ''} активаций · <span style="${soon ? 'color:var(--orange);font-weight:700' : 'opacity:.6'}">до ${_certDM(e)}</span></span>
           <button onclick="openCertPdf(['${escJs(c.id)}'])" title="Сертификат" style="${btnS};flex:none">📄</button>
+          <button onclick="archiveCert('${escJs(c.id)}')" title="Убрать в архив — код перестанет активироваться" style="${btnS};flex:none;color:var(--text2)">🗄</button>
         </div>`;
       }).join('') + `</div>`;
   }
@@ -8641,6 +8642,20 @@ async function archiveSelectedCerts() {
     toast(`В архив: ${ids.length} ✓`, 'ok');
   } catch(e) { toast('Ошибка: ' + e.message, 'err'); }
   renderCertCodes();
+}
+
+// Многоразовый код — в архив по одному (в режим «Выбрать коды» он не входит: там одноразовые).
+async function archiveCert(code) {
+  if (currentTrainer?.role !== 'admin') { toast('Только администратор', 'err'); return; }
+  const c = _certDocs.find(x => x.id === code);
+  if (!c || c.archived) return;
+  if (!confirm(`Убрать в архив код ${code}?\n\nОн перестанет активироваться. Кто уже ввёл — занятия сохранятся. Вернуть можно из архива.`)) return;
+  try {
+    await db.collection('certCodes').doc(code).update({ archived: true, archivedReason: 'manual', archivedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    c.archived = true; c.archivedReason = 'manual';
+    toast(`${code} — в архиве`, 'ok');
+    renderCertCodes();
+  } catch (e) { toast('Ошибка: ' + e.message, 'err'); }
 }
 
 async function unarchiveCert(code) {
