@@ -1,6 +1,6 @@
 // Версия сборки кабинета — уходит с каждым событием (?action=track&v=…), чтобы в «Пульсе
 // кабинета» падение раздела можно было связать с выкладкой. Менять при каждой заметной правке.
-export const APP_BUILD = '11.14-norating'
+export const APP_BUILD = '11.14-fields'
 
 // Бэкенд — тот же GAS веб-апп, что и у старого client.html.
 export const BACKEND =

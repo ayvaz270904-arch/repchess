@@ -2143,3 +2143,41 @@ body {
 .mascot-empty-txt {
   color: #3a3a3a;
 }
+
+/* 14.11: профиль — у каждого поля своя рамка (владелец: «не хватает разграничения полей»).
+   Раньше поля шли сплошным текстом под подписями. Рамку получает обёртка Input из telegram-ui. */
+.app-brand .field {
+  padding: 8px 16px 10px;
+}
+.app-brand .field + .field {
+  border-top: 0;
+}
+.app-brand .field > div[class*='tgui-']:has(input),
+.app-brand .field > div[class*='tgui-']:has(textarea) {
+  border: 1.5px solid #151515;
+  border-radius: var(--d-r-m, 10px) !important;
+  background: #fff;
+  box-shadow: none;
+}
+.app-brand .field > div[class*='tgui-'][aria-disabled='true'] {
+  border-color: #cfcfcf;
+  background: #f4f4f4;
+}
+.app-brand .field > div[class*='tgui-']:has(input:focus) {
+  border-color: #c94a42;
+}
+.app-brand .field-lbl {
+  color: #151515;
+  margin-bottom: 6px;
+}
+:root {
+  --d-r-m: 10px;
+}
+
+/* 14.11: короткая страница (пустая «История») не должна прокручиваться. В полноэкранном
+   Telegram на iOS 100vh бывает выше видимой области — страница уезжала на ~17 px, шапка
+   пряталась под чёрную плашку сверху и выглядела сдвинутой относительно других вкладок.
+   Высоту берём у Telegram (viewport.bindCssVars), 100vh — запасной вариант. */
+.app-scroll {
+  min-height: var(--tg-viewport-stable-height, 100vh);
+}

@@ -548,6 +548,15 @@ button,input,select,textarea{font-family:inherit;}
 
 .btn-write{border:1.5px solid #151515!important;color:#151515!important;text-decoration:none;font-weight:700;display:inline-flex;align-items:center;min-height:34px;border-radius:0!important;}
 .btn-write:hover{background:#151515!important;color:#fff!important;}
+/* 14.11: мягкие углы, как в кабинете (владелец: «острые углы — не вайб»). Перекрывает
+   «border-radius:0» дизайна D выше. Крупное — 12px, кнопки и поля — 10px, мелочь — 8px. */
+:root{--d-r:12px;--d-r-m:10px;--d-r-s:8px;}
+.card,.auth-card,.alert,.toast,.student-results,.stat-card{border-radius:var(--d-r)!important;}
+.card:has(.student-search-wrap) .card-head{border-radius:var(--d-r) var(--d-r) 0 0;}
+.btn-full,.btn-sm,.toggle-btn,.field-inp,.form-inp,.form-sel,.form-ta,.date-filter input,.copy-btn,.rate-act,.li-action,.fab-label,.btn-write,.dh-btn,.topbar .btn-sm,.topbar .trainer-badge,.trainer-badge{border-radius:var(--d-r-m)!important;}
+.note-chip,.day-chip,.slot-chip,.fmt-brush,.group-student-tag,.tag,.balance-badge,.attend-check{border-radius:var(--d-r-s)!important;}
+.modal{border-radius:16px 16px 0 0!important;}
+@media(min-width:600px){.modal{border-radius:16px!important;}}
 </style>
 </head>
 <body>
@@ -1872,7 +1881,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.14-arcdel';
+const APP_VERSION = '11.14-round';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
