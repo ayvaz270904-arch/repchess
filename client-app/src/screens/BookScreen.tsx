@@ -6,7 +6,8 @@ import { MascotEmpty } from '../ui/MascotEmpty'
 import { openUrl, haptic, selectionHaptic } from '../telegram/ui'
 import { fetchSlots, getCachedSlots, bookIndiv, joinGroup, leaveGroup, confirmDialog, track, safeAction, ApiError } from '../data'
 import { errText, isBalanceMismatch } from '../errors'
-import { plural, ratingLabel } from '../format'
+// 14.11: рейтинг тренеров клиентам не показываем (решение владельца); бот его по-прежнему отдаёт
+import { plural } from '../format'
 
 export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => void }) {
   // Стартуем из кэша (мгновенно, без спиннера), свежие слоты подтянем фоном.
@@ -114,7 +115,6 @@ export function BookScreen({ data, onReload }: { data: Cabinet; onReload: () => 
           <div>
             <div className="trainer-name">
               {slots.trainer}
-              {ratingLabel(slots.trainerRating) && <span className="tr-rating">{ratingLabel(slots.trainerRating)}</span>}
             </div>
             <div className="trainer-role">Ваш тренер · индивидуальные занятия</div>
           </div>
@@ -377,7 +377,6 @@ function GroupRow({
           <>
             {g.format === 'online' ? 'онлайн' : 'офлайн'}
             {g.trainerName ? ' · ' + g.trainerName : ''}
-            {g.trainerName && ratingLabel(g.trainerRating) && <span className="tr-rating">{ratingLabel(g.trainerRating)}</span>}
             {scarce && <span className="grp-left"> · осталось {left} {plural(left, 'место', 'места', 'мест')}</span>}
           </>
         }
