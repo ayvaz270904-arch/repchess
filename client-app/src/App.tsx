@@ -73,6 +73,17 @@ function lessonsWord(n: number): string {
   return 'занятий'
 }
 
+// Имя для приветствия. В базе ФИО обычно «Фамилия Имя» («Девяткин Егор»), но бывает и
+// «Имя Фамилия». Берём слово, которое НЕ похоже на фамилию по окончанию; одно слово — его.
+const SURNAME_END = /(ов|ова|ев|ева|ёв|ёва|ский|ская|цкий|цкая|ой|ая|ко|ук|юк|ян|дзе|швили|их|ых)$/i
+function firstName(full?: string): string {
+  const w = (full || '').trim().split(/\s+/).filter((x) => /[a-zа-яё]/i.test(x))
+  if (w.length <= 1) return w[0] || ''
+  if (SURNAME_END.test(w[0]) && !SURNAME_END.test(w[1])) return w[1]
+  if (SURNAME_END.test(w[1]) && !SURNAME_END.test(w[0])) return w[0]
+  return w[1] // по умолчанию в базе фамилия идёт первой
+}
+
 function todayShort(): string {
   const d = new Date()
   const p = (n: number) => String(n).padStart(2, '0')
@@ -87,7 +98,7 @@ function TabHeader({ tab, data }: { tab: Tab; data: Cabinet }) {
     const n = data.balanceTotal
     return (
       <DHeader tab="home" tall sticker="queen" right={todayShort()}>
-        <div className="dh-hello">{(data.name || '').split(' ')[0] || 'Привет'}, осталось</div>
+        <div className="dh-hello">{firstName(data.name) || 'Привет'}, осталось</div>
         <div className="dh-big">
           <b className={n < 0 && !noData ? 'debt' : ''}>{noData ? '—' : n}</b>
           <span>{noData ? 'нет данных' : lessonsWord(n)}</span>

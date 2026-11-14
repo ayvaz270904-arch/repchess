@@ -4,17 +4,10 @@ import sun from '../assets/star-sun.png'
 import checker from '../assets/star-checker.png'
 
 // Шапка дизайна D (11.11.2026): чёрная плашка, надпись REP CHESS EDUCATION, красная линия
-// «ходом коня» и полоса шахматных клеток снизу. Линия на всех экранах входит слева и выходит
-// справа на ОДНОЙ высоте (y=60), а ступенька у каждой вкладки своя — при переключении
-// разделов кажется, что линия продолжается с экрана на экран.
-// Ступенька задаётся в процентах ширины: экран Telegram бывает от 320 до 500+ px.
-const STEPS: Record<string, [number, number]> = {
-  home: [31, 77],
-  book: [15, 62],
-  events: [51, 67],
-  history: [10, 85],
-  profile: [28, 44],
-}
+// «ходом коня» и полоса шахматных клеток снизу. Ступенька в процентах ширины: экран Telegram
+// бывает от 320 до 500+ px.
+// 14.11: ступенька одна на всех вкладках (владелец: «полоса выглядит странно, сделать одинаково»)
+const STEP: [number, number] = [30, 70]
 
 export type Sticker = 'queen' | 'sun' | 'checker' | 'none'
 
@@ -33,7 +26,8 @@ export function DHeader({
   sticker?: Sticker
   tall?: boolean
 }) {
-  const [a, b] = STEPS[tab] || STEPS.home
+  void tab
+  const [a, b] = STEP
   return (
     <div className={'dh' + (tall ? ' dh-tall' : '')}>
       <div className="dh-black">

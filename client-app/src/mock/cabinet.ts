@@ -12,7 +12,7 @@ function evDay(offset: number): { date: string; label: string } {
 
 // Временные данные для превью всех экранов. На фазе бэкенда заменим на реальный ответ GAS.
 export const MOCK_CABINET: Cabinet = {
-  name: 'Александр',
+  name: 'Степанова Мария',
   role: 'ученик',
   balanceTotal: 12,
   nextExpiry: '30 сентября',

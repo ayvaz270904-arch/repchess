@@ -2088,3 +2088,58 @@ body {
 .dh-strip {
   border-bottom: 2px solid #151515;
 }
+
+/* 14.11: мягкие углы (владелец: «острые углы — не вайб»). Один радиус на кнопки и карточки,
+   поменьше — на мелкие значки. Перекрывает «border-radius: 0» блока D выше. */
+:root {
+  --d-r: 12px;
+  --d-r-s: 8px;
+}
+.d-btn,
+.d-next,
+.d-next-cancel,
+.d-cats,
+.fs-alert,
+.fs-alert.fs-alert-soft,
+.ev-banner,
+.stat-card,
+.home-tile,
+.trainer-card,
+.prof-header,
+.app-brand button[class*='tgui-'],
+.app-brand [class*='tgui-'][class*='wrapper'],
+.app-brand section[class*='tgui-'],
+.app-brand input,
+.app-brand textarea {
+  border-radius: var(--d-r) !important;
+}
+.d-cats {
+  overflow: hidden;
+}
+.fs-alert-btn,
+.ev-banner-btn,
+.ev-banner-chip,
+.day-chip,
+.ev-chip,
+.slot,
+.seg-wrap,
+.grp-act,
+.grp-prog,
+.pill,
+.ach,
+.prof-badge,
+.cell-icon {
+  border-radius: var(--d-r-s) !important;
+}
+.d-mark.group,
+.d-mark.indiv {
+  border-radius: 3px;
+}
+
+/* 14.11: звёзды в пустых состояниях — цветные в фирменном красном (серые на белом «грустно») */
+.mascot-empty img {
+  filter: none;
+}
+.mascot-empty-txt {
+  color: #3a3a3a;
+}
