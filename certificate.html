@@ -388,7 +388,7 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
       const wrap = document.createElement('div')
       wrap.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml')
       wrap.style.cssText = 'position:relative;width:2500px;height:1100px;margin:0'
-      wrap.innerHTML = '<style>' + css + '\n.canvas{zoom:1 !important}</style>' + $('defs').outerHTML
+      wrap.innerHTML = '<style>' + css + '\n.canvas{zoom:1 !important;background:transparent !important}</style>' + $('defs').outerHTML
       const sh = document.createElement('div')
       sh.className = 'sheet online'
       sh.style.cssText = 'position:relative;width:2500px;height:1100px;border-radius:0;box-shadow:none;aspect-ratio:auto'
@@ -402,7 +402,12 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
       await new Promise(r => setTimeout(r, 200))   // шрифт внутри картинки
       const cv = document.createElement('canvas')
       cv.width = 2500; cv.height = 1100
-      cv.getContext('2d').drawImage(img, 0, 0)
+      const ctx = cv.getContext('2d')
+      // фон-градиент рисуем на холсте отдельно: картинку-фон внутри SVG браузеры (Safari) пропускают
+      ctx.fillStyle = '#e8622c'; ctx.fillRect(0, 0, 2500, 1100)
+      const m = getComputedStyle(src).backgroundImage.match(/url\(["']?(.*?)["']?\)$/)
+      if (m) { const bgi = new Image(); bgi.src = m[1]; await bgi.decode(); ctx.drawImage(bgi, 0, 0, 2500, 1100) }
+      ctx.drawImage(img, 0, 0)
       return await new Promise(r => cv.toBlob(r, 'image/png'))
     },
     png: async () => {
