@@ -40,10 +40,21 @@ function pickFeatured(days: ScheduleDay[], today: string): FeaturedEvent | null 
   return fallback
 }
 
+// Понедельник текущей недели (YYYY-MM-DD) для даты today в том же формате
+function mondayOf(today: string): string {
+  const d = new Date(today + 'T12:00:00Z')
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7))
+  return d.toISOString().slice(0, 10)
+}
+
 export function EventsScreen({ data }: { data: Cabinet }) {
-  const s = data.schedule
   // Сегодняшняя дата в формате YYYY-MM-DD по МСК — совпадает с d.date из расписания
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow' }).format(new Date())
+  // Бот отдаёт сохранённое расписание целиком, пока не прошёл его последний день. Если пост
+  // захватил понедельник следующей недели, в понедельник висела вся прошлая неделя.
+  // Прошедшие дни показываем только с понедельника текущей недели.
+  const weekStart = mondayOf(today)
+  const s = data.schedule && { ...data.schedule, days: data.schedule.days.filter((d) => d.date >= weekStart) }
 
   if (!s || !s.days.length) {
     return (

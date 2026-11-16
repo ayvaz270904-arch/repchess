@@ -56,6 +56,20 @@ export function HomeScreen({
     }
   }
 
+  // Поле промокода появляется под ссылками — на телефоне это ниже экрана, за нижним меню.
+  // Поэтому после открытия прокручиваем к нему и ставим курсор.
+  function openCert() {
+    haptic()
+    const next = !showCert
+    setShowCert(next)
+    if (!next) return
+    setTimeout(() => {
+      const row = document.querySelector('.cert-row')
+      row?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      ;(row?.querySelector('input') as HTMLInputElement | null)?.focus({ preventScroll: true })
+    }, 60)
+  }
+
   async function cancel(u: UpcomingLesson) {
     const ok = await confirmDialog(`Отменить занятие ${u.date}${u.time ? ' · ' + u.time : ''}?`)
     if (!ok) return
@@ -136,7 +150,7 @@ export function HomeScreen({
         <div className="d-actions-row">
           {/* «Промокод», а не «сертификат»: код один и тот же (REP-XXXX-XX, action=redeemCert),
               но клиенты получают его как промокод — под этим словом и ищут. */}
-          <button className="d-link" onClick={() => { haptic(); setShowCert((v) => !v) }}>
+          <button className="d-link" onClick={openCert}>
             Ввести промокод
           </button>
           {data.refLink && (
@@ -166,6 +180,13 @@ export function HomeScreen({
           </div>
         )}
         {certMsg && <div className="section-note">{certMsg}</div>}
+        {/* Условия те же, что в боте (/invite и _maybeReferralReward в gas/bot.gs): бонус
+            начисляется один раз за друга, при его первой платной покупке. */}
+        {data.refLink && (
+          <div className="d-ref-note">
+            Пригласите друга по своей ссылке. Когда он оплатит первое занятие, вам начислим бесплатное групповое онлайн-занятие.
+          </div>
+        )}
       </div>
     </div>
   )

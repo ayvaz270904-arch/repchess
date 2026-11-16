@@ -2181,3 +2181,115 @@ body {
 .app-scroll {
   min-height: var(--tg-viewport-stable-height, 100vh);
 }
+
+/* 16.11: пояснение про приглашение друга под ссылками на Главной */
+.d-ref-note {
+  margin: -2px 4px 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #5c5c5c;
+  text-align: center;
+}
+/* 16.11: поле промокода — с рамкой, как поля Профиля; без лишнего отступа внутри .d-actions */
+.app-brand .cert-row { padding: 0; align-items: stretch; }
+.app-brand .cert-row .cert-inp { border: 1.5px solid #151515; border-radius: var(--d-r-m, 10px) !important; background: #fff; box-shadow: none; }
+.app-brand .cert-row .cert-inp:has(input:focus) { border-color: #c94a42; }
+.app-brand .cert-row > button { border-radius: var(--d-r-m, 10px) !important; min-width: 72px; }
+.app-brand .d-actions .section-note { padding: 0 4px; }
+/* 16.11: заголовки разделов Профиля — крупнее подписей полей, чтобы не путались с ними */
+.app-brand .d-cap.prof-cap {
+  margin: 28px 18px 2px;
+  font: 800 19px 'Onest', sans-serif;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #151515;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-brand .d-cap.prof-cap::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background: #c94a42;
+  border-radius: 3px;
+}
+/* 16.11: переключатели (Офлайн/Онлайн в Записи, Пол в Профиле) — с рамкой, как поля и кнопки.
+   Классы telegram-ui хэшированные, поэтому дорожку ищем по строению: div, в котором
+   первым идёт ползунок (div), а за ним кнопки. */
+.app-brand :is(.seg-wrap, .field) div:has(> div:first-child + button) {
+  border: 1px solid #151515;
+  border-radius: var(--d-r-m, 10px) !important;
+  background: #fff;
+  padding: 3px;
+}
+.app-brand :is(.seg-wrap, .field) div:has(> div:first-child + button) > div:first-child {
+  border: 1px solid #151515;
+  border-radius: var(--d-r-s, 8px) !important;
+  box-shadow: none;
+  background: #f3e3e1;
+}
+/* 16.11: правая колонка с «Записаться» + «с другом» выше текста строки и при выравнивании
+   по центру вылезала на разделитель сверху. Даём колонке поля — строка растёт сама. */
+.grp-after {
+  padding: 10px 0 4px;
+}
+/* 16.11: рамка переключателя одинаковой толщины со всех сторон — у выбранного варианта
+   своей рамки нет (рядом с внешней она давала двойную линию слева), только заливка. */
+.app-brand :is(.seg-wrap, .field) div:has(> div:first-child + button) {
+  padding: 0;
+  overflow: hidden;
+}
+.app-brand :is(.seg-wrap, .field) div:has(> div:first-child + button) > div:first-child {
+  border: 0;
+  border-radius: 0 !important;
+  top: 0;
+  bottom: 0;
+  height: 100%;
+}
+/* 16.11: разделитель между разделами Профиля — тонкая линия над заголовком раздела
+   (у первого раздела линии нет: над ним шапка профиля). */
+.app-brand .prof-cap ~ .prof-cap {
+  border-top: 1px solid #d0d0d0;
+  margin-top: 22px;
+  padding-top: 22px;
+}
+/* линия во всю ширину, как разделители полей; текст заголовка остаётся на месте */
+.app-brand .prof-cap ~ .prof-cap {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 18px;
+  padding-right: 18px;
+}
+/* У выбранного варианта — скруглённый край с линией со стороны соседнего варианта.
+   Линию рисуем тенью наружу: сверху, снизу и с внешней стороны её обрезает рамка
+   переключателя (overflow: hidden), поэтому внешняя рамка не двоится. */
+.app-brand :is(.seg-wrap, .field) div:has(> div:first-child + button) > div:first-child {
+  border-radius: calc(var(--d-r-m, 10px) - 1px) !important;
+  box-shadow: 0 0 0 1px #151515 !important;
+}
+/* Симметрично: выбранный вариант — отдельная скруглённая плашка с линией по кругу и
+   одинаковым отступом 3px от рамки со всех сторон. Сам ползунок telegram-ui (ширина 50%
+   и сдвиг translateX задаёт библиотека) делаем прозрачным, плашку рисуем ::after внутри. */
+.app-brand :is(.seg-wrap, .field) div:has(> div:first-child + button) > div:first-child {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+.app-brand :is(.seg-wrap, .field) div:has(> div:first-child + button) > div:first-child::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid #151515;
+  border-radius: calc(var(--d-r-m, 10px) - 3px);
+  background: #f3e3e1;
+}
+/* 16.11: на «Истории» справа счётчик в две строки (число + подпись) выше заголовка; при
+   выравнивании по низу заголовок съезжал на 14px ниже, чем на других вкладках.
+   Выравниваем по верху — заголовок стоит на одной высоте на всех вкладках. */
+.dh-body { align-items: flex-start; }
+.dh-count span { display: block; line-height: 1.2; margin-top: 2px; }
+/* 16.11: первый блок под шахматной полосой — на одном расстоянии (18px) на всех вкладках:
+   было Главная/Афиша 18, История 16, Профиль 14. */
+.app-brand .stat-strip { padding-top: 8px; }
+.app-brand .prof-header { margin-top: 8px; }

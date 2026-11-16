@@ -234,18 +234,12 @@ export function ProfileScreen({
         </>
       )}
 
-      <Section footer="Анкета помогает подбирать занятия под уровень. Если ученику меньше 18 лет — анкету заполняет родитель или законный представитель, укажите данные ученика.">
+      {/* Анкета разбита на разделы: одной длинной колонкой поля сливались. Заголовок раздела —
+          свой div, а не header у Section (тот липнет к первой ячейке, см. BookScreen). */}
+      <div className="d-cap prof-cap">Ученик</div>
+      <Section>
         <Field label="ФИО">
           <Input value={fio} onChange={(e) => setFio(e.currentTarget.value)} placeholder="Иванов Иван" />
-        </Field>
-        <Field label="Почта" hint={emailHint}>
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.currentTarget.value)}
-            placeholder="you@mail.ru"
-            disabled={emailLocked}
-          />
         </Field>
         <Field label="Дата рождения" hint="для поздравлений и подарков 🎁">
           <Input
@@ -254,9 +248,6 @@ export function ProfileScreen({
             onChange={(e) => setBirthdate(maskBdate(e.currentTarget.value))}
             placeholder="дд.мм.гггг"
           />
-        </Field>
-        <Field label="Город">
-          <Input value={city} onChange={(e) => setCity(e.currentTarget.value)} placeholder="Москва" />
         </Field>
         <Field label="Пол">
           <SegmentedControl>
@@ -268,6 +259,26 @@ export function ProfileScreen({
             </SegmentedControl.Item>
           </SegmentedControl>
         </Field>
+      </Section>
+
+      <div className="d-cap prof-cap">Контакты</div>
+      <Section>
+        <Field label="Почта" hint={emailHint}>
+          <Input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.currentTarget.value)}
+            placeholder="you@mail.ru"
+            disabled={emailLocked}
+          />
+        </Field>
+        <Field label="Город">
+          <Input value={city} onChange={(e) => setCity(e.currentTarget.value)} placeholder="Москва" />
+        </Field>
+      </Section>
+
+      <div className="d-cap prof-cap">Шахматы</div>
+      <Section footer="Анкета помогает подбирать занятия под уровень. Если ученику меньше 18 лет — анкету заполняет родитель или законный представитель, укажите данные ученика.">
         <Field label="Уровень игры">
           <Input value={level} onChange={(e) => setLevel(e.currentTarget.value)} placeholder="1400 lichess / новичок" />
         </Field>
@@ -275,6 +286,7 @@ export function ProfileScreen({
 
       {/* Номер, по которому кабинет ищет оплаты. Показываем всем: человек должен видеть,
           по какому номеру его ищут, — иначе пустой баланс выглядит как поломка. */}
+      {!gate && <div className="d-cap prof-cap">Оплаты</div>}
       {!gate && (
         <Section footer="Оплаты с сайта кабинет ищет по этому номеру. Если оформляли на другой — укажите его: администратор сверит и привяжет покупки.">
           <div className="field">
