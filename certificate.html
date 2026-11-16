@@ -244,6 +244,10 @@ body{background:var(--paper);color:var(--ink);font:15px/1.4 Onest,system-ui,sans
       if (st.delivery === 'online') {
         q('.x-cap1').textContent = list.length > 1 ? (i + 1) + ' из ' + list.length + ' · ' + it.code : 'Онлайн-сертификат'
         q('.x-of').innerHTML = esc(p.f1) + '<br>' + esc(p.f2) + '<br>в Rep Chess Education'
+        // «на посещение 4 индивидуальных» не влезало до края: правый край текста держим
+        // на уровне логотипа (2450), при длинной строке уменьшаем кегль с 44px
+        { const of = q('.x-of'); let fs = 44; of.style.fontSize = fs + 'px'
+          while (of.scrollWidth > 2450 - 1880 && fs > 30) { fs -= 1; of.style.fontSize = fs + 'px' } }
         const w = q('.x-who')
         w.style.display = st.named ? '' : 'none'
         w.innerHTML = 'для кого: ' + (nm ? esc(nm) : '<span class="ph">Имя Фамилия</span>')
