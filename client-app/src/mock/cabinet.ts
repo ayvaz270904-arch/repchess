@@ -65,29 +65,30 @@ export const MOCK_CABINET: Cabinet = {
   // должно выглядеть в кабинете (прошедшее приглушено, «Сегодня» в полоске дней).
   schedule: {
     days: [
+      // Как в настоящем посте: ссылка на названии события — на пост канала или сразу на билеты
       { ...evDay(-1), items: [
-        { time: '20:00', title: 'шахматный турнир для начинающих в Кривоколенном', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
+        { time: '20:00', title: 'турнир для начинашек в Кривоколенном', url: 'https://t.me/RepChessEducation/2023' },
       ] },
       { ...evDay(0), items: [
-        { time: '20:00', title: 'обучение шахматам с нуля в Пешке', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
+        { time: '19:00', title: 'Основы шахмат в Музее Москвы', url: 'https://mosmuseum.ru/events/p/shahmaty-s-nulya/' },
+        { time: '19:00', title: 'обучение шахматам с нуля в Пешке', url: 'https://t.me/RepChessEducation/2026' },
+        { time: '20:00', title: 'турнир в Yauza Place', url: 'https://chess17.ticketscloud.org/' },
       ] },
       { ...evDay(1), items: [
-        { time: '19:30', title: 'шведки в Trend Island', url: 'https://t.me/repchess' },
-        { time: '20:00', title: 'обучение шахматам для начинающих в Пешке', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
-      ] },
-      { ...evDay(3), items: [
-        { time: '13:00', title: 'турнир для начинающих в МИРА бистро', url: 'https://t.me/repchess' },
-        { time: '15:00', title: 'занятие «Шахматы с нуля» в КУБе', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
+        { time: '20:00', title: 'занятие для уверенных начинающих в Пешке' },
       ] },
       { ...evDay(4), items: [
-        { time: '14:00', title: 'занятие по шахматам для начинающих в Yauza Place', ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты' },
-        { time: '15:00', title: 'сеанс одновременной игры на фестивале «Фонарик»', url: 'https://t.me/repchess' },
+        { time: '11:00', title: 'обучение с нуля в Mátes', url: 'https://repchess.ru/tournaments/shahmaty-s-nulya-2026-msk-3' },
+        { time: '15:00', title: '«Шахматы с нуля» в КУБе' },
+      ] },
+      { ...evDay(5), items: [
+        { time: '14:00', title: 'шахматы для начинающих в Yauza Place', url: 'https://chess22.ticketscloud.org/' },
       ] },
     ],
     featured: {
-      ...evDay(4), time: '14:00',
-      title: 'занятие по шахматам для начинающих в Yauza Place',
-      ticketUrl: 'https://edu.repchess.ru', ticketLabel: 'Билеты', manual: false,
+      ...evDay(0), time: '20:00',
+      title: 'турнир в Yauza Place',
+      url: 'https://chess17.ticketscloud.org/', ticketUrl: '', ticketLabel: '', manual: false,
     },
     note: { text: 'Приведи друга — занятие в подарок', url: 'https://edu.repchess.ru' },
     postUrl: 'https://t.me/RepChessEducation',

@@ -40,6 +40,15 @@ function pickFeatured(days: ScheduleDay[], today: string): FeaturedEvent | null 
   return fallback
 }
 
+// В посте канала ссылка обычно стоит прямо на названии события, отдельной строки
+// «🎟 билеты» нет — поэтому кнопка не появлялась. Ссылка не на Telegram (ticketscloud,
+// сайт музея, repchess.ru) — это и есть страница билетов/записи: показываем кнопку.
+// Ссылка на пост канала — описание события, остаётся стрелкой.
+function withTicket<T extends { url?: string; ticketUrl?: string; ticketLabel?: string }>(it: T): T {
+  if (it.ticketUrl || !it.url || /^https?:\/\/(t\.me|telegram\.me)\//i.test(it.url)) return it
+  return { ...it, ticketUrl: it.url, ticketLabel: 'Билеты' }
+}
+
 // Понедельник текущей недели (YYYY-MM-DD) для даты today в том же формате
 function mondayOf(today: string): string {
   const d = new Date(today + 'T12:00:00Z')
@@ -54,7 +63,13 @@ export function EventsScreen({ data }: { data: Cabinet }) {
   // захватил понедельник следующей недели, в понедельник висела вся прошлая неделя.
   // Прошедшие дни показываем только с понедельника текущей недели.
   const weekStart = mondayOf(today)
-  const s = data.schedule && { ...data.schedule, days: data.schedule.days.filter((d) => d.date >= weekStart) }
+  const s = data.schedule && {
+    ...data.schedule,
+    days: data.schedule.days
+      .filter((d) => d.date >= weekStart)
+      .map((d) => ({ ...d, items: d.items.map(withTicket) })),
+    featured: data.schedule.featured && withTicket(data.schedule.featured),
+  }
 
   if (!s || !s.days.length) {
     return (
