@@ -1727,6 +1727,11 @@ body {
 .d-cat:nth-child(n + 3) {
   border-top: 1.5px solid #151515;
 }
+/* Нечётная последняя клетка (3 вида из 4) — на всю ширину, иначе справа зияла
+   пустая клетка с обрывком рамки (замечание владельца 18.11.2026). */
+.d-cat:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
 .d-cat-lbl {
   display: flex;
   align-items: center;
