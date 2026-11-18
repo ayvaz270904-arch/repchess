@@ -1769,6 +1769,7 @@ button,input,select,textarea{font-family:inherit;}
         <div style="background:color-mix(in srgb, var(--orange) 8%, transparent);border:1px solid color-mix(in srgb, var(--orange) 25%, transparent);border-radius:10px;padding:10px 14px;font-size:.82rem;color:var(--orange)">⚠️ <span id="attend-mismatch-text"></span></div>
       </div>
       <button class="btn-full btn-gold" id="attend-approve-btn" onclick="approveAttendance()" style="background:var(--green);margin-bottom:8px">✅ Подтвердить занятие</button>
+      <button class="btn-full btn-ghost" id="attend-unmark-btn" onclick="unmarkAttendance(document.getElementById('attend-group-id').value)" style="display:none;color:var(--accent);margin-bottom:8px">↩ Снять отметку</button>
     </div>
 
     <button class="btn-full btn-ghost" onclick="_closeModal('attend-modal')">Закрыть</button>
@@ -1893,7 +1894,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.18-attstart';
+const APP_VERSION = '11.18-unmark';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -3386,6 +3387,7 @@ function _renderGrpAttendBlock(g) {
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:8px 14px">
         ${rows || '<div class="dim" style="font-size:.8rem;padding:4px 0">Список пуст</div>'}${extraRows}
       </div>
+      ${isAdmin ? `<button type="button" onclick="unmarkAttendance('${g.id}')" style="margin-top:8px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--accent);padding:9px 12px;font-size:.8rem;font-weight:700;cursor:pointer;width:100%">↩ Снять отметку</button>` : ''}
       ${isAdmin ? `<button type="button" onclick="closeGroupModal();openAttendModal('${g.id}')" style="margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--accent);padding:9px 12px;font-size:.8rem;font-weight:700;cursor:pointer;width:100%">📋 Изменить посещаемость</button>` : ''}
     </div>`;
 }
@@ -7520,8 +7522,9 @@ async function openAttendModal(groupId) {
     } else {
       listEl.innerHTML = expectedEmails.map((email, i) => {
         const name = expectedNames[i] || email;
+        const on = _attDefaultOn(g, email);
         return `<div class="attend-row" data-attend-email="${esc(email)}">
-          <div class="attend-check on" onclick="toggleAttend(this)">✓</div>
+          <div class="attend-check${on ? ' on' : ''}" onclick="toggleAttend(this)">${on ? '✓' : ''}</div>
           <div style="flex:1;min-width:0">
             <div style="font-weight:600;font-size:.88rem">${esc(name)}</div>
           </div>
@@ -7543,6 +7546,7 @@ async function openAttendModal(groupId) {
     readonlyView.style.display  = 'none';
     adminControls.style.display = '';
     statusBanner.style.display  = submitted ? '' : 'none';
+    document.getElementById('attend-unmark-btn').style.display = submitted ? '' : 'none';
 
     if (submitted) {
       statusBanner.style.background = approved ? 'color-mix(in srgb, var(--green) 10%, transparent)' : 'color-mix(in srgb, var(--accent2) 10%, transparent)';
@@ -7560,7 +7564,7 @@ async function openAttendModal(groupId) {
     } else {
       listEl.innerHTML = expectedEmails.map((email, i) => {
         const name = expectedNames[i] || email;
-        const checked = submitted ? alreadyAttended.includes(email) : true;
+        const checked = submitted ? alreadyAttended.includes(email) : _attDefaultOn(g, email);
         const s = students.find(x => x.email === email);
         const contactHtml = s?.phone ? `<span style="font-size:.7rem;color:var(--text2)">${esc(s.phone)}</span>` : '';
         return `<div class="attend-row" data-attend-email="${esc(email)}">
@@ -7943,6 +7947,10 @@ async function submitAttendance() {
     const existingExtraNames = new Set(
       indSnap.docs.filter(d => d.data().isExtraAttendee).map(d => d.data().studentName)
     );
+    indSnap.docs.forEach(d => {   // запись осталась от снятой отметки — вернуть в «был», id тот же (отзывы не задвоятся)
+      const x = d.data();
+      if (x.isExtraAttendee && x.status !== 'done' && extraMatched.some(m => m.name === x.studentName)) batch.update(d.ref, { status: 'done', attended: true });
+    });
     for (const m of extraMatched) {
       if (!existingExtraNames.has(m.name)) {
         const ref = db.collection('lessons').doc();
@@ -8002,6 +8010,65 @@ async function submitAttendance() {
     toast('Ошибка: ' + e.message, 'err');
     btn.disabled = false;
     btn.textContent = isAdmin ? 'Сохранить изменения' : 'Отправить отметки администратору';
+  }
+}
+
+// ── АДМИНИСТРАТОР: снять отметку посещаемости (18.11.2026) ──
+// Отметка закрывает запись в боте. Снять — открыть запись снова и вернуть списания:
+// записи занятий этой группы → «cancelled» (не списывают, кабинет и бот их не показывают),
+// гостевые списания удаляются (при новой отметке они всё равно пересобираются начисто).
+// Записи не удаляем, чтобы при новой отметке обновились те же документы — по их id бот
+// помнит, кого уже спрашивал об отзыве. Кто был отмечен (attendedEmails, extraRaw,
+// guestCharges) остаётся в карточке группы — при новой отметке галочки встанут сами.
+function _attDefaultOn(g, email) {
+  const u = g && g.attUnmark;
+  if (!u) return true;
+  // Записавшиеся после снятия отметки — по умолчанию «был», как у обычной новой отметки
+  return (g.attendedEmails || []).includes(email) || !(u.expected || []).includes(email);
+}
+async function unmarkAttendance(groupId) {
+  if (currentTrainer?.role !== 'admin') { toast('Снять отметку может только админ', 'err'); return; }
+  let g = _editGroupCache[groupId];
+  try {
+    const doc = await db.collection('groupLessons').doc(groupId).get();
+    if (!doc.exists) { toast('Занятие не найдено', 'err'); return; }
+    g = { id: doc.id, ...doc.data() };
+  } catch (e) { toast('Ошибка: ' + e.message, 'err'); return; }
+  if (!g.attendanceMarked) { toast('Посещаемость у этого занятия не отмечена', 'ok'); return; }
+  let snap;
+  try { snap = await db.collection('lessons').where('groupLessonId', '==', groupId).get(); }
+  catch (e) { toast('Ошибка: ' + e.message, 'err'); return; }
+  const burned = snap.docs.filter(d => d.data().status === 'done').length;
+  const dt = g._date ? new Date(g._date + 'T12:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : '';
+  if (!confirm(`Снять отметку посещаемости — ${g.venue || 'группа'}, ${dt}${g.time ? ' ' + g.time : ''}?\n\n`
+    + `• Запись в боте снова откроется.\n`
+    + `• Вернётся списанных занятий: ${burned}.\n`
+    + `• Кто был отмечен — сохранится: при новой отметке галочки встанут сами.\n\n`
+    + `После занятия посещаемость нужно отметить заново.`)) return;
+  try {
+    const batch = db.batch();
+    const upd = {
+      attendanceMarked: false, adminApproved: false, mismatch: false, mismatchNote: '',
+      attUnmark: { at: new Date().toISOString(), by: currentTrainer?.name || '', expected: (g.studentEmails || []).slice() },
+    };
+    batch.update(db.collection('groupLessons').doc(groupId), upd);
+    snap.docs.forEach(d => {
+      const x = d.data();
+      if (x.isGuestCharge) batch.delete(d.ref);
+      else if (x.status !== 'cancelled') batch.update(d.ref, { status: 'cancelled', attended: false });
+    });
+    await batch.commit();
+    const updatedG = { ...g, ...upd };
+    _editGroupCache[groupId] = updatedG;
+    _patchGroupCaches(groupId, updatedG, null);
+    try { sessionStorage.removeItem('repchess_used_v1'); } catch (e) {}
+    _enrichedAt = 0;   // остатки учеников пересчитать при следующем показе
+    toast(`Отметка снята — запись открыта, списаний возвращено: ${burned}`, 'ok');
+    if (document.getElementById('attend-modal')?.style.display !== 'none') _closeModal('attend-modal');
+    if (document.getElementById('group-modal')?.style.display !== 'none' && typeof closeGroupModal === 'function') closeGroupModal();
+    loadHomePage(true);
+  } catch (e) {
+    toast('Не получилось снять отметку: ' + (e.message || e), 'err');
   }
 }
 
