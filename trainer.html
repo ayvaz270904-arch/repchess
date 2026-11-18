@@ -1893,7 +1893,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.16-dt24';
+const APP_VERSION = '11.18-attstart';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -2066,6 +2066,15 @@ function getLessonFlags(l) {
 }
 
 // Групповое занятие
+// Началось ли групповое занятие (по Москве). Посещаемость можно отмечать только после начала
+// (решение владельца 18.11.2026): отметка закрывает запись в боте, а 18.11 её поставили
+// в 16:55 при занятии в 20:00 — записаться больше никто не смог. Без времени — с начала дня.
+function _grpStarted(g) {
+  if (!g || !g._date) return false;
+  const now = new Date().toLocaleString('sv-SE', { timeZone: 'Europe/Moscow' }).slice(0, 16).replace(' ', 'T');
+  const t = /^\d{1,2}:\d{2}$/.test(g.time || '') ? g.time.padStart(5, '0') : '00:00';
+  return now >= g._date + 'T' + t;
+}
 function getGroupFlags(g) {
   const today        = localDateStr(new Date());
   const isAdmin      = currentTrainer.role === 'admin';
@@ -2073,10 +2082,11 @@ function getGroupFlags(g) {
   const approved     = !!g.adminApproved;
   const pastDate     = g._date && g._date <= today;
   const hasMismatch  = submitted && _groupHasMismatch(g);
-  const needsAttend  = !submitted && pastDate && (g.studentEmails||[]).length > 0;
+  const started      = _grpStarted(g);
+  const needsAttend  = !submitted && started && (g.studentEmails||[]).length > 0;
   const needsApproval = isAdmin && submitted && !approved;
   const canEdit      = isAdmin;   // групповые создаёт/правит только админ; тренер отмечает посещаемость
-  return { submitted, approved, pastDate, hasMismatch, needsAttend, needsApproval, canEdit, isAdmin };
+  return { submitted, approved, pastDate, started, hasMismatch, needsAttend, needsApproval, canEdit, isAdmin };
 }
 
 // ══════════════════════════════════════════════
@@ -2790,7 +2800,7 @@ function groupFeedItemHTML(g) {
   const d = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'short'}) : '—';
   const names = (g.studentNames||[]).slice(0,3).join(', ') + ((g.count||0)>3 ? ` и ещё ${g.count-3}` : '');
   const { submitted, approved, pastDate, hasMismatch, needsAttend, needsApproval, canEdit, isAdmin } = getGroupFlags(g);
-  const canMark = !submitted && (pastDate || currentTrainer.role==='admin');
+  const canMark = !submitted && getGroupFlags(g).started;   // и админу — только после начала
   const bigTime  = g.time ? esc(g.time) : d;
   const smallDay = g.time ? d : '';
   const showLinks = g.format==='online' && (currentTrainer.role==='admin' || g.trainerId===currentUser.uid);
@@ -3766,7 +3776,7 @@ async function loadGroupLessons() {
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           ${isAdmin?`<span class="dim" style="font-size:.75rem">${esc(g.trainerName||'')}</span>`:''}
-          ${!submitted && (pastDate || isAdmin)
+          ${!submitted && getGroupFlags(g).started
             ? `<button onclick="openAttendModal('${gid}')" style="background:color-mix(in srgb, var(--green) 12%, transparent);border:1px solid color-mix(in srgb, var(--green) 30%, transparent);border-radius:8px;color:var(--green);font-size:.75rem;padding:5px 9px;cursor:pointer;white-space:nowrap">📋 Посещ.</button>`
             : submitted
               ? `<button onclick="openAttendModal('${gid}')" style="background:${needsApproval?'color-mix(in srgb, var(--accent2) 15%, transparent)':'none'};border:1px solid ${needsApproval?'color-mix(in srgb, var(--accent2) 40%, transparent)':'var(--border)'};border-radius:8px;color:${needsApproval?'var(--accent2)':'var(--text2)'};font-size:.75rem;padding:5px 9px;cursor:pointer">${needsApproval?'✅ Подтвердить':'👁 Просмотр'}</button>`
@@ -7413,6 +7423,9 @@ async function saveGroupLinks() {
   btn.disabled = false; btn.textContent = 'Сохранить';
 }
 
+function _grpNotStartedMsg(g) {
+  return 'Посещаемость можно отметить после начала занятия' + (g.time ? ' — с ' + g.time : '') + '. До этого ученики ещё записываются.';
+}
 async function openAttendModal(groupId) {
   let g = _editGroupCache[groupId];
   if (!g) {
@@ -7424,6 +7437,7 @@ async function openAttendModal(groupId) {
     } catch(e) { toast('Ошибка: ' + e.message, 'err'); return; }
   }
 
+  if (!g.attendanceMarked && !_grpStarted(g)) { toast(_grpNotStartedMsg(g), 'err'); return; }
   await _enrichStudentsWithRemaining();   // остатки должны быть посчитаны до показа бейджей
   document.getElementById('attend-group-id').value = groupId;
   const dt = g._date ? new Date(g._date+'T12:00:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long'}) : '';
@@ -7833,6 +7847,7 @@ async function submitAttendance() {
   const groupId = document.getElementById('attend-group-id').value;
   const g = _editGroupCache[groupId];
   if (!g) { toast('Ошибка: занятие не найдено', 'err'); return; }
+  if (!g.attendanceMarked && !_grpStarted(g)) { toast(_grpNotStartedMsg(g), 'err'); return; }
 
   const isAdmin = currentTrainer.role === 'admin';
   const expectedEmails = [...(g.studentEmails || []), ..._attendNewExpected.map(s=>s.email)];
@@ -7995,6 +8010,7 @@ async function approveAttendance() {
   const groupId = document.getElementById('attend-group-id').value;
   const g = _editGroupCache[groupId];
   if (!g) { toast('Ошибка', 'err'); return; }
+  if (!g.attendanceMarked && !_grpStarted(g)) { toast(_grpNotStartedMsg(g), 'err'); return; }
 
   const btn = document.getElementById('attend-approve-btn');
   btn.disabled = true; btn.textContent = 'Подтверждение...';
