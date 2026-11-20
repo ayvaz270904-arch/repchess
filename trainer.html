@@ -44,6 +44,20 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .btn-full{width:100%;padding:13px;border-radius:10px;border:none;cursor:pointer;font-size:.95rem;font-weight:700;transition:all .15s;}
 /* Кнопки карточки группы — одной высоты (эмодзи 📋/🗑 раздували строку; 18.11.2026) */
 #group-modal .btn-full{height:48px;padding:0 13px;line-height:1;display:flex;align-items:center;justify-content:center;gap:6px;}
+/* 20.11.2026: повторы групповых и серия */
+.toggle-group.grp-rep-tg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.toggle-group.grp-rep-tg .toggle-btn{width:100%;text-align:center;padding:8px 6px}
+#grp-series-row .toggle-group{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+#grp-series-row .toggle-btn{width:100%;text-align:center}
+.grp-rep-preview{margin-top:8px;font-size:.8rem;line-height:1.45;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+.grp-rep-preview:empty{display:none}
+.grp-rep-preview.err{color:var(--red);border-color:color-mix(in srgb, var(--red) 35%, transparent)}
+.sched-st{font-size:.72rem;border-radius:10px;padding:1px 7px;border:1px solid}
+.sched-st.ok{color:var(--green);border-color:color-mix(in srgb, var(--green) 40%, transparent)}
+.sched-st.wait{color:var(--text2);border-color:var(--border)}
+.sched-st.miss{color:var(--red);border-color:color-mix(in srgb, var(--red) 40%, transparent);background:color-mix(in srgb, var(--red) 8%, transparent)}
+.sched-st.man{color:var(--accent2);border-color:color-mix(in srgb, var(--accent2) 40%, transparent)}
+.ser-tag{font-size:.72rem;color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:1px 7px}
 .btn-gold{background:var(--accent);color:#fff;}
 .btn-gold:hover{background:color-mix(in srgb, var(--accent) 82%, #000);}
 .btn-ghost{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
@@ -1258,6 +1272,42 @@ button,input,select,textarea{font-family:inherit;}
         </div>
       </div>
     </div>
+    <!-- Повторы (20.11.2026): при создании сразу делаются все занятия серии -->
+    <div class="form-row" id="grp-repeat-row">
+      <div class="form-label">Повторять</div>
+      <div class="toggle-group grp-rep-tg">
+        <button class="toggle-btn on" onclick="setGrpRepeat('none')" id="grp-rep-none">Нет</button>
+        <button class="toggle-btn" onclick="setGrpRepeat('w1')" id="grp-rep-w1">Каждую неделю</button>
+        <button class="toggle-btn" onclick="setGrpRepeat('w2')" id="grp-rep-w2">Раз в 2 недели</button>
+        <button class="toggle-btn" onclick="setGrpRepeat('m1')" id="grp-rep-m1">Каждый месяц</button>
+      </div>
+      <input type="hidden" id="grp-repeat" value="none">
+      <div id="grp-repeat-opts" style="display:none;margin-top:10px">
+        <div style="display:flex;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div class="form-label">Сколько раз</div>
+            <input class="form-inp" id="grp-rep-count" type="number" min="2" max="52" placeholder="Например: 10" oninput="_grpRepPreview()">
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="form-label">До даты</div>
+            <input class="form-inp" id="grp-rep-until" type="date" oninput="_grpRepPreview()">
+          </div>
+        </div>
+        <div id="grp-rep-preview" class="grp-rep-preview"></div>
+        <div style="font-size:.72rem;color:var(--text2);margin-top:6px">Можно заполнить одно поле или оба — повторы закончатся на том, что наступит раньше. Не больше 52 занятий. В боте каждое занятие серии появится, только когда оно будет в посте с расписанием недели.</div>
+      </div>
+    </div>
+    <!-- Занятие из серии: к чему применить сохранение и удаление -->
+    <div class="form-row" id="grp-series-row" style="display:none">
+      <div class="form-label" id="grp-series-label">Занятие из серии</div>
+      <div class="toggle-group">
+        <button class="toggle-btn on" onclick="setGrpScope('one')" id="grp-scope-one">Только это</button>
+        <button class="toggle-btn" onclick="setGrpScope('next')" id="grp-scope-next">Это и следующие</button>
+      </div>
+      <input type="hidden" id="grp-scope" value="one">
+      <div id="grp-scope-hint" style="font-size:.72rem;color:var(--text2);margin-top:6px"></div>
+      <div id="grp-sched-box" style="margin-top:10px"></div>
+    </div>
     <div class="form-row">
       <div class="form-label">Место проведения</div>
       <input class="form-inp" id="grp-venue" type="text" placeholder="Адрес или название клуба">
@@ -1896,7 +1946,7 @@ let currentUser = null;
 let currentTrainer = null;  // Firestore trainer doc
 // Метка сборки: видно в консоли и в «Админ → 📦 Версия», чтобы всегда понимать,
 // какой код реально загружен. Обновлять вместе с заметными правками тренерки.
-const APP_VERSION = '11.18-btnsize';
+const APP_VERSION = '11.20-series';
 console.log('%c♟ Rep Chess тренерка · ' + APP_VERSION, 'color:#CF4B4E;font-weight:700;font-size:13px');
 try { document.getElementById('app-version-badge').textContent = APP_VERSION; } catch (e) {}
 
@@ -1951,7 +2001,7 @@ let grpSelectedStudents = []; // for group lesson modal
 // (12.11.2026: занятие у тренера без VPN записалось трижды). Ключ индив. — «почта|дата»:
 // сменил ученика или дату — это уже другое занятие.
 let _recLessonIds = {};
-let _newGrpId = null, _newGrpLessonIds = {};
+let _newGrpIds = {}, _newGrpLessonIds = {};   // id по дате / «дата|почта»: повтор создания не плодит копий
 let editingGroupId = null;
 let _editGroupCache = {};
 let _priceOverrides = {};   // price (string) → { lessons, group }
@@ -2824,6 +2874,7 @@ function groupFeedItemHTML(g) {
           ${approved ? `<span class="tag tag-attendance-ok">✅ подтв.</span>` : ''}
           ${submitted && !approved ? `<span class="tag tag-scheduled">⏳ проверка</span>` : ''}
           ${hasMismatch ? `<span class="tag tag-mismatch">⚠️</span>` : ''}
+          ${_grpSeriesBadges(g)}
           ${g.trainerName&&currentTrainer.role==='admin'?`<span class="dim" style="font-size:.73rem">${esc(g.trainerName)}</span>`:''}
           ${names ? `<span class="dim" style="font-size:.73rem">${esc(names)}</span>` : ''}
         </div>
@@ -3402,6 +3453,153 @@ function setGrpVis(mode) {
   if (row) row.style.display = mode === 'closed' ? '' : 'none';
 }
 
+// ── Повторы групповых и серия (20.11.2026) ──
+// Серия создаётся сразу целиком: отдельный документ на каждую дату, общий seriesId
+// (= id первого). needsSched: true — бот показывает занятие, только когда в посте
+// с расписанием недели есть этот день и это время (_inWeekSched в bot.gs).
+const GRP_REP_LABEL = { w1: 'каждую неделю', w2: 'раз в 2 недели', m1: 'каждый месяц' };
+function setGrpRepeat(mode) {
+  document.getElementById('grp-repeat').value = mode;
+  ['none','w1','w2','m1'].forEach(m => document.getElementById('grp-rep-'+m)?.classList.toggle('on', m === mode));
+  document.getElementById('grp-repeat-opts').style.display = mode === 'none' ? 'none' : '';
+  _grpRepPreview();
+}
+function setGrpScope(scope) {
+  document.getElementById('grp-scope').value = scope;
+  ['one','next'].forEach(x => document.getElementById('grp-scope-'+x)?.classList.toggle('on', x === scope));
+  const el = document.getElementById('grp-scope-hint');
+  if (el) el.textContent = scope === 'next'
+    ? 'Сохранение и удаление коснутся этого занятия и следующих в серии, где посещаемость ещё не отмечена. Дата меняется только у этого занятия; у следующих — время, место, формат, тренер, видимость, лимит, заметки и ученики.'
+    : 'Сохранение и удаление коснутся только этого занятия.';
+}
+// Даты серии: шаг 7 или 14 дней, либо месяц (31-е в коротком месяце → последний день)
+function _grpSeriesDates(start, rep, count, until) {
+  const out = [];
+  if (!/^\d{4}-\d\d-\d\d$/.test(start || '')) return out;
+  const [y, m, d] = start.split('-').map(Number);
+  for (let i = 0; i < 52; i++) {
+    let dt;
+    if (rep === 'm1') {
+      const last = new Date(Date.UTC(y, m + i, 0)).getUTCDate();
+      dt = new Date(Date.UTC(y, m - 1 + i, Math.min(d, last)));
+    } else dt = new Date(Date.UTC(y, m - 1, d + i * (rep === 'w2' ? 14 : 7)));
+    const ds = dt.toISOString().slice(0, 10);
+    if (until && ds > until) break;
+    if (count && out.length >= count) break;
+    out.push(ds);
+  }
+  return out;
+}
+const _dayDiff = (a, b) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+const _shiftDT = (dt, days) => new Date(Date.parse(dt.slice(0, 10) + 'T00:00:00Z') + days * 86400000).toISOString().slice(0, 10) + dt.slice(10);
+const _nZan = n => { const a = n % 10, b = n % 100; return n + ' ' + (a === 1 && b !== 11 ? 'занятие' : a >= 2 && a <= 4 && (b < 12 || b > 14) ? 'занятия' : 'занятий'); };
+// Что ввёл админ: { dates } или { err }
+function _grpRepRead() {
+  const rep = document.getElementById('grp-repeat').value;
+  const date = document.getElementById('grp-date').value;
+  if (rep === 'none') return { dates: date ? [date] : [], rep };
+  const cRaw = document.getElementById('grp-rep-count').value.trim();
+  const until = document.getElementById('grp-rep-until').value;
+  const count = cRaw ? parseInt(cRaw, 10) : 0;
+  if (!date) return { err: 'Сначала укажите дату первого занятия' };
+  if (!cRaw && !until) return { err: 'Укажите, сколько раз повторять или до какой даты' };
+  if (cRaw && (!(count >= 2) || count > 52)) return { err: '«Сколько раз» — от 2 до 52' };
+  if (until && until <= date) return { err: '«До даты» должна быть позже первого занятия' };
+  const dates = _grpSeriesDates(date, rep, count, until);
+  if (dates.length < 2) return { err: 'До этой даты повторов не получается — выберите дату позже' };
+  return { dates, rep, capped: !count && dates.length === 52 };
+}
+function _grpRepPreview() {
+  const box = document.getElementById('grp-rep-preview');
+  if (!box) return;
+  if (document.getElementById('grp-repeat').value === 'none') { box.textContent = ''; box.classList.remove('err'); return; }
+  const r = _grpRepRead();
+  box.classList.toggle('err', !!r.err);
+  if (r.err) { box.textContent = r.err; return; }
+  const f = x => x.slice(8, 10) + '.' + x.slice(5, 7);
+  const n = r.dates.length;
+  const list = n <= 6 ? r.dates.map(f).join(', ') : r.dates.slice(0, 4).map(f).join(', ') + ' … ' + f(r.dates[n - 1]);
+  box.innerHTML = 'Будет создано <b>' + _nZan(n) + '</b>: ' + list
+    + (r.capped ? '<br>Больше 52 за раз не создаём — остальные можно добавить позже.' : '');
+}
+
+// Расписание недели из бота (пост канала): {days:[{date, times}]} — для пометок «в расписании»
+let _wsSlots = null, _wsSlotsAt = 0, _wsSlotsP = null;
+function _loadSchedSlots(force) {
+  if (!force && _wsSlots && Date.now() - _wsSlotsAt < 600000) return Promise.resolve(_wsSlots);
+  if (_wsSlotsP) return _wsSlotsP;
+  _wsSlotsP = fetch(ML_BOT_URL + '?action=schedSlots&t=' + Date.now())
+    .then(r => r.json())
+    .then(j => { if (j && j.ok) { _wsSlots = j; _wsSlotsAt = Date.now(); } return _wsSlots; })
+    .catch(() => _wsSlots)
+    .finally(() => { _wsSlotsP = null; });
+  return _wsSlotsP;
+}
+const _hhmm = t => { const m = String(t || '').match(/^(\d{1,2})[:.](\d{2})/); return m ? m[1].padStart(2, '0') + ':' + m[2] : ''; };
+// null — не серия или не видно в боте; ok | wait | miss | man (показано вручную)
+function _grpSchedState(g) {
+  if (!g || !g.seriesId || !g.isPublic) return null;
+  if (g.needsSched === false) return 'man';
+  if (!_wsSlots) { _loadSchedSlots(); return null; }   // расписание ещё не пришло — не гадаем
+  const days = _wsSlots.days || [];
+  if (!days.length) return 'wait';
+  const day = days.find(d => d.date === g._date);
+  if (day) return (day.times || []).includes(_hhmm(g.time)) ? 'ok' : 'miss';
+  return (g._date >= days[0].date && g._date <= days[days.length - 1].date) ? 'miss' : 'wait';
+}
+const GRP_SCHED_TAG = { ok: 'в расписании', wait: 'ждёт поста с расписанием', miss: 'нет в расписании — в боте скрыто', man: 'в боте без сверки' };
+function _grpSeriesBadges(g) {
+  if (!g || !g.seriesId) return '';
+  const st = _grpSchedState(g);
+  return '<span class="ser-tag">↻ серия</span>' + (st ? `<span class="sched-st ${st}">${GRP_SCHED_TAG[st]}</span>` : '');
+}
+function _renderGrpSchedBox(g) {
+  const box = document.getElementById('grp-sched-box');
+  if (!box) return;
+  const st = _grpSchedState(g);
+  if (!st) { box.innerHTML = ''; return; }
+  const txt = {
+    ok:   'Занятие есть в посте с расписанием — в боте видно.',
+    wait: 'Поста с расписанием на эту дату ещё нет. В боте занятие появится, когда выйдет пост и в нём будет это время.',
+    miss: 'В посте с расписанием на эту дату нет занятия в ' + (g.time || 'это время') + ' — в боте оно скрыто. Удалите его или покажите в боте вручную.',
+    man:  'Показано в боте вручную, без сверки с расписанием.',
+  }[st];
+  const canEdit = currentTrainer?.role === 'admin' && !_grpViewMode;
+  box.innerHTML = `<div class="sched-st ${st}" style="display:block;border-radius:8px;padding:8px 10px;font-size:.78rem;line-height:1.4">${txt}</div>`
+    + (canEdit && st !== 'ok' ? `<button type="button" class="btn-full" style="margin-top:8px;background:none;border:1px solid var(--border);color:var(--text)" onclick="toggleGrpSchedGate('${g.id}', ${st === 'man'})">${st === 'man' ? 'Снова сверять с расписанием' : 'Показать в боте без расписания'}</button>` : '');
+}
+async function toggleGrpSchedGate(gid, gateOn) {
+  if (currentTrainer?.role !== 'admin') return;
+  try {
+    await db.collection('groupLessons').doc(gid).update({ needsSched: !!gateOn });
+    const g = _editGroupCache[gid];
+    if (g) g.needsSched = !!gateOn;
+    _patchGroupCaches(gid, { needsSched: !!gateOn });
+    if (g) _renderGrpSchedBox(g);
+    toast(gateOn ? 'Снова сверяем с расписанием ✓' : 'Занятие показано в боте ✓', 'ok');
+    if (document.getElementById('page-group')?.classList.contains('on')) loadGroupLessons();
+  } catch (e) { toast('Ошибка: ' + e.message, 'err'); }
+}
+
+// Постоянная ссылка тренера на войс-чат: trainerSchedules/{uid}.voiceUrl
+// (документ читают только сам тренер и админ — другие тренеры её не видят)
+async function _trainerVoiceUrl(tid) {
+  if (!tid) return '';
+  try { const d = await db.collection('trainerSchedules').doc(tid).get(); return d.exists ? (d.data().voiceUrl || '') : ''; }
+  catch (e) { return ''; }
+}
+// Пакетная запись кусками: у пакета предел 500 операций
+function _chunkedBatch() {
+  const batches = []; let n = 450;
+  const cur = () => { if (n >= 450) { batches.push(db.batch()); n = 0; } n++; return batches[batches.length - 1]; };
+  return {
+    set: (ref, data) => cur().set(ref, data),
+    update: (ref, data) => cur().update(ref, data),
+    delete: ref => cur().delete(ref),
+    commit: async () => { for (const b of batches) await b.commit(); },   // пустых пакетов нет
+  };
+}
+
 function _nowLocalDT() {
   const d = new Date(), p = n => String(n).padStart(2,'0');
   return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
@@ -3453,7 +3651,7 @@ async function openGroupModal() {
   if (currentTrainer?.role !== 'admin') { toast('Групповые занятия создаёт администратор', 'err'); return; }
   _setGroupModalReadOnly(false);
   editingGroupId = null;
-  _newGrpId = null; _newGrpLessonIds = {};
+  _newGrpIds = {}; _newGrpLessonIds = {};
   grpSelectedStudents = [];
   renderGrpTags();
   document.getElementById('grp-date').value = localDateStr(new Date());
@@ -3464,6 +3662,13 @@ async function openGroupModal() {
   document.getElementById('grp-openat').value = '';
   document.querySelectorAll('#group-modal .toggle-btn').forEach(b => b.classList.remove('on'));
   setGrpVis('private');
+  // Повторы — только при создании
+  document.getElementById('grp-repeat-row').style.display = '';
+  document.getElementById('grp-series-row').style.display = 'none';
+  document.getElementById('grp-rep-count').value = '';
+  document.getElementById('grp-rep-until').value = '';
+  document.getElementById('grp-date').oninput = _grpRepPreview;
+  setGrpRepeat('none');
   document.getElementById('grp-submit').textContent = 'Создать занятие';
   document.getElementById('group-modal-title').textContent = 'Новое групповое занятие';
   _renderGrpAttendBlock(null); // скрываем блок посещаемости
@@ -3542,6 +3747,19 @@ async function openEditGroupModal(groupId, viewMode) {
   delBtn.style.display = (currentTrainer?.role === 'admin') ? '' : 'none';   // удаление групповых — только админ
   delBtn.dataset.confirm = ''; delBtn.disabled = false; delBtn.textContent = 'Удалить занятие';
   _setGroupModalReadOnly(!!viewMode);
+  // Серия: к чему применить сохранение/удаление + сверка с постом расписания
+  document.getElementById('grp-repeat-row').style.display = 'none';
+  document.getElementById('grp-date').oninput = null;
+  const serRow = document.getElementById('grp-series-row');
+  serRow.style.display = g.seriesId ? '' : 'none';
+  if (g.seriesId) {
+    document.getElementById('grp-series-label').textContent = 'Занятие из серии' + (GRP_REP_LABEL[g.seriesRule] ? ' · ' + GRP_REP_LABEL[g.seriesRule] : '');
+    serRow.querySelector('.toggle-group').style.display = viewMode ? 'none' : '';
+    document.getElementById('grp-scope-hint').style.display = viewMode ? 'none' : '';
+    setGrpScope('one');
+    _renderGrpSchedBox(g);
+    _loadSchedSlots().then(() => { if (editingGroupId === groupId) _renderGrpSchedBox(_editGroupCache[groupId] || g); });
+  }
   _renderGrpAttendBlock(g); // данные группы + посещаемость в одном окне
   _openModal('group-modal');
 }
@@ -3549,39 +3767,54 @@ async function openEditGroupModal(groupId, viewMode) {
 async function confirmDeleteGroup() {
   if (currentTrainer?.role !== 'admin') { toast('Удалять групповые может только администратор', 'err'); return; }
   const btn = document.getElementById('grp-delete-btn');
+  const deletingId = editingGroupId;
+  const orig = _editGroupCache[deletingId] || {};
+  const scopeNext = !!orig.seriesId && document.getElementById('grp-scope').value === 'next';
   if (btn.dataset.confirm !== '1') {
+    // «Это и следующие»: заранее считаем, сколько уйдёт (следующие без отметки посещаемости)
+    let ids = [deletingId];
+    if (scopeNext) {
+      btn.disabled = true; btn.textContent = 'Считаем занятия серии...';
+      try {
+        const sSnap = await db.collection('groupLessons').where('seriesId', '==', orig.seriesId).get();
+        ids = ids.concat(sSnap.docs.filter(d => d.id !== deletingId && (d.data()._date || '') > (orig._date || '') && !d.data().attendanceMarked).map(d => d.id));
+      } catch (e) { toast('Ошибка: ' + e.message, 'err'); btn.disabled = false; btn.textContent = 'Удалить занятие'; return; }
+      btn.disabled = false;
+    }
+    btn._delIds = ids;
     btn.dataset.confirm = '1';
-    btn.textContent = 'Нажмите ещё раз для подтверждения';
-    setTimeout(() => { btn.dataset.confirm = ''; btn.textContent = 'Удалить занятие'; }, 3000);
+    btn.textContent = ids.length > 1 ? `Нажмите ещё раз: удалить ${_nZan(ids.length)}` : 'Нажмите ещё раз для подтверждения';
+    setTimeout(() => { btn.dataset.confirm = ''; btn.textContent = 'Удалить занятие'; }, 4000);
     return;
   }
+  const ids = (btn._delIds && btn._delIds[0] === deletingId) ? btn._delIds : [deletingId];
   btn.disabled = true; btn.textContent = 'Удаление...';
-  const deletingId = editingGroupId;
   try {
-    const batch = db.batch();
-    batch.delete(db.collection('groupLessons').doc(deletingId));
-    // Удаляем связанные индивидуальные записи
-    const snap = await db.collection('lessons').where('groupLessonId','==',deletingId).get();
-    snap.docs.forEach(d => {
+    const batch = _chunkedBatch();
+    // Удаляем занятия и связанные индивидуальные записи
+    const snaps = await Promise.all(ids.map(id => db.collection('lessons').where('groupLessonId','==',id).get()));
+    ids.forEach(id => batch.delete(db.collection('groupLessons').doc(id)));
+    const linkedIds = new Set();
+    snaps.forEach(snap => snap.docs.forEach(d => {
       batch.delete(d.ref);
+      linkedIds.add(d.id);
       delete _editLessonCache[d.id];
-    });
+    }));
     await batch.commit();
-    _deletedGroupIds.add(deletingId);
-    delete _editGroupCache[deletingId];
-
-    // Сразу убираем из DOM
-    document.querySelectorAll(`[data-edit-group-id="${deletingId}"]`).forEach(el => {
-      el.closest('.lesson-item, .card')?.remove();
+    const gone = new Set(ids);
+    ids.forEach(id => {
+      _deletedGroupIds.add(id);
+      delete _editGroupCache[id];
+      // Сразу убираем из DOM
+      document.querySelectorAll(`[data-edit-group-id="${id}"]`).forEach(el => el.closest('.lesson-item, .card')?.remove());
     });
 
     // Удаляем связанные индив. записи из кэша истории
-    const linkedIds = new Set(snap.docs.map(d => d.id));
     _histLessonsCache = _histLessonsCache.filter(l => !linkedIds.has(l.id));
-    _histGroupsCache  = _histGroupsCache.filter(g => g.id !== deletingId);
+    _histGroupsCache  = _histGroupsCache.filter(g => !gone.has(g.id));
 
     closeGroupModal();
-    toast('Групповое занятие удалено', 'ok');
+    toast(ids.length > 1 ? `Удалено: ${_nZan(ids.length)} серии` : 'Групповое занятие удалено', 'ok');
 
     // Перерисовываем из кэша без Firestore-запроса
     if (document.getElementById('page-history').classList.contains('on')) renderHistoryList();
@@ -3589,10 +3822,10 @@ async function confirmDeleteGroup() {
     if (document.getElementById('page-group').classList.contains('on')) loadGroupLessons();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
-    btn.disabled = false;
-    btn.dataset.confirm = '';
-    btn.textContent = 'Удалить занятие';
   }
+  btn.disabled = false;
+  btn.dataset.confirm = '';
+  btn.textContent = 'Удалить занятие';
 }
 
 function closeGroupModal() {
@@ -3620,6 +3853,10 @@ async function submitGroupLesson() {
   if (!venue) { toast('Укажи место', 'err'); return; }
   // Студенты необязательны при создании — добавляются позже через редактирование
 
+  // Повторы (только при создании): даты всех занятий серии
+  const rr = editingGroupId ? null : _grpRepRead();
+  if (rr && rr.err) { toast(rr.err, 'err'); return; }
+
   // Для администратора — используем выбранного тренера (при создании и при редактировании)
   const isAdmin = currentTrainer.role === 'admin';
   let trainerId   = currentUser.uid;
@@ -3635,12 +3872,19 @@ async function submitGroupLesson() {
 
   const btn = document.getElementById('grp-submit');
   btn.disabled=true; btn.textContent='Сохранение...';
+  // Постоянная ссылка тренера на войс-чат — в онлайн-занятия
+  const voiceNew = format === 'online' ? await _trainerVoiceUrl(trainerId) : '';
 
   try {
-    const batch = db.batch();
+    const batch = _chunkedBatch();
 
     if (editingGroupId) {
       // ── РЕЖИМ РЕДАКТИРОВАНИЯ ──
+      const orig = _editGroupCache[editingGroupId] || {};
+      const scopeNext = !!orig.seriesId && document.getElementById('grp-scope').value === 'next';
+      // Ссылку подставляем, если её не было или стояла постоянная прежнего тренера
+      const voiceOld = (orig.trainerId && orig.trainerId !== trainerId) ? await _trainerVoiceUrl(orig.trainerId) : voiceNew;
+      const voiceFor = cur => (voiceNew && (!cur || cur === voiceOld)) ? { voiceUrl: voiceNew } : {};
       batch.update(db.collection('groupLessons').doc(editingGroupId), {
         trainerId, trainerName,
         _date: date, time, venue, format, notes, isPublic, regOpen, regOpensAt,
@@ -3649,14 +3893,57 @@ async function submitGroupLesson() {
         studentNames:  grpSelectedStudents.map(s=>s.name),
         studentIds:    grpSelectedStudents.map(s=>s.id),
         count: grpSelectedStudents.length,
+        ...voiceFor(orig.voiceUrl),
       });
       // Обновляем связанные индивидуальные записи (в т.ч. переназначенного тренера)
       const indSnap = await db.collection('lessons').where('groupLessonId','==',editingGroupId).get();
       indSnap.docs.forEach(d => batch.update(d.ref, { _date: date, format, notes, trainerId, trainerName }));
+
+      // «Это и следующие»: следующие занятия серии без отметки посещаемости.
+      // Дату не трогаем; учеников меняем разницей (добавленные/убранные здесь),
+      // чтобы не стереть тех, кто записался на следующие сам через бота.
+      let nextCount = 0;
+      if (scopeNext) {
+        const sSnap = await db.collection('groupLessons').where('seriesId', '==', orig.seriesId).get();
+        const next = sSnap.docs.filter(d => d.id !== editingGroupId && (d.data()._date || '') > (orig._date || '') && !d.data().attendanceMarked);
+        nextCount = next.length;
+        const origEmails = orig.studentEmails || [];
+        const added   = grpSelectedStudents.filter(s => !origEmails.includes(s.email));
+        const removed = origEmails.filter(e => !grpSelectedStudents.some(s => s.email === e));
+        const lesSnaps = await Promise.all(next.map(d => db.collection('lessons').where('groupLessonId', '==', d.id).get()));
+        next.forEach((d, i) => {
+          const x = d.data();
+          const emails = [...(x.studentEmails || [])], names = [...(x.studentNames || [])], ids = [...(x.studentIds || [])];
+          removed.forEach(e => { const k = emails.indexOf(e); if (k >= 0) { emails.splice(k, 1); names.splice(k, 1); ids.splice(k, 1); } });
+          added.forEach(st => { if (!emails.includes(st.email)) { emails.push(st.email); names.push(st.name); ids.push(st.id); } });
+          batch.update(d.ref, {
+            trainerId, trainerName, time, venue, format, notes, isPublic, regOpen,
+            regOpensAt: regOpensAt ? _shiftDT(regOpensAt, _dayDiff(date, x._date)) : '',
+            ...(maxStudents ? { maxStudents } : { maxStudents: null }),
+            studentEmails: emails, studentNames: names, studentIds: ids, count: emails.length,
+            ...voiceFor(x.voiceUrl),
+          });
+          const les = lesSnaps[i].docs;
+          les.forEach(l => {
+            const ld = l.data();
+            if (removed.includes(ld.studentEmail) && ld.status === 'pending' && !ld.isGuestCharge && !ld.isExtraAttendee) batch.delete(l.ref);
+            else batch.update(l.ref, { format, notes, trainerId, trainerName });
+          });
+          added.forEach(st => {
+            if (les.some(l => l.data().studentEmail === st.email)) return;
+            batch.set(db.collection('lessons').doc(), {
+              trainerId, trainerName, studentEmail: st.email, studentName: st.name, studentId: st.id,
+              _date: x._date, format, type: 'group', notes, status: 'pending', groupLessonId: d.id,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          });
+          delete _editGroupCache[d.id];
+        });
+      }
       await batch.commit();
       delete _editGroupCache[editingGroupId];
       closeGroupModal();
-      toast('Занятие обновлено ✓', 'ok');
+      toast(nextCount ? `Обновлено: это занятие и ещё ${_nZan(nextCount)} серии ✓` : 'Занятие обновлено ✓', 'ok');
       loadGroupLessons();
       loadHomePage();
       if (document.getElementById('page-history').classList.contains('on')) loadHistory();
@@ -3665,66 +3952,89 @@ async function submitGroupLesson() {
     }
 
     // ── РЕЖИМ СОЗДАНИЯ ── (id постоянные на время окна: повтор не создаёт вторую группу)
-    if (!_newGrpId) _newGrpId = db.collection('groupLessons').doc().id;
-    const grpRef = db.collection('groupLessons').doc(_newGrpId);
-    batch.set(grpRef, {
-      trainerId, trainerName,
-      _date: date, time, venue, format, notes, isPublic, regOpen, regOpensAt,
-      ...(maxStudents ? { maxStudents } : {}),
-      studentEmails: grpSelectedStudents.map(s=>s.email),
-      studentNames:  grpSelectedStudents.map(s=>s.name),
-      studentIds:    grpSelectedStudents.map(s=>s.id),
-      count: grpSelectedStudents.length,
-      attendanceMarked: false,
-      attendedEmails: [],
-      attendedNames: [],
-      extraAttendees: [],
-      registeredTelegramIds: [],
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-
-    // Create individual lesson records for each student
-    for (const s of grpSelectedStudents) {
-      if (!_newGrpLessonIds[s.email]) _newGrpLessonIds[s.email] = db.collection('lessons').doc().id;
-      const lesRef = db.collection('lessons').doc(_newGrpLessonIds[s.email]);
-      batch.set(lesRef, {
+    const dates = rr.dates;
+    const series = dates.length > 1;
+    const gids = dates.map(dt => _newGrpIds[dt] || (_newGrpIds[dt] = db.collection('groupLessons').doc().id));
+    dates.forEach((dt, i) => {
+      const grpRef = db.collection('groupLessons').doc(gids[i]);
+      batch.set(grpRef, {
         trainerId, trainerName,
-        studentEmail: s.email,
-        studentName:  s.name,
-        studentId:    s.id,
-        _date: date, format, type: 'group', notes,
-        status: 'pending',
-        groupLessonId: grpRef.id,
+        _date: dt, time, venue, format, notes, isPublic, regOpen,
+        // Отложенное открытие записи сдвигается вместе с датой занятия
+        regOpensAt: regOpensAt ? _shiftDT(regOpensAt, _dayDiff(date, dt)) : '',
+        ...(maxStudents ? { maxStudents } : {}),
+        studentEmails: grpSelectedStudents.map(s=>s.email),
+        studentNames:  grpSelectedStudents.map(s=>s.name),
+        studentIds:    grpSelectedStudents.map(s=>s.id),
+        count: grpSelectedStudents.length,
+        attendanceMarked: false,
+        attendedEmails: [],
+        attendedNames: [],
+        extraAttendees: [],
+        registeredTelegramIds: [],
+        ...(voiceNew ? { voiceUrl: voiceNew } : {}),
+        ...(series ? { seriesId: gids[0], seriesIdx: i + 1, seriesN: dates.length, seriesRule: rr.rep, needsSched: true } : {}),
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
-    }
+
+      // Create individual lesson records for each student
+      for (const s of grpSelectedStudents) {
+        const key = dt + '|' + s.email;
+        if (!_newGrpLessonIds[key]) _newGrpLessonIds[key] = db.collection('lessons').doc().id;
+        batch.set(db.collection('lessons').doc(_newGrpLessonIds[key]), {
+          trainerId, trainerName,
+          studentEmail: s.email,
+          studentName:  s.name,
+          studentId:    s.id,
+          _date: dt, format, type: 'group', notes,
+          status: 'pending',
+          groupLessonId: grpRef.id,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    });
 
     await batch.commit();
     closeGroupModal();
-    toast(`Групповое занятие записано (${grpSelectedStudents.length} учеников) ✓`, 'ok');
+    toast(series
+      ? `Серия создана: ${_nZan(dates.length)} ✓`
+      : `Групповое занятие записано (${grpSelectedStudents.length} учеников) ✓`, 'ok');
     loadGroupLessons();
     loadHomePage();
   } catch(e) {
     toast('Ошибка: ' + e.message, 'err');
   }
-  btn.disabled=false; btn.textContent='Создать занятие';
+  btn.disabled=false; btn.textContent = editingGroupId ? 'Сохранить изменения' : 'Создать занятие';
 }
 
 async function loadGroupLessons() {
   let snap;
+  const todayStr = localDateStr(new Date());
   try {
-    snap = currentTrainer.role === 'admin'
-      ? await db.collection('groupLessons').orderBy('createdAt','desc').limit(50).get()
-      : await db.collection('groupLessons').where('trainerId','==',currentUser.uid).get();
+    if (currentTrainer.role === 'admin') {
+      // Последние 50 созданных + ВСЕ предстоящие: серия на 10 недель иначе вытеснила бы
+      // из списка сегодняшние и недавние занятия (20.11.2026)
+      const [last, upcoming] = await Promise.all([
+        db.collection('groupLessons').orderBy('createdAt','desc').limit(50).get(),
+        db.collection('groupLessons').where('_date','>=',todayStr).get(),
+      ]);
+      const seen = new Set();
+      snap = { docs: [...last.docs, ...upcoming.docs].filter(d => !seen.has(d.id) && seen.add(d.id)) };
+    } else snap = await db.collection('groupLessons').where('trainerId','==',currentUser.uid).get();
   } catch(e) {
     snap = currentTrainer.role === 'admin'
       ? await db.collection('groupLessons').limit(50).get()
       : await db.collection('groupLessons').where('trainerId','==',currentUser.uid).get();
   }
+  // Сверху ближайшие (по возрастанию даты), ниже прошедшие (свежие первыми)
   const docs = snap.docs.slice().sort((a,b)=>{
     const ad=a.data()._date||'', bd=b.data()._date||'';
-    return bd>ad?1:-1;
+    const af = ad >= todayStr, bf = bd >= todayStr;
+    if (af !== bf) return af ? -1 : 1;
+    if (ad === bd) return (a.data().time||'') < (b.data().time||'') ? -1 : 1;
+    return af ? (ad < bd ? -1 : 1) : (bd > ad ? 1 : -1);
   });
+  if (docs.some(d => d.data().seriesId)) await _loadSchedSlots();
   // Кешируем для редактирования
   docs.forEach(d => { _editGroupCache[d.id] = {id: d.id, ...d.data()}; });
   const list = document.getElementById('group-list');
@@ -3770,6 +4080,7 @@ async function loadGroupLessons() {
             <span style="font-size:.75rem;color:var(--text2)">${dt}${timeStr}</span>
             <span style="font-size:.75rem;color:var(--text2)">${g.count||0}${maxStr} уч.</span>
             ${_grpVisBadge(g)}
+            ${_grpSeriesBadges(g)}
             <span class="tag ${g.format==='online'?'tag-online':'tag-offline'}" style="padding:1px 6px">${g.format==='online'?'Онлайн':'Офлайн'}</span>
             ${approved?`<span class="tag tag-attendance-ok" style="padding:1px 6px">✅ подтверждено</span>`:''}
             ${submitted&&!approved?`<span class="tag" style="background:color-mix(in srgb, var(--accent2) 12%, transparent);color:var(--accent2);padding:1px 6px">⏳ на проверке</span>`:''}
@@ -4929,7 +5240,7 @@ async function loadAllSchedules() {
     ]);
     _allSchedCache = {};
     schedDocs.forEach((doc, i) => {
-      _allSchedCache[trainers[i].id] = doc.exists ? doc.data() : { template: {}, exceptions: {}, formats: {} };
+      _allSchedCache[trainers[i].id] = { template: {}, exceptions: {}, formats: {}, ...(doc.exists ? doc.data() : {}) };
     });
     _allWeekLessons = ls.docs.map(d => ({ id: d.id, ...d.data() })).filter(l => !_deletedLessonIds.has(l.id) && l.type !== 'group');
     _allWeekGroups  = gs.docs.map(d => ({ id: d.id, ...d.data(), _isGroup: true })).filter(g => !_deletedGroupIds.has(g.id));
@@ -5050,7 +5361,7 @@ async function schedLoad() {
   if (st) st.textContent = 'загрузка...';
   try {
     const doc = await db.collection('trainerSchedules').doc(_schedTrainerId).get();
-    _sched = doc.exists ? doc.data() : { template:{}, exceptions:{}, formats:{} };
+    _sched = { template:{}, exceptions:{}, formats:{}, ...(doc.exists ? doc.data() : {}) };
     _sched.template = _sched.template || {};
     _sched.exceptions = _sched.exceptions || {};
     _sched.formats = _sched.formats || {};
@@ -5140,7 +5451,10 @@ async function saveSchedule() {
   const btn = document.getElementById('sched-save-btn');
   btn.disabled = true; btn.textContent = 'Сохранение...';
   try {
+    // В этом же документе — постоянная ссылка тренера на войс-чат: set() без merge её стёр бы
+    const voiceUrl = await _trainerVoiceUrl(_schedTrainerId);
     await db.collection('trainerSchedules').doc(_schedTrainerId).set({
+      ...(voiceUrl ? { voiceUrl } : {}),
       template: _sched.template,
       formats: _sched.formats || {},
       exceptions: _sched.exceptions,
@@ -7372,6 +7686,9 @@ function _patchGroupCaches(groupId, updatedG, attendedEmails) {
 
 // Ссылки на онлайн-групповое занятие (войс-чат + студия Lichess).
 // Редактируют админ и тренер этого занятия. Ученику открываются за 10 мин до начала.
+// Постоянная ссылка на войс-чат (20.11.2026) — своя у каждого тренера, в trainerSchedules/{uid}.voiceUrl:
+// подставляется в его онлайн-занятия, другие тренеры её не видят.
+let _glPerm = '', _glTid = '';
 async function openGroupLinksModal(groupId) {
   let g = _editGroupCache[groupId];
   if (!g) {
@@ -7392,7 +7709,11 @@ async function openGroupLinksModal(groupId) {
       <div style="font-weight:800;font-size:1.05rem;margin-bottom:4px">🔗 Ссылки на онлайн-занятие</div>
       <div style="color:var(--text2);font-size:.8rem;margin-bottom:14px">Откроются ученикам в кабинете и придут в бота за 10 минут до начала.</div>
       <div style="font-size:.8rem;color:var(--text2);margin-bottom:4px">🎙 Войс-чат</div>
-      <input id="gl-voice" type="url" inputmode="url" placeholder="https://..." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px;color:var(--text);font-size:.9rem;margin-bottom:12px">
+      <input id="gl-voice" type="url" inputmode="url" placeholder="https://..." oninput="_glPermHint()" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px;color:var(--text);font-size:.9rem;margin-bottom:8px">
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:.82rem;line-height:1.35;cursor:pointer;margin-bottom:4px">
+        <input type="checkbox" id="gl-keep" style="margin-top:2px;flex-shrink:0" onchange="_glPermHint()"><span id="gl-keep-txt"></span>
+      </label>
+      <div id="gl-perm" style="font-size:.74rem;color:var(--text2);margin:0 0 14px 24px;line-height:1.35;overflow-wrap:anywhere"></div>
       <div style="font-size:.8rem;color:var(--text2);margin-bottom:4px">♟ Студия Lichess</div>
       <input id="gl-studio" type="url" inputmode="url" placeholder="https://lichess.org/study/..." style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:11px;color:var(--text);font-size:.9rem;margin-bottom:16px">
       <div style="display:flex;gap:8px">
@@ -7404,25 +7725,66 @@ async function openGroupLinksModal(groupId) {
     document.body.appendChild(m);
     m.addEventListener('click', e => { if (e.target === m) _closeModal('group-links-modal'); });
   }
+  _glTid = g.trainerId || '';
+  _glPerm = await _trainerVoiceUrl(_glTid);
+  const own = _glTid === currentUser.uid;
+  document.getElementById('gl-keep-txt').textContent = own
+    ? 'Сделать моей постоянной ссылкой — подставлять во все мои онлайн-занятия'
+    : 'Сделать постоянной ссылкой тренера ' + (g.trainerName || '') + ' — подставлять во все его онлайн-занятия';
   document.getElementById('gl-id').value = groupId;
   document.getElementById('gl-voice').value  = g.voiceUrl  || '';
   document.getElementById('gl-studio').value = g.studioUrl || '';
+  document.getElementById('gl-keep').checked = !!_glPerm && (g.voiceUrl || '') === _glPerm;
+  _glPermHint();
   _openModal('group-links-modal');
+}
+function _glPermHint() {
+  const el = document.getElementById('gl-perm'); if (!el) return;
+  const v = document.getElementById('gl-voice').value.trim();
+  const keep = document.getElementById('gl-keep').checked;
+  if (keep && v && v === _glPerm) el.textContent = 'Это и есть постоянная ссылка.';
+  else if (keep && v) el.textContent = _glPerm
+    ? 'Заменит постоянную ' + _glPerm + ' — и в будущих онлайн-занятиях, где стояла она.'
+    : 'Подставится в будущие онлайн-занятия, где ссылки на войс-чат ещё нет.';
+  else el.textContent = _glPerm ? 'Постоянная сейчас: ' + _glPerm : 'Постоянной ссылки пока нет.';
 }
 
 async function saveGroupLinks() {
   const groupId  = document.getElementById('gl-id').value;
   const voiceUrl  = document.getElementById('gl-voice').value.trim();
   const studioUrl = document.getElementById('gl-studio').value.trim();
+  const keep = document.getElementById('gl-keep').checked && voiceUrl !== _glPerm;
   const badUrl = u => u && !/^https?:\/\//i.test(u);
   if (badUrl(voiceUrl) || badUrl(studioUrl)) { toast('Ссылка должна начинаться с http:// или https://', 'err'); return; }
+  if (document.getElementById('gl-keep').checked && !voiceUrl) { toast('Чтобы сделать ссылку постоянной, вставьте её в поле «Войс-чат»', 'err'); return; }
   const btn = document.getElementById('gl-save'); btn.disabled = true; btn.textContent = 'Сохранение...';
   try {
     await db.collection('groupLessons').doc(groupId).update({ voiceUrl, studioUrl });
     if (_editGroupCache[groupId]) { _editGroupCache[groupId].voiceUrl = voiceUrl; _editGroupCache[groupId].studioUrl = studioUrl; }
     _patchGroupCaches(groupId, { voiceUrl, studioUrl });
+    let more = 0;
+    if (keep && _glTid) {
+      const oldPerm = _glPerm;
+      await db.collection('trainerSchedules').doc(_glTid).set({ voiceUrl }, { merge: true });
+      _glPerm = voiceUrl;
+      // Будущие онлайн-занятия тренера: без ссылки или с прежней постоянной → новая
+      const today = localDateStr(new Date());
+      const snap = await db.collection('groupLessons').where('trainerId', '==', _glTid).get();
+      const upd = snap.docs.filter(d => {
+        const x = d.data();
+        return d.id !== groupId && x.format === 'online' && (x._date || '') >= today && !x.attendanceMarked
+          && (!x.voiceUrl || (oldPerm && x.voiceUrl === oldPerm));
+      });
+      if (upd.length) {
+        const b = _chunkedBatch();
+        upd.forEach(d => b.update(d.ref, { voiceUrl }));
+        await b.commit();
+        upd.forEach(d => { if (_editGroupCache[d.id]) _editGroupCache[d.id].voiceUrl = voiceUrl; _patchGroupCaches(d.id, { voiceUrl }); });
+      }
+      more = upd.length;
+    }
     _closeModal('group-links-modal');
-    toast('Ссылки сохранены ✓', 'ok');
+    toast(keep ? `Ссылка стала постоянной${more ? ', обновлена ещё в ' + more + (more % 10 === 1 && more % 100 !== 11 ? ' занятии' : ' занятиях') : ''} ✓` : 'Ссылки сохранены ✓', 'ok');
   } catch (e) { toast('Ошибка: ' + e.message, 'err'); }
   btn.disabled = false; btn.textContent = 'Сохранить';
 }
